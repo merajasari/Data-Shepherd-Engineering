@@ -1,4 +1,27 @@
-"""Bronze layer writer for raw market data."""
+"""
+Writes raw market data to Bronze layer.
+"""
+
+import os
+
+
+def write_bronze(df, symbol):
+
+    os.makedirs(
+        "../bronze",
+        exist_ok=True
+    )
+
+    path = f"../bronze/{symbol}.parquet"
+
+    df.to_parquet(
+        path,
+        index=False
+    )
+
+    print(
+        f"Bronze data written: {path}"
+    )"""Bronze layer writer for raw market data."""
 
 from pathlib import Path
 import pandas as pd
