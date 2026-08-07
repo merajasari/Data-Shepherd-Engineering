@@ -1,0 +1,5 @@
+massive
+pandas
+python-dotenv
+pyarrow
+requests
