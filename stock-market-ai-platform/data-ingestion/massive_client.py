@@ -1,15 +1,12 @@
 """
 Massive market data API client wrapper.
-
-Loads API keys from environment variables.
-Returns normalized OHLCV market data.
 """
 
 import os
+
+import requests
 import pandas as pd
 from dotenv import load_dotenv
-from massive import RESTClient
-
 
 load_dotenv()
 
@@ -17,6 +14,7 @@ load_dotenv()
 class MassiveClient:
 
     def __init__(self):
+
         self.api_key = os.getenv("MASSIVE_API_KEY")
 
         if not self.api_key:
@@ -24,83 +22,49 @@ class MassiveClient:
                 "MASSIVE_API_KEY environment variable is required"
             )
 
-        self.client = RESTClient(api_key=self.api_key)
-
-
     def get_daily_prices(
         self,
         symbol: str,
         start_date: str,
         end_date: str
-    ) -> pd.DataFrame:
-        """
-        Retrieve daily OHLCV market data.
+    ):
 
-        Returns:
-            pandas DataFrame
-        """
-
-        response = self.client.get_aggs(
-            ticker=symbol,
-            multiplier=1,
-            timespan="day",
-            from_=start_date,
-            to=end_date,
-            limit=50000
+        url = (
+            f"https://api.massive.com/v2/aggs/ticker/{symbol}/range/"
+            f"1/day/{start_date}/{end_date}"
         )
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=30
+        )
+
+        response.raise_for_status()
+
+        payload = response.json()
 
         rows = []
 
-        for item in response:
+        for item in payload.get("results", []):
+
             rows.append(
                 {
                     "symbol": symbol,
-                    "date": item.timestamp,
-                    "open": item.open,
-                    "high": item.high,
-                    "low": item.low,
-                    "close": item.close,
-                    "volume": item.volume,
+                    "timestamp": item["t"],
+                    "open": item["o"],
+                    "high": item["h"],
+                    "low": item["l"],
+                    "close": item["c"],
+                    "volume": item["v"],
+                    "vwap": item.get("vw"),
                 }
             )
 
         df = pd.DataFrame(rows)
 
-        if not df.empty:
-            df["date"] = pd.to_datetime(df["date"], unit="ms")
-            df = df.sort_values("date")
-
-        return df"""Massive market data API client wrapper.
-
-API keys are loaded from environment variables and should never be committed.
-"""
-
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-MASSIVE_API_KEY = os.getenv("MASSIVE_API_KEY")
-
-
-class MassiveClient:
-    def __init__(self):
-        if not MASSIVE_API_KEY:
-            raise ValueError("MASSIVE_API_KEY environment variable is required")
-
-        self.api_key = MASSIVE_API_KEY
-
-    def get_daily_prices(self, symbol: str, start_date: str, end_date: str):
-        """Retrieve daily OHLCV data.
-
-        The API integration layer is intentionally isolated here so future
-        changes to providers do not impact downstream analytics.
-        """
-        # TODO: Add Massive REST client implementation
-        # TODO: Return normalized OHLCV dataframe
-        return {
-            "symbol": symbol,
-            "start_date": start_date,
-            "end_date": end_date,
-            "status": "client_ready",
-        }
+        return df
