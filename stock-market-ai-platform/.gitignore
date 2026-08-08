@@ -16,3 +16,6 @@ env/
 
 # OS files
 .DS_Store
+
+# Generated ML model artifacts
+models/*.pkl
