@@ -6,9 +6,6 @@
 __pycache__/
 *.py[cod]
 
-# Generated data
-data-ingestion/data/
-
 # Virtual environments
 .venv/
 venv/
@@ -16,6 +13,15 @@ env/
 
 # OS files
 .DS_Store
+
+# Generated market-data layers
+data/bronze/
+data/silver/
+data/gold/
+data/features/
+
+# Legacy generated data location
+data-ingestion/data/
 
 # Generated ML model artifacts
 models/*.pkl
