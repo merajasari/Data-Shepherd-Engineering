@@ -1,35 +1,24 @@
 """
-Train a baseline stock-direction prediction model.
+Train a baseline stock-direction prediction model for any configured symbol.
 
-The model predicts whether a stock will be higher five trading
+Usage:
+    python ml/train_model.py AAPL
+    python ml/train_model.py MSFT
+    python ml/train_model.py NVDA
+
+The model predicts whether the stock will be higher five trading
 days in the future.
 
-This implementation uses only NumPy, Pandas, and Python's
-standard library so it can run in lightweight environments
-such as Termux.
-
-Important:
-- Training/test splitting is chronological.
-- Feature scaling is fit only on training data.
-- Future-return fields are never used as model inputs.
-- The saved model artifact contains only portable parameters,
-  not a pickled custom Python class.
+This implementation uses NumPy, Pandas, and the Python standard library.
 """
 
 from pathlib import Path
 import pickle
+import sys
 
 import numpy as np
 import pandas as pd
 
-
-FEATURE_FILE = Path(
-    "data/features/stocks/AAPL/AAPL_features.parquet"
-)
-
-MODEL_PATH = Path(
-    "models/aapl_direction_model.pkl"
-)
 
 PREDICTION_THRESHOLD = 0.50
 
@@ -65,9 +54,7 @@ FEATURE_COLUMNS = [
 
 
 class LogisticRegression:
-    """
-    Lightweight binary logistic regression implemented with NumPy.
-    """
+    """Lightweight NumPy binary logistic regression."""
 
     def __init__(
         self,
@@ -78,14 +65,11 @@ class LogisticRegression:
         self.learning_rate = learning_rate
         self.epochs = epochs
         self.l2 = l2
-
         self.weights = None
         self.bias = 0.0
 
     @staticmethod
     def sigmoid(values):
-        """Calculate numerically stable sigmoid probabilities."""
-
         values = np.clip(
             values,
             -500,
@@ -101,8 +85,6 @@ class LogisticRegression:
         X,
         y,
     ):
-        """Train using gradient descent."""
-
         row_count, feature_count = X.shape
 
         self.weights = np.zeros(
@@ -148,8 +130,6 @@ class LogisticRegression:
         self,
         X,
     ):
-        """Return probability that target equals 1."""
-
         scores = (
             X @ self.weights
             + self.bias
@@ -164,8 +144,6 @@ class LogisticRegression:
         X,
         threshold=PREDICTION_THRESHOLD,
     ):
-        """Return binary predictions."""
-
         probabilities = (
             self.predict_probability(X)
         )
@@ -175,25 +153,41 @@ class LogisticRegression:
         ).astype(int)
 
 
-def load_dataset():
-    """
-    Load and prepare the feature dataset for training.
-    """
+def get_paths(symbol: str):
+    """Return the feature and model paths for a symbol."""
 
-    if not FEATURE_FILE.exists():
+    feature_file = Path(
+        f"data/features/stocks/{symbol}/{symbol}_features.parquet"
+    )
+
+    model_path = Path(
+        f"models/{symbol.lower()}_direction_model.pkl"
+    )
+
+    return (
+        feature_file,
+        model_path,
+    )
+
+
+def load_dataset(
+    feature_file: Path,
+):
+    """Load and prepare the feature dataset."""
+
+    if not feature_file.exists():
         raise FileNotFoundError(
-            f"Feature dataset not found: {FEATURE_FILE}"
+            f"Feature dataset not found: {feature_file}"
         )
 
     df = pd.read_parquet(
-        FEATURE_FILE
+        feature_file
     )
 
     df = df.sort_values(
         "timestamp"
     ).reset_index(drop=True)
 
-    # Training rows must have a known future outcome.
     df = df.dropna(
         subset=[
             "forward_return_5d",
@@ -201,7 +195,6 @@ def load_dataset():
         ]
     )
 
-    # All model input features must be available.
     df = df.dropna(
         subset=FEATURE_COLUMNS
     )
@@ -213,12 +206,7 @@ def standardize(
     X_train,
     X_test,
 ):
-    """
-    Standardize features using training statistics only.
-
-    This prevents information from the future test period
-    leaking into model preprocessing.
-    """
+    """Standardize using training statistics only."""
 
     feature_mean = X_train.mean(
         axis=0
@@ -252,7 +240,7 @@ def calculate_metrics(
     y_true,
     predictions,
 ):
-    """Calculate binary classification metrics."""
+    """Calculate basic binary classification metrics."""
 
     y_true = np.asarray(
         y_true
@@ -287,27 +275,17 @@ def calculate_metrics(
         / len(y_true)
     )
 
-    precision_denominator = (
-        true_positive
-        + false_positive
-    )
-
     precision = (
         true_positive
-        / precision_denominator
-        if precision_denominator
+        / (true_positive + false_positive)
+        if (true_positive + false_positive)
         else 0.0
-    )
-
-    recall_denominator = (
-        true_positive
-        + false_negative
     )
 
     recall = (
         true_positive
-        / recall_denominator
-        if recall_denominator
+        / (true_positive + false_negative)
+        if (true_positive + false_negative)
         else 0.0
     )
 
@@ -321,33 +299,37 @@ def calculate_metrics(
     )
 
     return {
-        "accuracy": float(accuracy),
-        "precision": float(precision),
-        "recall": float(recall),
-        "f1": float(f1),
+        "accuracy":
+            float(accuracy),
 
-        "true_positive": int(
-            true_positive
-        ),
+        "precision":
+            float(precision),
 
-        "true_negative": int(
-            true_negative
-        ),
+        "recall":
+            float(recall),
 
-        "false_positive": int(
-            false_positive
-        ),
+        "f1":
+            float(f1),
 
-        "false_negative": int(
-            false_negative
-        ),
+        "true_positive":
+            int(true_positive),
+
+        "true_negative":
+            int(true_negative),
+
+        "false_positive":
+            int(false_positive),
+
+        "false_negative":
+            int(false_negative),
     }
 
 
-def train_model(df):
-    """
-    Train and evaluate the baseline model.
-    """
+def train_model(
+    df,
+    symbol,
+):
+    """Train and evaluate one symbol model."""
 
     X = df[
         FEATURE_COLUMNS
@@ -364,16 +346,6 @@ def train_model(df):
     split_index = int(
         len(df) * 0.80
     )
-
-    if split_index <= 0:
-        raise ValueError(
-            "Not enough rows for training"
-        )
-
-    if split_index >= len(df):
-        raise ValueError(
-            "Not enough rows for testing"
-        )
 
     X_train = X[
         :split_index
@@ -401,6 +373,14 @@ def train_model(df):
         X_test,
     )
 
+    print()
+    print(
+        f"{symbol} MODEL TRAINING"
+    )
+    print(
+        "=" * 48
+    )
+
     print(
         f"Total usable rows: {len(df)}"
     )
@@ -413,57 +393,7 @@ def train_model(df):
         f"Test rows:         {len(X_test)}"
     )
 
-    print()
-
-    training_start = (
-        df.iloc[0][
-            "timestamp_utc"
-        ]
-    )
-
-    training_end = (
-        df.iloc[
-            split_index - 1
-        ][
-            "timestamp_utc"
-        ]
-    )
-
-    test_start = (
-        df.iloc[
-            split_index
-        ][
-            "timestamp_utc"
-        ]
-    )
-
-    test_end = (
-        df.iloc[-1][
-            "timestamp_utc"
-        ]
-    )
-
-    print(
-        "Training period:",
-        training_start,
-        "to",
-        training_end,
-    )
-
-    print(
-        "Test period:",
-        test_start,
-        "to",
-        test_end,
-    )
-
-    print()
-
-    model = LogisticRegression(
-        learning_rate=0.05,
-        epochs=3000,
-        l2=0.001,
-    )
+    model = LogisticRegression()
 
     model.fit(
         X_train_scaled,
@@ -486,132 +416,43 @@ def train_model(df):
         predictions,
     )
 
-    print("Model Performance")
-    print("=================")
-
-    print(
-        f"Accuracy:  "
-        f"{metrics['accuracy']:.4f}"
-    )
-
-    print(
-        f"Precision: "
-        f"{metrics['precision']:.4f}"
-    )
-
-    print(
-        f"Recall:    "
-        f"{metrics['recall']:.4f}"
-    )
-
-    print(
-        f"F1 Score:  "
-        f"{metrics['f1']:.4f}"
-    )
-
-    print()
-
-    print("Confusion Matrix")
-    print("================")
-
-    print(
-        "                 Predicted"
-    )
-
-    print(
-        "                 Down   Up"
-    )
-
-    print(
-        "Actual Down      "
-        f"{metrics['true_negative']:4d}   "
-        f"{metrics['false_positive']:4d}"
-    )
-
-    print(
-        "Actual Up        "
-        f"{metrics['false_negative']:4d}   "
-        f"{metrics['true_positive']:4d}"
-    )
-
-    print()
-
-    actual_up_rate = (
+    actual_up_rate = float(
         y_test.mean()
     )
 
-    predicted_up_rate = (
-        predictions.mean()
-    )
-
-    baseline_accuracy = max(
+    majority_baseline = max(
         actual_up_rate,
         1.0 - actual_up_rate,
     )
 
-    print("Baseline Comparison")
-    print("===================")
+    print()
+    print("Model Performance")
+    print("-----------------")
 
     print(
-        f"Actual UP rate:     "
-        f"{actual_up_rate:.4f}"
-    )
-
-    print(
-        f"Predicted UP rate:  "
-        f"{predicted_up_rate:.4f}"
-    )
-
-    print(
-        f"Majority baseline:  "
-        f"{baseline_accuracy:.4f}"
-    )
-
-    print(
-        f"Model accuracy:     "
+        f"Accuracy:          "
         f"{metrics['accuracy']:.4f}"
     )
 
-    print()
-
-    print("Sample Predictions")
-    print("==================")
-
-    results = pd.DataFrame(
-        {
-            "timestamp":
-                df.iloc[
-                    split_index:
-                ][
-                    "timestamp_utc"
-                ].values,
-
-            "actual":
-                y_test,
-
-            "predicted":
-                predictions,
-
-            "probability_up":
-                probabilities,
-        }
+    print(
+        f"Majority baseline: "
+        f"{majority_baseline:.4f}"
     )
 
     print(
-        results.head(10).to_string(
-            index=False
-        )
+        f"Precision:         "
+        f"{metrics['precision']:.4f}"
     )
 
-    # -----------------------------------------------------
-    # IMPORTANT:
-    #
-    # Save only portable parameters.
-    #
-    # Do NOT pickle the LogisticRegression class instance.
-    # This allows inference scripts to load the artifact
-    # without importing the training class.
-    # -----------------------------------------------------
+    print(
+        f"Recall:            "
+        f"{metrics['recall']:.4f}"
+    )
+
+    print(
+        f"F1 Score:          "
+        f"{metrics['f1']:.4f}"
+    )
 
     artifact = {
         "model_type":
@@ -621,7 +462,7 @@ def train_model(df):
             1,
 
         "symbol":
-            "AAPL",
+            symbol,
 
         "target":
             "target_up_5d",
@@ -661,6 +502,11 @@ def train_model(df):
         "metrics":
             metrics,
 
+        "majority_baseline":
+            float(
+                majority_baseline
+            ),
+
         "training_rows":
             int(
                 len(X_train)
@@ -670,24 +516,6 @@ def train_model(df):
             int(
                 len(X_test)
             ),
-
-        "training_period":
-            {
-                "start":
-                    str(training_start),
-
-                "end":
-                    str(training_end),
-            },
-
-        "test_period":
-            {
-                "start":
-                    str(test_start),
-
-                "end":
-                    str(test_end),
-            },
     }
 
     return artifact
@@ -695,15 +523,16 @@ def train_model(df):
 
 def save_model(
     artifact,
+    model_path,
 ):
-    """Persist the portable model artifact."""
+    """Save the portable model artifact."""
 
-    MODEL_PATH.parent.mkdir(
+    model_path.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    with MODEL_PATH.open(
+    with model_path.open(
         "wb"
     ) as file:
 
@@ -713,27 +542,43 @@ def save_model(
         )
 
     print()
-
     print(
-        f"Model saved: {MODEL_PATH}"
+        f"Model saved: {model_path}"
     )
 
 
 def main():
-    """Training entry point."""
 
-    print(
-        "Loading feature dataset..."
+    symbol = (
+        sys.argv[1].upper()
+        if len(sys.argv) > 1
+        else "AAPL"
     )
 
-    df = load_dataset()
+    (
+        feature_file,
+        model_path,
+    ) = get_paths(
+        symbol
+    )
+
+    print(
+        f"Loading feature dataset: "
+        f"{feature_file}"
+    )
+
+    df = load_dataset(
+        feature_file
+    )
 
     artifact = train_model(
-        df
+        df,
+        symbol,
     )
 
     save_model(
-        artifact
+        artifact,
+        model_path,
     )
 
 

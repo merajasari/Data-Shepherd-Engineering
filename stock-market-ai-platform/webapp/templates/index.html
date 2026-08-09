@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>
+Stock Market AI Platform
+</title>
+
+
+<style>
+
+:root {
+    --bg: #07101f;
+    --panel: #0d1c31;
+    --panel2: #10223b;
+    --border: #244261;
+
+    --text: #f2f6ff;
+    --muted: #91a6c2;
+
+    --cyan: #36d8ff;
+    --green: #39e3a1;
+    --red: #ff6680;
+    --purple: #9b65ff;
+    --gold: #efc56b;
+}
+
+
+* {
+    box-sizing: border-box;
+}
+
+
+body {
+    margin: 0;
+
+    color: var(--text);
+
+    font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    background:
+        radial-gradient(
+            circle at 10% 0%,
+            rgba(54,216,255,.10),
+            transparent 30%
+        ),
+        radial-gradient(
+            circle at 90% 0%,
+            rgba(155,101,255,.10),
+            transparent 30%
+        ),
+        var(--bg);
+}
+
+
+.shell {
+    width: min(1450px, 94%);
+    margin: auto;
+}
+
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    gap: 30px;
+
+    padding: 45px 0 30px;
+}
+
+
+.eyebrow,
+.label {
+    color: var(--cyan);
+
+    font-size: .75rem;
+    font-weight: 900;
+    letter-spacing: .16em;
+}
+
+
+h1 {
+    margin: 8px 0;
+
+    font-size:
+        clamp(2.1rem, 4vw, 3.7rem);
+}
+
+
+h2,
+h3 {
+    margin-top: 7px;
+}
+
+
+.subtitle {
+    margin: 0;
+
+    color: var(--muted);
+
+    font-size: 1.05rem;
+}
+
+
+.online {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 14px 20px;
+
+    border:
+        1px solid var(--border);
+
+    border-radius: 999px;
+
+    background:
+        rgba(13,28,49,.85);
+
+    font-weight: 900;
+}
+
+
+.dot {
+    width: 10px;
+    height: 10px;
+
+    border-radius: 50%;
+
+    background: var(--green);
+
+    box-shadow:
+        0 0 15px var(--green);
+}
+
+
+.selector-card {
+    margin-bottom: 22px;
+    padding: 18px 22px;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+
+    border:
+        1px solid var(--border);
+
+    border-radius: 20px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(18,37,62,.97),
+            rgba(8,20,36,.97)
+        );
+}
+
+
+.selector-card h3 {
+    margin: 6px 0 0;
+}
+
+
+.selector-card select {
+    min-width: 150px;
+
+    padding: 12px 16px;
+
+    color: var(--text);
+
+    background: var(--panel2);
+
+    border:
+        1px solid var(--border);
+
+    border-radius: 12px;
+
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+
+.card {
+    padding: 28px;
+
+    border:
+        1px solid var(--border);
+
+    border-radius: 26px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(18,37,62,.97),
+            rgba(8,20,36,.97)
+        );
+
+    box-shadow:
+        0 18px 50px
+        rgba(0,0,0,.22);
+}
+
+
+.hero {
+    display: grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap: 22px;
+}
+
+
+.market-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+
+    margin-top: 35px;
+}
+
+
+.symbol {
+    font-size: 3.6rem;
+    font-weight: 900;
+}
+
+
+.date {
+    color: var(--muted);
+
+    margin-top: 7px;
+}
+
+
+.price-block {
+    text-align: right;
+}
+
+
+.price {
+    font-size: 3.4rem;
+    font-weight: 900;
+}
+
+
+.positive {
+    color: var(--green);
+}
+
+
+.negative {
+    color: var(--red);
+}
+
+
+.direction-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    margin-top: 35px;
+}
+
+
+.direction {
+    font-size: 4.3rem;
+    font-weight: 900;
+}
+
+
+.up {
+    color: var(--green);
+}
+
+
+.down {
+    color: var(--red);
+}
+
+
+.output {
+    text-align: right;
+}
+
+
+.output strong {
+    display: block;
+
+    font-size: 2.6rem;
+}
+
+
+.output span {
+    color: var(--muted);
+
+    font-size: .75rem;
+}
+
+
+.bar-row {
+    display: grid;
+
+    grid-template-columns:
+        55px 1fr 65px;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin-top: 15px;
+}
+
+
+.bar {
+    height: 9px;
+
+    border-radius: 999px;
+
+    background: #172943;
+
+    overflow: hidden;
+}
+
+
+.bar-up {
+    height: 100%;
+
+    background:
+        linear-gradient(
+            90deg,
+            var(--green),
+            var(--cyan)
+        );
+}
+
+
+.bar-down {
+    height: 100%;
+
+    background:
+        linear-gradient(
+            90deg,
+            var(--red),
+            var(--purple)
+        );
+}
+
+
+.metrics {
+    display: grid;
+
+    grid-template-columns:
+        repeat(6, 1fr);
+
+    gap: 15px;
+
+    margin-top: 22px;
+}
+
+
+.metric {
+    padding: 20px;
+
+    border:
+        1px solid var(--border);
+
+    border-radius: 20px;
+
+    background:
+        var(--panel);
+}
+
+
+.metric span {
+    display: block;
+
+    color: var(--muted);
+
+    font-size: .7rem;
+    font-weight: 900;
+
+    letter-spacing: .08em;
+}
+
+
+.metric strong {
+    display: block;
+
+    margin-top: 8px;
+
+    font-size: 1.4rem;
+}
+
+
+.chart-card {
+    margin-top: 22px;
+}
+
+
+.chart-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+.chart-legend {
+    display: flex;
+
+    gap: 18px;
+
+    flex-wrap: wrap;
+
+    color: var(--muted);
+
+    font-size: .82rem;
+}
+
+
+.chart-box {
+    height: 390px;
+
+    margin-top: 15px;
+}
+
+
+.chart-box svg {
+    width: 100%;
+    height: 100%;
+}
+
+
+.section-title {
+    margin-top: 30px;
+}
+
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+
+table {
+    width: 100%;
+
+    border-collapse: collapse;
+}
+
+
+th,
+td {
+    padding: 15px 12px;
+
+    text-align: right;
+
+    border-bottom:
+        1px solid rgba(120,155,205,.12);
+}
+
+
+th:first-child,
+td:first-child {
+    text-align: left;
+}
+
+
+th {
+    color: var(--muted);
+
+    font-size: .72rem;
+
+    letter-spacing: .08em;
+}
+
+
+.top10-charts {
+    display: grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap: 22px;
+
+    margin-top: 22px;
+}
+
+
+.comparison-chart {
+    margin-top: 15px;
+}
+
+
+.compare-row {
+    display: grid;
+
+    grid-template-columns:
+        70px 1fr 70px;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin: 14px 0;
+}
+
+
+.compare-track {
+    height: 11px;
+
+    background: #172943;
+
+    border-radius: 999px;
+
+    overflow: hidden;
+}
+
+
+.compare-fill {
+    height: 100%;
+
+    border-radius: 999px;
+}
+
+
+.prob-fill {
+    background:
+        linear-gradient(
+            90deg,
+            var(--purple),
+            var(--cyan)
+        );
+}
+
+
+.acc-fill {
+    background:
+        linear-gradient(
+            90deg,
+            var(--green),
+            var(--cyan)
+        );
+}
+
+
+.baseline-fill {
+    background: var(--gold);
+}
+
+
+.dual-bar {
+    margin-top: 8px;
+}
+
+
+.small-label {
+    color: var(--muted);
+
+    font-size: .72rem;
+}
+
+
+.detail-grid {
+    display: grid;
+
+    grid-template-columns:
+        2fr 1fr;
+
+    gap: 22px;
+
+    margin-top: 22px;
+}
+
+
+.model-row {
+    display: flex;
+    justify-content: space-between;
+
+    padding: 14px 0;
+
+    border-bottom:
+        1px solid rgba(120,155,205,.12);
+}
+
+
+.model-row span {
+    color: var(--muted);
+}
+
+
+.warning {
+    margin-top: 20px;
+
+    padding: 14px;
+
+    border:
+        1px solid rgba(239,197,107,.25);
+
+    border-radius: 14px;
+
+    background:
+        rgba(239,197,107,.07);
+
+    color: var(--gold);
+}
+
+
+.pipeline {
+    margin-top: 22px;
+}
+
+
+.pipeline-row {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 10px;
+
+    overflow-x: auto;
+
+    margin-top: 20px;
+}
+
+
+.node {
+    min-width: 110px;
+
+    padding: 13px;
+
+    text-align: center;
+
+    border:
+        1px solid var(--border);
+
+    border-radius: 13px;
+
+    background:
+        var(--panel2);
+
+    font-size: .75rem;
+    font-weight: 900;
+}
+
+
+footer {
+    padding: 40px 0;
+
+    text-align: center;
+
+    color: var(--muted);
+
+    line-height: 1.8;
+}
+
+
+@media(max-width: 1000px) {
+
+    .hero,
+    .detail-grid,
+    .top10-charts {
+        grid-template-columns: 1fr;
+    }
+
+    .metrics {
+        grid-template-columns:
+            repeat(3,1fr);
+    }
+
+}
+
+
+@media(max-width: 650px) {
+
+    header,
+    .selector-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .selector-card form,
+    .selector-card select {
+        width: 100%;
+    }
+
+    .metrics {
+        grid-template-columns:
+            repeat(2,1fr);
+    }
+
+    .symbol,
+    .price {
+        font-size: 2.5rem;
+    }
+
+    .direction {
+        font-size: 3.2rem;
+    }
+
+    .chart-box {
+        height: 300px;
+    }
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="shell">
+
+
+<header>
+
+<div>
+
+<div class="eyebrow">
+DATA SHEPHERD ENGINEERING
+</div>
+
+<h1>
+Stock Market AI Platform
+</h1>
+
+<p class="subtitle">
+End-to-end market intelligence powered by
+data engineering, feature engineering and machine learning.
+</p>
+
+</div>
+
+
+<div class="online">
+
+<span class="dot"></span>
+
+PLATFORM ONLINE
+
+</div>
+
+</header>
+
+
+<section class="selector-card">
+
+<div>
+
+<div class="label">
+PRIMARY STOCK VIEW
+</div>
+
+<h3>
+Detailed Market Analysis
+</h3>
+
+</div>
+
+
+<form
+method="get"
+action="/"
+>
+
+<select
+name="symbol"
+onchange="this.form.submit()"
+>
+
+{% for symbol in top_symbols %}
+
+<option
+value="{{ symbol }}"
+{% if symbol == selected_symbol %}
+selected
+{% endif %}
+>
+
+{{ symbol }}
+
+</option>
+
+{% endfor %}
+
+</select>
+
+</form>
+
+</section>
+
+
+
+<section class="hero">
+
+
+<div class="card">
+
+<div class="label">
+MARKET
+</div>
+
+
+<div class="market-row">
+
+<div>
+
+<div class="symbol">
+{{ market.symbol }}
+</div>
+
+<div class="date">
+{{ market.timestamp }}
+</div>
+
+</div>
+
+
+<div class="price-block">
+
+<div class="price">
+
+${{ "%.2f"|format(market.close) }}
+
+</div>
+
+
+<div
+class="
+{% if market.price_change < 0 %}
+negative
+{% else %}
+positive
+{% endif %}
+"
+>
+
+{{ "%+.2f"|format(market.price_change) }}
+
+(
+
+{{ "%+.2f"|format(
+market.price_change_pct * 100
+) }}%
+
+)
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+
+<div class="card">
+
+<div class="label">
+5-DAY AI DIRECTION
+</div>
+
+
+<div class="direction-row">
+
+<div
+class="
+direction
+{% if prediction.prediction == 'UP' %}
+up
+{% else %}
+down
+{% endif %}
+"
+>
+
+{{ prediction.prediction }}
+
+</div>
+
+
+<div class="output">
+
+<strong>
+
+{{ "%.1f"|format(
+prediction.confidence * 100
+) }}%
+
+</strong>
+
+<span>
+MODEL OUTPUT PROBABILITY
+</span>
+
+</div>
+
+</div>
+
+
+<div class="bar-row">
+
+<span>UP</span>
+
+<div class="bar">
+
+<div
+class="bar-up"
+style="
+width:
+{{ prediction.probability_up * 100 }}%;
+"
+></div>
+
+</div>
+
+<strong>
+
+{{ "%.1f"|format(
+prediction.probability_up * 100
+) }}%
+
+</strong>
+
+</div>
+
+
+<div class="bar-row">
+
+<span>DOWN</span>
+
+<div class="bar">
+
+<div
+class="bar-down"
+style="
+width:
+{{ prediction.probability_down * 100 }}%;
+"
+></div>
+
+</div>
+
+<strong>
+
+{{ "%.1f"|format(
+prediction.probability_down * 100
+) }}%
+
+</strong>
+
+</div>
+
+</div>
+
+</section>
+
+
+
+<section class="metrics">
+
+<div class="metric">
+<span>RSI 14</span>
+<strong>{{ "%.2f"|format(market.rsi_14) }}</strong>
+</div>
+
+<div class="metric">
+<span>SMA 20</span>
+<strong>${{ "%.2f"|format(market.sma_20) }}</strong>
+</div>
+
+<div class="metric">
+<span>SMA 50</span>
+<strong>${{ "%.2f"|format(market.sma_50) }}</strong>
+</div>
+
+<div class="metric">
+<span>SMA 200</span>
+<strong>${{ "%.2f"|format(market.sma_200) }}</strong>
+</div>
+
+<div class="metric">
+<span>20D VOLATILITY</span>
+<strong>{{ "%.2f"|format(market.volatility_20d * 100) }}%</strong>
+</div>
+
+<div class="metric">
+<span>VOLUME RATIO</span>
+<strong>{{ "%.2f"|format(market.volume_ratio) }}x</strong>
+</div>
+
+</section>
+
+
+
+<section class="card chart-card">
+
+<div class="chart-head">
+
+<div>
+
+<div class="label">
+MARKET TREND
+</div>
+
+<h2>
+{{ selected_symbol }} Recent Price History
+</h2>
+
+</div>
+
+
+<div class="chart-legend">
+
+<span style="color:#36d8ff">● Close</span>
+<span style="color:#39e3a1">● SMA 20</span>
+<span style="color:#9b65ff">● SMA 50</span>
+<span style="color:#efc56b">● SMA 200</span>
+
+</div>
+
+</div>
+
+
+<div
+id="primary-chart"
+class="chart-box"
+></div>
+
+</section>
+
+
+
+<section class="card section-title">
+
+<div class="label">
+MULTI-STOCK AI INTELLIGENCE
+</div>
+
+<h2>
+Top 10 Model Comparison
+</h2>
+
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>Symbol</th>
+<th>Direction</th>
+<th>Output</th>
+<th>Accuracy</th>
+<th>Baseline</th>
+<th>Edge</th>
+<th>RSI</th>
+
+</tr>
+
+</thead>
+
+
+<tbody>
+
+{% for stock in stocks %}
+
+{% set edge =
+stock.accuracy -
+stock.majority_baseline
+%}
+
+<tr>
+
+<td>
+<strong>{{ stock.symbol }}</strong>
+</td>
+
+<td
+class="
+{% if stock.prediction == 'UP' %}
+positive
+{% else %}
+negative
+{% endif %}
+"
+>
+{{ stock.prediction }}
+</td>
+
+<td>
+{{ "%.1f"|format(stock.output_probability * 100) }}%
+</td>
+
+<td>
+{{ "%.1f"|format(stock.accuracy * 100) }}%
+</td>
+
+<td>
+{{ "%.1f"|format(stock.majority_baseline * 100) }}%
+</td>
+
+<td
+class="
+{% if edge > 0 %}
+positive
+{% else %}
+negative
+{% endif %}
+"
+>
+{{ "%+.1f"|format(edge * 100) }}%
+</td>
+
+<td>
+{{ "%.1f"|format(stock.rsi_14) }}
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</section>
+
+
+
+<section class="top10-charts">
+
+
+<div class="card">
+
+<div class="label">
+AI OUTPUT COMPARISON
+</div>
+
+<h2>
+Top 10 Prediction Strength
+</h2>
+
+
+<div class="comparison-chart">
+
+{% for stock in stocks %}
+
+<div class="compare-row">
+
+<strong>
+{{ stock.symbol }}
+</strong>
+
+
+<div class="compare-track">
+
+<div
+class="compare-fill prob-fill"
+style="
+width:
+{{ stock.output_probability * 100 }}%;
+"
+></div>
+
+</div>
+
+
+<strong>
+{{ "%.0f"|format(stock.output_probability * 100) }}%
+</strong>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+</div>
+
+
+
+<div class="card">
+
+<div class="label">
+MODEL QUALITY
+</div>
+
+<h2>
+Accuracy vs Baseline
+</h2>
+
+
+{% for stock in stocks %}
+
+<div class="dual-bar">
+
+
+<div class="small-label">
+
+{{ stock.symbol }}
+
+Accuracy
+{{ "%.1f"|format(stock.accuracy * 100) }}%
+
+vs
+
+Baseline
+{{ "%.1f"|format(stock.majority_baseline * 100) }}%
+
+</div>
+
+
+<div class="compare-track">
+
+<div
+class="compare-fill acc-fill"
+style="
+width:
+{{ stock.accuracy * 100 }}%;
+"
+></div>
+
+</div>
+
+
+<div
+class="compare-track"
+style="margin-top:4px"
+>
+
+<div
+class="compare-fill baseline-fill"
+style="
+width:
+{{ stock.majority_baseline * 100 }}%;
+"
+></div>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+</section>
+
+
+
+<section class="detail-grid">
+
+
+<div class="card">
+
+<div class="label">
+RECENT MARKET DATA
+</div>
+
+<h2>
+Latest {{ selected_symbol }} Trading Sessions
+</h2>
+
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>Date</th>
+<th>Open</th>
+<th>High</th>
+<th>Low</th>
+<th>Close</th>
+<th>Volume</th>
+
+</tr>
+
+</thead>
+
+
+<tbody>
+
+{% for row in recent_prices[-10:]|reverse %}
+
+<tr>
+
+<td>
+{{ row.timestamp[:10] }}
+</td>
+
+<td>
+${{ "%.2f"|format(row.open) }}
+</td>
+
+<td>
+${{ "%.2f"|format(row.high) }}
+</td>
+
+<td>
+${{ "%.2f"|format(row.low) }}
+</td>
+
+<td>
+${{ "%.2f"|format(row.close) }}
+</td>
+
+<td>
+{{ "{:,.0f}".format(row.volume) }}
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+
+<div class="card">
+
+<div class="label">
+MODEL PERFORMANCE
+</div>
+
+<h2>
+{{ selected_symbol }} Baseline ML Model
+</h2>
+
+
+<div class="model-row">
+
+<span>Accuracy</span>
+
+<strong>
+{{ "%.1f"|format(prediction.accuracy * 100) }}%
+</strong>
+
+</div>
+
+
+<div class="model-row">
+
+<span>Majority Baseline</span>
+
+<strong>
+{{ "%.1f"|format(prediction.majority_baseline * 100) }}%
+</strong>
+
+</div>
+
+
+<div class="model-row">
+
+<span>Precision</span>
+
+<strong>
+{{ "%.1f"|format(prediction.precision * 100) }}%
+</strong>
+
+</div>
+
+
+<div class="model-row">
+
+<span>Recall</span>
+
+<strong>
+{{ "%.1f"|format(prediction.recall * 100) }}%
+</strong>
+
+</div>
+
+
+<div class="model-row">
+
+<span>F1 Score</span>
+
+<strong>
+{{ "%.1f"|format(prediction.f1 * 100) }}%
+</strong>
+
+</div>
+
+
+<div class="warning">
+
+Experimental research model.
+
+Model output probability is not the same
+as validated predictive accuracy.
+
+</div>
+
+</div>
+
+</section>
+
+
+
+<section class="card pipeline">
+
+<div class="label">
+PLATFORM PIPELINE
+</div>
+
+
+<div class="pipeline-row">
+
+<div class="node">TIINGO API</div>
+<span>→</span>
+
+<div class="node">BRONZE</div>
+<span>→</span>
+
+<div class="node">SILVER</div>
+<span>→</span>
+
+<div class="node">GOLD</div>
+<span>→</span>
+
+<div class="node">FEATURES</div>
+<span>→</span>
+
+<div class="node">ML</div>
+<span>→</span>
+
+<div class="node">INFERENCE</div>
+
+</div>
+
+</section>
+
+
+
+<footer>
+
+Built with Python • Flask • Pandas • NumPy •
+Parquet • Tiingo • Git • GitHub
+
+<br>
+
+Data Shepherd Engineering
+
+<br>
+
+Experimental research platform.
+Not financial advice.
+
+</footer>
+
+
+</div>
+
+
+
+<script>
+
+const rows =
+{{ recent_prices | tojson }};
+
+
+function rollingAverage(
+values,
+windowSize
+) {
+
+const result = [];
+
+for (
+let i = 0;
+i < values.length;
+i++
+) {
+
+if (
+i < windowSize - 1
+) {
+
+result.push(null);
+continue;
+
+}
+
+let total = 0;
+
+for (
+let j = 0;
+j < windowSize;
+j++
+) {
+
+total +=
+values[i-j];
+
+}
+
+result.push(
+total / windowSize
+);
+
+}
+
+return result;
+
+}
+
+
+
+function drawChart() {
+
+const container =
+document.getElementById(
+"primary-chart"
+);
+
+
+const closes =
+rows.map(
+r => Number(r.close)
+);
+
+
+const sma20 =
+rollingAverage(
+closes,
+20
+);
+
+
+const sma50 =
+rollingAverage(
+closes,
+50
+);
+
+
+const sma200 =
+rollingAverage(
+closes,
+200
+);
+
+
+const all =
+[
+...closes,
+...sma20,
+...sma50,
+...sma200
+].filter(
+v =>
+v !== null &&
+Number.isFinite(v)
+);
+
+
+const width = 1000;
+const height = 360;
+
+const padX = 50;
+const padY = 35;
+
+
+const min =
+Math.min(...all);
+
+
+const max =
+Math.max(...all);
+
+
+const range =
+Math.max(
+max-min,
+1
+);
+
+
+const x =
+i =>
+padX +
+i *
+(
+(width-padX*2)
+/
+Math.max(
+rows.length-1,
+1
+)
+);
+
+
+const y =
+v =>
+height-padY -
+(
+(v-min)
+/
+range
+)
+*
+(
+height-padY*2
+);
+
+
+function path(
+values
+) {
+
+let output = "";
+
+let started =
+false;
+
+
+values.forEach(
+(value,index) => {
+
+if (
+value === null
+) {
+return;
+}
+
+
+const px =
+x(index);
+
+
+const py =
+y(value);
+
+
+if (!started) {
+
+output +=
+`M ${px} ${py}`;
+
+started = true;
+
+} else {
+
+output +=
+` L ${px} ${py}`;
+
+}
+
+}
+);
+
+
+return output;
+
+}
+
+
+container.innerHTML = `
+
+<svg
+viewBox="0 0 ${width} ${height}"
+preserveAspectRatio="none"
+>
+
+<path
+d="${path(closes)}"
+fill="none"
+stroke="#36d8ff"
+stroke-width="4"
+/>
+
+<path
+d="${path(sma20)}"
+fill="none"
+stroke="#39e3a1"
+stroke-width="2"
+/>
+
+<path
+d="${path(sma50)}"
+fill="none"
+stroke="#9b65ff"
+stroke-width="2"
+/>
+
+<path
+d="${path(sma200)}"
+fill="none"
+stroke="#efc56b"
+stroke-width="2"
+/>
+
+<circle
+cx="${x(closes.length-1)}"
+cy="${y(closes[closes.length-1])}"
+r="6"
+fill="#36d8ff"
+stroke="white"
+stroke-width="2"
+/>
+
+<text
+x="${x(closes.length-1)-10}"
+y="${y(closes[closes.length-1])-12}"
+text-anchor="end"
+fill="white"
+font-size="18"
+font-weight="700"
+>
+
+$${closes[
+closes.length-1
+].toFixed(2)}
+
+</text>
+
+</svg>
+
+`;
+
+}
+
+
+drawChart();
+
+</script>
+
+
+</body>
+
+</html>

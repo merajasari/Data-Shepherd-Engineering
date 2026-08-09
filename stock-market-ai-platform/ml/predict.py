@@ -1,32 +1,22 @@
 """
-Run inference using the trained AAPL direction model.
+Run inference for any configured stock symbol.
 
-This script:
-- Loads the saved portable model artifact.
-- Loads the latest engineered AAPL feature data.
-- Applies the exact training-time standardization.
-- Calculates probability of an UP move over the next 5 trading days.
-- Prints a human-readable prediction.
+Usage:
+    python ml/predict.py AAPL
+    python ml/predict.py NVDA
+    python ml/predict.py TSLA
 """
 
 from pathlib import Path
 import pickle
+import sys
 
 import numpy as np
 import pandas as pd
 
 
-MODEL_PATH = Path(
-    "models/aapl_direction_model.pkl"
-)
-
-FEATURE_FILE = Path(
-    "data/features/stocks/AAPL/AAPL_features.parquet"
-)
-
-
 def sigmoid(value):
-    """Calculate a numerically stable sigmoid probability."""
+    """Calculate numerically stable sigmoid probability."""
 
     value = np.clip(
         value,
@@ -39,15 +29,32 @@ def sigmoid(value):
     )
 
 
-def load_model():
+def get_paths(symbol: str):
+    """Return feature and model paths for a symbol."""
+
+    feature_file = Path(
+        f"data/features/stocks/{symbol}/{symbol}_features.parquet"
+    )
+
+    model_file = Path(
+        f"models/{symbol.lower()}_direction_model.pkl"
+    )
+
+    return (
+        feature_file,
+        model_file,
+    )
+
+
+def load_model(model_file: Path):
     """Load the portable model artifact."""
 
-    if not MODEL_PATH.exists():
+    if not model_file.exists():
         raise FileNotFoundError(
-            f"Model artifact not found: {MODEL_PATH}"
+            f"Model artifact not found: {model_file}"
         )
 
-    with MODEL_PATH.open("rb") as file:
+    with model_file.open("rb") as file:
         artifact = pickle.load(file)
 
     required_keys = [
@@ -75,18 +82,19 @@ def load_model():
     return artifact
 
 
-def load_latest_features(feature_columns):
-    """
-    Load the latest row with all required inference features.
-    """
+def load_latest_features(
+    feature_file: Path,
+    feature_columns,
+):
+    """Load latest row containing all required model features."""
 
-    if not FEATURE_FILE.exists():
+    if not feature_file.exists():
         raise FileNotFoundError(
-            f"Feature dataset not found: {FEATURE_FILE}"
+            f"Feature dataset not found: {feature_file}"
         )
 
     df = pd.read_parquet(
-        FEATURE_FILE
+        feature_file
     )
 
     df = df.sort_values(
@@ -116,20 +124,30 @@ def load_latest_features(feature_columns):
     return valid_rows.iloc[-1]
 
 
-def predict():
-    """Generate the latest stock-direction prediction."""
+def run_prediction(symbol: str):
+    """Generate latest prediction for one stock."""
 
-    artifact = load_model()
+    (
+        feature_file,
+        model_file,
+    ) = get_paths(
+        symbol
+    )
+
+    artifact = load_model(
+        model_file
+    )
 
     feature_columns = artifact[
         "feature_columns"
     ]
 
     latest = load_latest_features(
-        feature_columns
+        feature_file,
+        feature_columns,
     )
 
-    X = latest[
+    features = latest[
         feature_columns
     ].to_numpy(
         dtype=float
@@ -164,12 +182,12 @@ def predict():
         feature_std == 0
     ] = 1.0
 
-    X_scaled = (
-        X - feature_mean
+    scaled = (
+        features - feature_mean
     ) / feature_std
 
     score = (
-        X_scaled @ weights
+        scaled @ weights
         + bias
     )
 
@@ -181,92 +199,178 @@ def predict():
         1.0 - probability_up
     )
 
-    predicted_up = (
-        probability_up >= threshold
-    )
-
     prediction = (
         "UP"
-        if predicted_up
+        if probability_up >= threshold
         else "DOWN"
     )
 
-    confidence = max(
+    output_probability = max(
         probability_up,
         probability_down,
     )
 
+    metrics = artifact.get(
+        "metrics",
+        {}
+    )
+
+    result = {
+        "symbol":
+            symbol,
+
+        "timestamp":
+            str(
+                latest["timestamp_utc"]
+            ),
+
+        "close":
+            float(
+                latest["close"]
+            ),
+
+        "prediction":
+            prediction,
+
+        "probability_up":
+            probability_up,
+
+        "probability_down":
+            probability_down,
+
+        "output_probability":
+            output_probability,
+
+        "accuracy":
+            metrics.get(
+                "accuracy"
+            ),
+
+        "majority_baseline":
+            artifact.get(
+                "majority_baseline"
+            ),
+
+        "precision":
+            metrics.get(
+                "precision"
+            ),
+
+        "recall":
+            metrics.get(
+                "recall"
+            ),
+
+        "f1":
+            metrics.get(
+                "f1"
+            ),
+
+        "model_type":
+            artifact.get(
+                "model_type"
+            ),
+
+        "horizon_days":
+            artifact.get(
+                "target_horizon_days",
+                5,
+            ),
+    }
+
+    return result
+
+
+def print_prediction(result):
+    """Print human-readable prediction output."""
+
     print()
     print(
-        f"{artifact['symbol']} 5-Day Direction Prediction"
-    )
-    print(
-        "=" * 38
+        f"{result['symbol']} 5-Day Direction Prediction"
     )
 
     print(
-        f"As of: {latest['timestamp_utc']}"
+        "=" * 42
     )
 
     print(
-        f"Close: ${latest['close']:.2f}"
+        f"As of: {result['timestamp']}"
+    )
+
+    print(
+        f"Close: ${result['close']:.2f}"
     )
 
     print()
 
     print(
-        f"Prediction: {prediction}"
+        f"Prediction: "
+        f"{result['prediction']}"
     )
 
     print(
         f"Probability UP:   "
-        f"{probability_up:.2%}"
+        f"{result['probability_up']:.2%}"
     )
 
     print(
         f"Probability DOWN: "
-        f"{probability_down:.2%}"
+        f"{result['probability_down']:.2%}"
     )
 
     print(
-        f"Model confidence: "
-        f"{confidence:.2%}"
+        f"Model output probability: "
+        f"{result['output_probability']:.2%}"
     )
 
     print()
 
-    print(
-        "Model:",
-        artifact["model_type"],
-    )
-
-    print(
-        "Prediction horizon:",
-        "5 trading days",
-    )
-
-    if "metrics" in artifact:
-
-        accuracy = artifact[
-            "metrics"
-        ].get(
-            "accuracy"
+    if result["accuracy"] is not None:
+        print(
+            f"Holdout accuracy: "
+            f"{result['accuracy']:.2%}"
         )
 
-        if accuracy is not None:
-            print(
-                "Holdout accuracy:",
-                f"{accuracy:.2%}",
-            )
+    if result["majority_baseline"] is not None:
+        print(
+            f"Majority baseline: "
+            f"{result['majority_baseline']:.2%}"
+        )
+
+    print()
+
+    print(
+        f"Model: {result['model_type']}"
+    )
+
+    print(
+        f"Horizon: "
+        f"{result['horizon_days']} trading days"
+    )
 
     print()
     print(
-        "Note: This is an experimental model output,"
+        "Experimental research output. "
+        "Not financial advice."
     )
-    print(
-        "not financial advice or a validated trading signal."
+
+
+def main():
+
+    symbol = (
+        sys.argv[1].upper()
+        if len(sys.argv) > 1
+        else "AAPL"
+    )
+
+    result = run_prediction(
+        symbol
+    )
+
+    print_prediction(
+        result
     )
 
 
 if __name__ == "__main__":
-    predict()
+    main()

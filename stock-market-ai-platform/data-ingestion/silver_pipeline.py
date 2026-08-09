@@ -10,8 +10,7 @@ from silver_transform import transform_to_silver
 from silver_writer import write_silver
 
 
-BRONZE_PATH = Path("data-ingestion/data/bronze/stocks")
-
+BRONZE_PATH = Path("data/bronze/stocks")
 
 def process_stock(stock_dir: Path) -> None:
     """Transform and write one stock's Bronze dataset."""
