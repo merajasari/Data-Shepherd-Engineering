@@ -1,28 +1,27 @@
 """
-Fast multi-stock ingestion using Tiingo.
+Multi-symbol Tiingo market-data ingestion.
 
-Downloads the configured stock universe and writes each symbol
-to the canonical Bronze layer.
+Downloads daily historical data for all configured symbols
+and writes each dataset to the Bronze layer.
+
+The end date is calculated dynamically so the pipeline always
+requests data through the current date.
 """
 
-from pathlib import Path
+from datetime import date
 
 from bronze_writer import write_bronze
 from symbols import get_symbols
 from tiingo_client import TiingoClient
-from validators import validate_prices
 
 
 START_DATE = "2024-08-01"
-END_DATE = "2026-01-01"
 
-BRONZE_PATH = Path(
-    "data/bronze/stocks"
-)
+# Always request through today's date.
+END_DATE = date.today().isoformat()
 
 
-def run_ingestion():
-    """Download all configured symbols from Tiingo."""
+def main():
 
     symbols = get_symbols()
 
@@ -62,13 +61,10 @@ def run_ingestion():
             )
 
             if df.empty:
-                raise ValueError(
-                    "No market data returned"
-                )
 
-            validate_prices(
-                df
-            )
+                raise ValueError(
+                    "Tiingo returned no rows"
+                )
 
             write_bronze(
                 df,
@@ -76,64 +72,80 @@ def run_ingestion():
             )
 
             successful.append(
-                {
-                    "symbol": symbol,
-                    "rows": len(df),
-                }
+                (
+                    symbol,
+                    len(df),
+                )
             )
 
             print(
-                f"[SUCCESS] {symbol}: "
+                f"[SUCCESS] "
+                f"{symbol}: "
                 f"{len(df)} rows"
             )
 
         except Exception as exc:
 
             failed.append(
-                {
-                    "symbol": symbol,
-                    "error": str(exc),
-                }
+                (
+                    symbol,
+                    str(exc),
+                )
             )
 
             print(
-                f"[ERROR] {symbol}: "
+                f"[ERROR] "
+                f"{symbol}: "
                 f"{exc}"
             )
 
         print()
 
-    print("=" * 60)
-    print("TIINGO INGESTION SUMMARY")
-    print("=" * 60)
-
     print(
-        f"Successful: {len(successful)}"
+        "=" * 60
     )
 
     print(
-        f"Failed:     {len(failed)}"
+        "TIINGO INGESTION SUMMARY"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        f"Successful: "
+        f"{len(successful)}"
+    )
+
+    print(
+        f"Failed:     "
+        f"{len(failed)}"
     )
 
     print()
 
-    for item in successful:
+    for symbol, rows in successful:
+
         print(
-            f"{item['symbol']:6} "
-            f"{item['rows']:4} rows"
+            f"{symbol:6} "
+            f"{rows:,} rows"
         )
 
     if failed:
 
         print()
-        print("FAILED SYMBOLS")
+        print(
+            "FAILED SYMBOLS"
+        )
 
-        for item in failed:
+        for symbol, error in failed:
+
             print(
-                f"{item['symbol']}: "
-                f"{item['error']}"
+                f"{symbol}: "
+                f"{error}"
             )
 
 
 if __name__ == "__main__":
-    run_ingestion()
+    main()
