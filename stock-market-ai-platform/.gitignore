@@ -25,3 +25,15 @@ data-ingestion/data/
 
 # Generated ML model artifacts
 models/*.pkl
+
+# Live runtime market cache
+data/live/
+
+# Runtime logs
+logs/
+
+# Runtime PID / process state
+run/
+
+# Refresh lock files
+*.lock

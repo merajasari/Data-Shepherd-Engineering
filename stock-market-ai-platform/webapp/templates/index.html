@@ -1069,6 +1069,7 @@ Top 10 Model Comparison
 <tr>
 
 <th>Symbol</th>
+<th>Price</th>
 <th>Direction</th>
 <th>Output</th>
 <th>Accuracy</th>
@@ -1090,10 +1091,18 @@ stock.accuracy -
 stock.majority_baseline
 %}
 
-<tr>
+<tr data-stock-symbol="{{ stock.symbol }}">
 
 <td>
 <strong>{{ stock.symbol }}</strong>
+</td>
+
+<td
+class="top10-price"
+data-live-price-symbol="{{ stock.symbol }}"
+data-eod-price="{{ '%.2f'|format(stock.close) }}"
+>
+${{ "%.2f"|format(stock.display_price) }}
 </td>
 
 <td
@@ -1758,6 +1767,9 @@ drawChart();
 
 </script>
 
+
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 
 </body>
 

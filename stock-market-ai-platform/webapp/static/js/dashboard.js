@@ -1,597 +1,453 @@
-let priceChart = null;
+/*
+Stock Market AI Platform
+Live dashboard client
+*/
 
+const LIVE_REFRESH_MS = 10000;
 
-const TOP_SYMBOLS = [
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "GOOGL",
-    "META",
-    "TSLA",
-    "AVGO",
-    "AMD",
-    "ORCL"
-];
-
-
-function percent(value, digits = 1) {
-    return `${(Number(value) * 100).toFixed(digits)}%`;
-}
-
-
-function signedPercent(value, digits = 1) {
-    const number = Number(value) * 100;
-
-    return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
-}
+let liveRefreshTimer = null;
+let lastMainPrice = null;
 
 
 function money(value) {
-    return `$${Number(value).toFixed(2)}`;
-}
+    const number = Number(value);
 
-
-function safeNumber(value, digits = 1) {
-    if (
-        value === null
-        || value === undefined
-        || Number.isNaN(Number(value))
-    ) {
+    if (!Number.isFinite(number)) {
         return "N/A";
     }
 
-    return Number(value).toFixed(digits);
+    return `$${number.toFixed(2)}`;
 }
 
 
-function directionClass(direction) {
-    return (
-        direction === "UP"
-            ? "prediction-up"
-            : "prediction-down"
+function getSelectedSymbol() {
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    const querySymbol =
+        params.get("symbol");
+
+    if (querySymbol) {
+        return querySymbol
+            .trim()
+            .toUpperCase();
+    }
+
+    const symbolElement =
+        document.querySelector(
+            ".symbol"
+        );
+
+    if (
+        symbolElement
+        && symbolElement.textContent
+    ) {
+        return symbolElement
+            .textContent
+            .trim()
+            .toUpperCase();
+    }
+
+    return "AAPL";
+}
+
+
+function getMainPriceElement() {
+    return document.querySelector(
+        ".price-block .price"
     );
 }
 
 
-function edgeClass(edge) {
-    if (edge > 0) {
-        return "positive";
-    }
-
-    if (edge < 0) {
-        return "negative";
-    }
-
-    return "";
+function getMainPriceBlock() {
+    return document.querySelector(
+        ".price-block"
+    );
 }
 
 
-async function loadStocks() {
+function getOrCreateMainStatus() {
+    const priceBlock =
+        getMainPriceBlock();
 
-    const response = await fetch(
-        "/api/stocks"
+    if (!priceBlock) {
+        return null;
+    }
+
+    let label =
+        document.getElementById(
+            "live-price-source"
+        );
+
+    if (label) {
+        return label;
+    }
+
+    label =
+        document.createElement(
+            "div"
+        );
+
+    label.id =
+        "live-price-source";
+
+    label.style.marginTop =
+        "6px";
+
+    label.style.fontSize =
+        ".72rem";
+
+    label.style.fontWeight =
+        "900";
+
+    label.style.letterSpacing =
+        ".08em";
+
+    priceBlock.appendChild(
+        label
     );
 
-    if (!response.ok) {
-        throw new Error(
-            `Stock API failed: ${response.status}`
-        );
-    }
-
-    const stocks = await response.json();
-
-    renderRanking(stocks);
-    renderStockCards(stocks);
+    return label;
 }
 
 
-function renderRanking(stocks) {
-
-    const tbody =
-        document.getElementById(
-            "ranking-body"
-        );
-
-    tbody.innerHTML = "";
-
-
-    for (const stock of stocks) {
-
-        const edge =
-            Number(stock.accuracy)
-            - Number(
-                stock.majority_baseline
-            );
-
-
-        const row =
-            document.createElement(
-                "tr"
-            );
-
-
-        row.innerHTML = `
-            <td>
-                <strong>
-                    ${stock.symbol}
-                </strong>
-            </td>
-
-            <td
-                class="${directionClass(
-                    stock.prediction
-                )}"
-            >
-                ${stock.prediction}
-            </td>
-
-            <td>
-                ${percent(
-                    stock.output_probability
-                )}
-            </td>
-
-            <td>
-                ${percent(
-                    stock.accuracy
-                )}
-            </td>
-
-            <td>
-                ${percent(
-                    stock.majority_baseline
-                )}
-            </td>
-
-            <td
-                class="${edgeClass(edge)}"
-            >
-                ${signedPercent(edge)}
-            </td>
-        `;
-
-
-        tbody.appendChild(
-            row
-        );
-    }
-}
-
-
-function renderStockCards(stocks) {
-
-    const grid =
-        document.getElementById(
-            "stock-grid"
-        );
-
-    grid.innerHTML = "";
-
-
-    for (const stock of stocks) {
-
-        const edge =
-            Number(stock.accuracy)
-            - Number(
-                stock.majority_baseline
-            );
-
-
-        const card =
-            document.createElement(
-                "article"
-            );
-
-        card.className =
-            "stock-card";
-
-
-        card.innerHTML = `
-            <div class="stock-card-header">
-
-                <div>
-                    <div class="stock-symbol">
-                        ${stock.symbol}
-                    </div>
-
-                    <div class="stock-date">
-                        ${String(
-                            stock.timestamp
-                        ).slice(0, 10)}
-                    </div>
-                </div>
-
-                <div class="stock-price-block">
-
-                    <div class="stock-price">
-                        ${money(
-                            stock.close
-                        )}
-                    </div>
-
-                    <div
-                        class="
-                        stock-change
-                        ${
-                            Number(
-                                stock.price_change_pct
-                            ) >= 0
-                                ? "positive"
-                                : "negative"
-                        }
-                        "
-                    >
-                        ${signedPercent(
-                            stock.price_change_pct
-                        )}
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="prediction-section">
-
-                <div>
-
-                    <div class="mini-label">
-                        5-DAY AI DIRECTION
-                    </div>
-
-                    <div
-                        class="
-                        mini-direction
-                        ${directionClass(
-                            stock.prediction
-                        )}
-                        "
-                    >
-                        ${stock.prediction}
-                    </div>
-
-                </div>
-
-
-                <div class="mini-probability">
-
-                    <strong>
-                        ${percent(
-                            stock.output_probability
-                        )}
-                    </strong>
-
-                    <span>
-                        MODEL OUTPUT
-                    </span>
-
-                </div>
-
-            </div>
-
-
-            <div class="probability-bar-wrap">
-
-                <div class="probability-label-row">
-
-                    <span>
-                        UP
-                    </span>
-
-                    <span>
-                        ${percent(
-                            stock.probability_up
-                        )}
-                    </span>
-
-                </div>
-
-
-                <div class="mini-bar">
-
-                    <div
-                        class="mini-bar-fill up-bar"
-                        style="
-                            width:
-                            ${
-                                Number(
-                                    stock.probability_up
-                                ) * 100
-                            }%;
-                        "
-                    ></div>
-
-                </div>
-
-            </div>
-
-
-            <div class="metric-grid-small">
-
-                <div>
-                    <span>RSI</span>
-
-                    <strong>
-                        ${safeNumber(
-                            stock.rsi_14,
-                            1
-                        )}
-                    </strong>
-                </div>
-
-
-                <div>
-                    <span>SMA 20</span>
-
-                    <strong>
-                        ${money(
-                            stock.sma_20
-                        )}
-                    </strong>
-                </div>
-
-
-                <div>
-                    <span>VOL 20D</span>
-
-                    <strong>
-                        ${percent(
-                            stock.volatility_20d,
-                            2
-                        )}
-                    </strong>
-                </div>
-
-
-                <div>
-                    <span>VOLUME RATIO</span>
-
-                    <strong>
-                        ${safeNumber(
-                            stock.volume_ratio,
-                            2
-                        )}x
-                    </strong>
-                </div>
-
-            </div>
-
-
-            <div class="model-quality">
-
-                <div>
-                    <span>
-                        MODEL ACCURACY
-                    </span>
-
-                    <strong>
-                        ${percent(
-                            stock.accuracy
-                        )}
-                    </strong>
-                </div>
-
-
-                <div>
-                    <span>
-                        BASELINE
-                    </span>
-
-                    <strong>
-                        ${percent(
-                            stock.majority_baseline
-                        )}
-                    </strong>
-                </div>
-
-            </div>
-
-
-            <div class="model-edge">
-
-                <span
-                    class="${
-                        edge > 0
-                            ? "edge-positive"
-                            : edge < 0
-                                ? "edge-negative"
-                                : "edge-neutral"
-                    }"
-                >
-
-                    ${
-                        edge > 0
-                            ? "MODEL EDGE"
-                            : edge < 0
-                                ? "BELOW BASELINE"
-                                : "MATCHES BASELINE"
-                    }
-
-                    ${signedPercent(edge)}
-
-                </span>
-
-            </div>
-        `;
-
-
-        grid.appendChild(
-            card
-        );
-    }
-}
-
-
-async function loadPriceChart(symbol) {
-
-    const response =
-        await fetch(
-            `/api/prices/${symbol}`
-        );
-
-
-    if (!response.ok) {
-
-        throw new Error(
-            `Price API failed for ${symbol}: ${response.status}`
-        );
-    }
-
-
-    const rows =
-        await response.json();
-
-
-    if (!rows.length) {
+function showMainEod() {
+    const label =
+        getOrCreateMainStatus();
+
+    if (!label) {
         return;
     }
 
+    label.textContent =
+        "LATEST EOD";
 
-    const labels =
-        rows.map(
-            row =>
-                String(
-                    row.timestamp
-                ).slice(0, 10)
-        );
+    label.style.color =
+        "#91a6c2";
+}
 
 
-    const close =
-        rows.map(
-            row =>
-                Number(
-                    row.close
-                )
-        );
+function showMainLive(
+    quote
+) {
+    const label =
+        getOrCreateMainStatus();
 
-
-    const sma20 =
-        rollingAverage(
-            close,
-            20
-        );
-
-
-    const sma50 =
-        rollingAverage(
-            close,
-            50
-        );
-
-
-    const sma200 =
-        rollingAverage(
-            close,
-            200
-        );
-
-
-    const title =
-        document.getElementById(
-            "chart-title"
-        );
-
-
-    title.textContent =
-        `${symbol} Price History`;
-
-
-    const canvas =
-        document.getElementById(
-            "priceChart"
-        );
-
-
-    const context =
-        canvas.getContext(
-            "2d"
-        );
-
-
-    if (priceChart) {
-        priceChart.destroy();
+    if (!label) {
+        return;
     }
 
+    label.textContent =
+        "● LIVE IEX";
 
-    priceChart =
-        new Chart(
-            context,
+    label.style.color =
+        "#39e3a1";
+
+    if (quote.received_at) {
+        const date =
+            new Date(
+                quote.received_at
+            );
+
+        if (
+            !Number.isNaN(
+                date.getTime()
+            )
+        ) {
+            label.title =
+                `Last update: ${
+                    date.toLocaleString()
+                }`;
+        }
+    }
+}
+
+
+function showMainChecking() {
+    const label =
+        getOrCreateMainStatus();
+
+    if (!label) {
+        return;
+    }
+
+    label.textContent =
+        "LIVE FEED CHECKING";
+
+    label.style.color =
+        "#efc56b";
+}
+
+
+function updateMainPrice(
+    quote
+) {
+    const element =
+        getMainPriceElement();
+
+    if (!element) {
+        return;
+    }
+
+    const price =
+        Number(
+            quote.reference_price
+        );
+
+    if (!Number.isFinite(price)) {
+        return;
+    }
+
+    if (
+        lastMainPrice !== null
+        && price !== lastMainPrice
+    ) {
+        element.style.transition =
+            "transform .15s ease";
+
+        element.style.transform =
+            "scale(1.025)";
+
+        window.setTimeout(
+            () => {
+                element.style.transform =
+                    "scale(1)";
+            },
+            160
+        );
+    }
+
+    element.textContent =
+        money(price);
+
+    lastMainPrice =
+        price;
+}
+
+
+async function fetchSelectedLiveQuote() {
+    const symbol =
+        getSelectedSymbol();
+
+    const response =
+        await fetch(
+            `/api/live/${encodeURIComponent(symbol)}?t=${Date.now()}`,
             {
-                type: "line",
+                cache: "no-store"
+            }
+        );
 
-                data: {
-                    labels,
+    if (!response.ok) {
+        throw new Error(
+            `Live quote API returned ${
+                response.status
+            }`
+        );
+    }
 
-                    datasets: [
-                        {
-                            label: "Close",
-                            data: close,
-                            borderWidth: 3,
-                            pointRadius: 0,
-                            tension: 0.18
-                        },
-
-                        {
-                            label: "SMA 20",
-                            data: sma20,
-                            borderWidth: 2,
-                            pointRadius: 0,
-                            tension: 0.15
-                        },
-
-                        {
-                            label: "SMA 50",
-                            data: sma50,
-                            borderWidth: 2,
-                            pointRadius: 0,
-                            tension: 0.15
-                        },
-
-                        {
-                            label: "SMA 200",
-                            data: sma200,
-                            borderWidth: 2,
-                            pointRadius: 0,
-                            tension: 0.15
-                        }
-                    ]
-                },
+    return response.json();
+}
 
 
-                options: {
+async function refreshSelectedStock() {
+    try {
+        const quote =
+            await fetchSelectedLiveQuote();
 
-                    responsive: true,
+        if (
+            quote
+            && quote.available
+            && quote.reference_price !== null
+            && quote.reference_price !== undefined
+        ) {
+            updateMainPrice(
+                quote
+            );
 
-                    maintainAspectRatio: false,
+            showMainLive(
+                quote
+            );
+
+            return;
+        }
+
+        showMainEod();
+
+    } catch (error) {
+        console.warn(
+            "Selected live price refresh failed:",
+            error
+        );
+
+        showMainChecking();
+    }
+}
 
 
-                    interaction: {
-                        mode: "index",
-                        intersect: false
-                    },
+function updateTop10Cell(
+    cell,
+    stock
+) {
+    const livePrice =
+        Number(
+            stock.live_price
+        );
+
+    const displayPrice =
+        Number(
+            stock.display_price
+        );
+
+    if (
+        stock.live_available
+        && Number.isFinite(
+            livePrice
+        )
+    ) {
+        cell.textContent =
+            money(
+                livePrice
+            );
+
+        cell.title =
+            "LIVE IEX";
+
+        cell.style.color =
+            "#39e3a1";
+
+        return;
+    }
+
+    if (
+        Number.isFinite(
+            displayPrice
+        )
+    ) {
+        cell.textContent =
+            money(
+                displayPrice
+            );
+    }
+
+    cell.title =
+        "LATEST EOD";
+
+    cell.style.color =
+        "";
+}
 
 
-                    plugins: {
+async function refreshTop10Prices() {
+    try {
+        const response =
+            await fetch(
+                `/api/stocks?t=${Date.now()}`,
+                {
+                    cache: "no-store"
+                }
+            );
 
-                        legend: {
+        if (!response.ok) {
+            throw new Error(
+                `Stock API returned ${
+                    response.status
+                }`
+            );
+        }
 
-                            labels: {
-                                color:
-                                    "#a8bad0"
-                            }
-                        },
+        const stocks =
+            await response.json();
+
+        for (
+            const stock of stocks
+        ) {
+            const selector =
+                `[data-live-price-symbol="${stock.symbol}"]`;
+
+            const cell =
+                document.querySelector(
+                    selector
+                );
+
+            if (!cell) {
+                continue;
+            }
+
+            updateTop10Cell(
+                cell,
+                stock
+            );
+        }
+
+    } catch (error) {
+        console.warn(
+            "Top 10 live price refresh failed:",
+            error
+        );
+    }
+}
 
 
-                        tooltip: {
+async function refreshDashboard() {
+    await Promise.allSettled([
+        refreshSelectedStock(),
+        refreshTop10Prices()
+    ]);
+}
 
-                            callbacks: {
 
-                                label: function(
-                                    context
-                                ) {
+function startLiveRefresh() {
+    if (liveRefreshTimer) {
+        window.clearInterval(
+            liveRefreshTimer
+        );
+    }
 
-                                    const value =
-                                        context.parsed.y;
+    refreshDashboard();
 
-                                    if
+    liveRefreshTimer =
+        window.setInterval(
+            refreshDashboard,
+            LIVE_REFRESH_MS
+        );
+}
+
+
+function stopLiveRefresh() {
+    if (!liveRefreshTimer) {
+        return;
+    }
+
+    window.clearInterval(
+        liveRefreshTimer
+    );
+
+    liveRefreshTimer =
+        null;
+}
+
+
+document.addEventListener(
+    "visibilitychange",
+    () => {
+        if (
+            document.visibilityState
+            === "visible"
+        ) {
+            startLiveRefresh();
+        } else {
+            stopLiveRefresh();
+        }
+    }
+);
+
+
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+        showMainEod();
+        startLiveRefresh();
+    }
+);
