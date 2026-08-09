@@ -2,158 +2,93 @@
 
 ## Overview
 
-The Stock Market AI Platform is a multi-stock data engineering, machine-learning, and analytics system built to ingest market data, transform it through a layered data architecture, engineer predictive features, train per-symbol machine-learning models, and expose market intelligence through an interactive Flask dashboard.
+The Stock Market AI Platform is a multi-stock data engineering, machine-learning, live-market, automation, and analytics system. It now contains two coordinated data paths: a historical/end-of-day pipeline used for analytics and model training, and a live Tiingo IEX WebSocket path used for intraday reference prices.
 
-The project deliberately separates ingestion, transformation, feature engineering, model training, inference, and presentation so each component can evolve independently.
+The architecture deliberately separates ingestion, transformation, feature engineering, training, inference, live market state, presentation, scheduling, and process supervision so each layer can evolve independently.
 
-> This project is an experimental research and engineering platform. Model predictions are not financial advice and should not be treated as guaranteed trading signals.
-
----
+> Experimental research platform. Model outputs are not financial advice or guaranteed trading signals.
 
 ## Architecture at a Glance
 
 ```text
                          STOCK MARKET AI PLATFORM
 
-                              Tiingo API
-                                  |
-                                  v
-                    +---------------------------+
-                    |     Data Ingestion        |
-                    |  26-stock universe        |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |       BRONZE LAYER        |
-                    | Raw canonical market data |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |       SILVER LAYER        |
-                    | Cleaned / validated data  |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |        GOLD LAYER         |
-                    | Analytics-ready datasets  |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |     FEATURE LAYER         |
-                    | Technical / ML features   |
-                    +-------------+-------------+
-                                  |
-                     +------------+------------+
-                     |                         |
-                     v                         v
-          +----------------------+   +----------------------+
-          |   MODEL TRAINING     |   |  MARKET ANALYTICS    |
-          | Per-symbol models    |   | Price / RSI / SMA    |
-          | 5-day direction      |   | volatility / volume  |
-          +----------+-----------+   +----------+-----------+
-                     |                          |
-                     v                          |
-          +----------------------+              |
-          |      INFERENCE       |              |
-          | UP / DOWN probability|              |
-          +----------+-----------+              |
-                     |                          |
-                     +------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |      FLASK WEB APP        |
-                    | Interactive dashboard     |
-                    | Selected-stock detail     |
-                    | Top-10 comparison         |
-                    +---------------------------+
+               +------------------ TIINGO ------------------+
+               |                                             |
+               v                                             v
+          EOD REST API                                 IEX WebSocket
+               |                                             |
+               v                                             v
+            Bronze                                   Live Quote Cache
+               |                                             |
+               v                                             |
+            Silver                                           |
+               |                                             |
+               v                                             |
+             Gold --------------------+                      |
+               |                      |                      |
+               v                      v                      |
+            Features             Market Analytics            |
+               |                      |                      |
+               v                      |                      |
+         Model Training               |                      |
+               |                      |                      |
+               v                      |                      |
+            Inference                 |                      |
+               +-----------+----------+----------------------+
+                           |
+                           v
+                    Flask Services / APIs
+                           |
+                           v
+                   Interactive Dashboard
+                           |
+                           v
+                   10-second browser polling
 ```
-
----
 
 ## 1. Stock Universe
 
-The processing and training universe currently contains 26 equities configured in `data-ingestion/symbols.py`:
+The processing and training universe contains 26 equities configured centrally in `data-ingestion/symbols.py`:
 
-- AAPL
-- MSFT
-- NVDA
-- AMZN
-- GOOGL
-- META
-- TSLA
-- AVGO
-- AMD
-- ORCL
-- CRM
-- JPM
-- BAC
-- V
-- MA
-- WMT
-- COST
-- HD
-- JNJ
-- UNH
-- LLY
-- XOM
-- CVX
-- CAT
-- NFLX
-- DIS
+`AAPL`, `MSFT`, `NVDA`, `AMZN`, `GOOGL`, `META`, `TSLA`, `AVGO`, `AMD`, `ORCL`, `CRM`, `JPM`, `BAC`, `V`, `MA`, `WMT`, `COST`, `HD`, `JNJ`, `UNH`, `LLY`, `XOM`, `CVX`, `CAT`, `NFLX`, `DIS`.
 
-Centralizing this list gives ingestion and batch model training a shared definition of the supported universe.
+The dashboard currently emphasizes a Top 10 subset for comparison and detailed navigation.
 
-The web dashboard currently focuses its comparison experience on a Top 10 subset:
+## 2. Historical Ingestion
+
+`data-ingestion/tiingo_multi_ingest.py` retrieves daily Tiingo price history for the configured symbols and writes canonical Bronze CSV files.
+
+The historical ingestion window uses a dynamic current end date rather than a fixed snapshot.
+
+Flow:
 
 ```text
-AAPL, MSFT, NVDA, AMZN, GOOGL,
-META, TSLA, AVGO, AMD, ORCL
+Tiingo EOD API
+    -> validation
+    -> Bronze CSV
+    -> Silver Parquet
+    -> Gold Parquet
+    -> Feature Parquet
 ```
 
-This distinction is intentional:
+## 3. Live IEX Ingestion
 
-- **26-stock universe** — data processing and model-training scope.
-- **Top 10 dashboard universe** — focused interactive presentation and comparison scope.
+`data-ingestion/iex_stream.py` provides the intraday market path.
 
----
+Responsibilities:
 
-## 2. Data Ingestion
+- connect to Tiingo IEX over WebSocket
+- subscribe to all 26 configured symbols
+- process informational messages and heartbeats
+- receive market updates when available
+- maintain the latest quote per symbol
+- write runtime state to `data/live/latest_quotes.json`
+- terminate cleanly rather than entering an unwanted reconnect loop on Ctrl+C
 
-### Primary source
+The live cache is runtime state and is intentionally ignored by Git.
 
-Market data is retrieved through Tiingo using the project's Tiingo client and multi-symbol ingestion pipeline.
-
-Key components include:
-
-```text
-data-ingestion/
-├── symbols.py
-├── tiingo_client.py
-├── tiingo_multi_ingest.py
-├── bronze_writer.py
-└── validators.py
-```
-
-The ingestion process:
-
-1. Loads the configured stock universe.
-2. Requests daily market data for each symbol.
-3. Validates the returned dataset.
-4. Writes canonical raw data into the Bronze layer.
-5. Reports successful and failed symbols.
-
-The ingestion date range is designed to support refreshed market history rather than leaving the dashboard tied to a historical snapshot.
-
----
-
-## 3. Medallion Data Architecture
-
-The platform uses a Bronze → Silver → Gold pattern, followed by a dedicated feature layer.
+## 4. Medallion Data Architecture
 
 ### Bronze
 
@@ -161,13 +96,7 @@ The platform uses a Bronze → Silver → Gold pattern, followed by a dedicated 
 data/bronze/stocks/<SYMBOL>/<SYMBOL>_prices.csv
 ```
 
-Purpose:
-
-- Preserve canonical ingested market data.
-- Provide a reproducible input to downstream transformations.
-- Keep ingestion concerns separate from analytical transformations.
-
-Typical fields include symbol, timestamp, OHLC prices, and volume.
+Preserves canonical ingested OHLCV observations.
 
 ### Silver
 
@@ -175,14 +104,7 @@ Typical fields include symbol, timestamp, OHLC prices, and volume.
 data/silver/stocks/<SYMBOL>/<SYMBOL>_prices.parquet
 ```
 
-Purpose:
-
-- Clean and standardize Bronze data.
-- Enforce expected data types and structure.
-- Remove or identify invalid records.
-- Prepare efficient Parquet datasets for downstream processing.
-
-The Silver pipeline operates across the configured stock datasets rather than being tied to a single ticker.
+Cleans, standardizes, validates, and types Bronze records.
 
 ### Gold
 
@@ -190,368 +112,264 @@ The Silver pipeline operates across the configured stock datasets rather than be
 data/gold/stocks/<SYMBOL>/<SYMBOL>_prices.parquet
 ```
 
-Purpose:
+Provides analytics-ready market data used by the web application and feature pipeline.
 
-- Produce analytics-ready datasets.
-- Support dashboard market summaries.
-- Serve as the source for feature engineering.
-
-### Feature layer
+### Features
 
 ```text
 data/features/stocks/<SYMBOL>/<SYMBOL>_features.parquet
 ```
 
-Purpose:
+Contains model-ready technical and statistical features.
 
-- Calculate technical and statistical features.
-- Produce model-ready observations.
-- Separate predictive features from raw/curated market data.
+## 5. Machine-Learning Architecture
 
-This separation makes it possible to improve feature engineering without redesigning the ingestion or web layers.
-
----
-
-## 4. Data Quality
-
-Data quality checks are an explicit part of the pipeline.
-
-The platform validates conditions such as:
-
-- Duplicate symbol/timestamp records.
-- Null OHLC price values.
-- Non-positive price values.
-- Empty source datasets.
-- Expected schema and data availability.
-
-The objective is to prevent malformed market data from silently propagating into model training and dashboard analytics.
-
----
-
-## 5. Feature Engineering
-
-The feature pipeline transforms Gold datasets into model-ready datasets.
-
-Features include market behavior derived from historical prices and volume, such as:
-
-- Daily returns.
-- Cumulative returns.
-- Simple moving averages.
-- Relative Strength Index (RSI).
-- Rolling volatility.
-- Volume-based measures.
-- Price relationships and trend indicators.
-
-The training pipeline explicitly excludes future-return fields from model inputs to reduce target leakage.
-
-For the complete ML feature and training explanation, see [`MACHINE_LEARNING.md`](MACHINE_LEARNING.md).
-
----
-
-## 6. Machine-Learning Architecture
-
-The current model predicts whether a stock will be higher **five trading days into the future**.
-
-Each supported symbol receives its own trained model artifact.
+Each symbol receives its own NumPy logistic-regression artifact predicting five-trading-day direction.
 
 ```text
-Feature dataset
+Feature data
+  -> chronological 80/20 split
+  -> training-only standardization
+  -> logistic regression + L2
+  -> holdout evaluation
+  -> serialized model artifact
+  -> prediction service
+```
+
+Metrics include accuracy, precision, recall, F1, and majority-class baseline. Several current models remain below baseline; the architecture treats that transparently as a research finding.
+
+## 6. Live Market Service
+
+`webapp/services/live_market_service.py` isolates the Flask application from the file-based live cache.
+
+It returns a consistent quote structure even when no live tick is available. The UI can therefore use:
+
+```text
+live quote available -> LIVE IEX price
+no live quote        -> latest EOD price
+```
+
+This prevents the dashboard from depending on active market hours to render successfully.
+
+## 7. Flask Presentation Layer
+
+The Flask app combines three service concerns:
+
+- historical market analytics
+- saved-model inference
+- live IEX quote state
+
+Current routes include:
+
+```text
+/
+/api/stocks
+/api/prices/<symbol>
+/api/live
+/api/live/<symbol>
+/health
+```
+
+The selected-stock market card shows live price state when available. The Top 10 table also includes a Price column that can transition from EOD to live values.
+
+## 8. Browser Auto-Refresh
+
+`webapp/static/js/dashboard.js` polls live Flask endpoints every 10 seconds while the page is visible.
+
+It updates:
+
+- the selected stock's main price
+- the LIVE IEX / LATEST EOD indicator
+- the Top 10 Price column
+
+The page does not need a full browser reload for new live values.
+
+Polling is paused while the tab is hidden to avoid unnecessary requests.
+
+## 9. Automated EOD Refresh
+
+`refresh_pipeline.sh` orchestrates historical refreshes.
+
+The first design ran the entire 26-symbol historical pipeline on every schedule. After encountering Tiingo HTTP 429 responses during repeated testing, the architecture was changed to use a low-cost sentinel check.
+
+Current flow:
+
+```text
+cron at minute 05
       |
       v
-Chronological train/test split
+flock overlap guard
       |
       v
-Training-only feature scaling
+query recent AAPL EOD data
+      |
+      +--> no newer timestamp -> stop
       |
       v
-NumPy logistic regression
+new EOD bar exists
       |
       v
-Holdout evaluation
-      |
-      v
-models/<symbol>_direction_model.pkl
+refresh all 26 symbols
+      -> Silver
+      -> Gold
+      -> Features
+      -> train all models
 ```
 
-### Why chronological splitting matters
+This avoids unnecessary downstream work and materially reduces API usage.
 
-Financial observations are time ordered. Randomly shuffling future observations into a training set can produce unrealistic evaluation results.
+## 10. Cron and Overlap Protection
 
-The project therefore uses a chronological training/test split so the model is evaluated on observations occurring after its training period.
+The refresh is scheduled through `crond`.
 
-### Per-symbol models
+The current crontab uses `flock -n` so an hourly invocation exits if the previous refresh is still running. This protects against duplicate ingestion, duplicate model training, and race conditions caused by overlapping jobs.
 
-`ml/train_all.py` iterates through the configured stock universe and invokes the training pipeline for each symbol.
+## 11. Process Supervision
 
-This creates independent artifacts such as:
+The Android/Termux deployment now uses `termux-services` and runit.
+
+Supervised services:
 
 ```text
-models/aapl_direction_model.pkl
-models/msft_direction_model.pkl
-models/nvda_direction_model.pkl
-...
+crond
+stock-market-ai
 ```
 
-### Evaluation
-
-The training pipeline reports metrics including:
-
-- Accuracy.
-- Precision.
-- Recall.
-- F1 score.
-- Majority-class baseline.
-
-The majority baseline is particularly important. A directional model should not be considered useful merely because its raw accuracy appears high; its performance should be evaluated relative to a simple baseline and ultimately through realistic out-of-sample trading research.
-
----
-
-## 7. Inference Layer
-
-The prediction layer loads the appropriate model artifact and latest engineered feature observation for the selected symbol.
-
-It produces information including:
+The `stock-market-ai` runit service launches:
 
 ```text
-Prediction:          UP or DOWN
-Probability UP:      model probability
-Probability DOWN:    complementary probability
-Model accuracy:      holdout evaluation metric
-Majority baseline:   comparison benchmark
-Horizon:             5 trading days
+Tiingo IEX WebSocket process
+Flask web application
 ```
 
-The Flask prediction service exposes this information to the presentation layer.
+It monitors both child processes and exits if either child fails, allowing runit to restart the service.
 
----
+## 12. Boot Persistence
 
-## 8. Market Analytics Service
-
-`webapp/services/market_service.py` provides the dashboard with current analytical information for a requested symbol.
-
-Examples include:
-
-- Latest close.
-- Price change.
-- Percentage price change.
-- RSI-14.
-- SMA-20.
-- SMA-50.
-- SMA-200.
-- 20-day volatility.
-- Volume ratio.
-- Recent price history.
-
-This service keeps market-data logic out of the Flask route and HTML template.
-
----
-
-## 9. Prediction Service
-
-`webapp/services/prediction_service.py` encapsulates model inference.
-
-Its responsibilities include:
-
-- Resolving the model artifact for a symbol.
-- Resolving the symbol's feature dataset.
-- Loading portable model parameters.
-- Calculating the latest model probability.
-- Applying the prediction threshold.
-- Returning model metrics and prediction metadata to the application.
-
-Separating prediction logic from Flask routing keeps the application easier to test and evolve.
-
----
-
-## 10. Flask Presentation Layer
-
-The Flask application combines market analytics and model predictions.
-
-Primary routes include:
+The Google Play Termux build supports boot scripts from:
 
 ```text
-/                     Interactive dashboard
-/api/stocks           Top 10 stock/model data
-/api/prices/<symbol>  Recent price history
-/health               Service health endpoint
+~/.termux/boot/
 ```
 
-### Selected-stock experience
+The configured boot script starts `runsvdir`. Because `crond` and `stock-market-ai` are enabled services, both return automatically after Android reboot.
 
-Users can select a stock from the dashboard dropdown. The detailed dashboard then updates for that symbol while retaining the overall visual design.
+This behavior was tested successfully. After reboot, the following were verified without manually launching the platform:
 
-The selected-stock view includes market metrics, technical indicators, AI prediction information, and recent price history.
+- `runsvdir` running
+- `crond` running
+- `stock-market-ai` running
+- Flask returning HTTP 200
 
-### Top 10 comparison
+## 13. Manual Process Manager
 
-The dashboard also presents comparison information for the Top 10 universe so users can evaluate multiple stocks without losing the richer selected-stock detail view.
-
-This gives the UI two analytical levels:
+`run_platform.sh` remains available as a manual process manager and supports:
 
 ```text
-Portfolio-level comparison
-          +
-Selected-stock deep dive
+start
+stop
+status
+restart
 ```
 
----
+It uses PID files and duplicate-process checks. Under normal persistent operation, runit is the preferred supervisor.
 
-## 11. Repository Data Strategy
+## 14. Runtime and Repository Boundaries
 
-Generated datasets are runtime artifacts and are intentionally excluded from ongoing Git tracking.
+Tracked source should include code, scripts, documentation, configuration templates, and tests.
 
-The repository tracks the engineering system rather than every refreshed copy of market data.
-
-### Tracked
-
-```text
-Source code
-Pipeline definitions
-Configuration
-ML implementation
-Flask application
-Documentation
-Tests
-```
-
-### Generated / ignored
+Generated/runtime state is ignored:
 
 ```text
 data/bronze/
 data/silver/
 data/gold/
 data/features/
+data/live/
 models/*.pkl
+logs/
+run/
+*.lock
 ```
 
-### Never commit
+Secrets such as `.env` and API tokens must never be committed.
 
-```text
-.env
-API keys
-credentials
-secrets
+## 15. Operational Verification
+
+Useful checks:
+
+```bash
+sv status crond
+sv status stock-market-ai
+pgrep -a runsvdir
+crontab -l
+curl -I http://127.0.0.1:5000
 ```
 
-This prevents normal market-data refreshes from creating large, noisy Git commits and keeps sensitive credentials out of source control.
+A healthy web service returns HTTP 200.
 
----
+## 16. Current Strengths
 
-## 12. End-to-End Processing Flow
+The current architecture demonstrates:
 
-A complete refresh follows this conceptual sequence:
+- multi-symbol market ingestion
+- layered Bronze/Silver/Gold/Feature data design
+- live WebSocket ingestion
+- EOD fallback behavior
+- per-symbol model artifacts
+- chronological evaluation
+- baseline-aware reporting
+- browser-side live refresh
+- API-efficient sentinel scheduling
+- `flock` overlap protection
+- cron automation
+- runit service supervision
+- Android reboot persistence
+- generated-data isolation from source control
 
-```text
-1. Tiingo ingestion
-       |
-2. Bronze market data
-       |
-3. Silver transformation
-       |
-4. Gold transformation
-       |
-5. Feature engineering
-       |
-6. Train/retrain symbol models
-       |
-7. Run inference
-       |
-8. Flask services
-       |
-9. Interactive dashboard
-```
-
-Because each stage has a distinct responsibility, the architecture can later be orchestrated or scheduled without collapsing everything into one monolithic script.
-
----
-
-## 13. Current Architecture Strengths
-
-The current implementation demonstrates several production-oriented engineering principles:
-
-- Layered data architecture.
-- Multi-symbol ingestion.
-- Central stock-universe configuration.
-- Explicit data-quality validation.
-- Columnar Parquet processing downstream of Bronze.
-- Dedicated feature layer.
-- Chronological ML evaluation.
-- Training-only feature scaling.
-- Per-symbol model artifacts.
-- Baseline-aware model evaluation.
-- Separation of market and prediction services.
-- API endpoints for dashboard data.
-- Interactive multi-stock presentation.
-- Generated-data isolation from source control.
-- Secret isolation through environment configuration.
-
----
-
-## 14. Planned Evolution
-
-The architecture is designed to support several future improvements.
+## 17. Planned Evolution
 
 ### Data engineering
 
-- Incremental ingestion rather than full historical reloads.
-- Pipeline orchestration and scheduling.
-- Stronger schema contracts.
-- Automated quality gates.
-- Pipeline observability and structured logging.
-- Cloud-backed storage.
+- incremental historical ingestion
+- stronger schema contracts and data-quality gates
+- structured logging and monitoring
+- cloud-backed storage
 
 ### Machine learning
 
-- Walk-forward validation.
-- Backtesting with transaction costs.
-- Probability calibration.
-- Hyperparameter research.
-- Cross-sectional and market-regime features.
-- Additional model families.
-- Model registry and experiment tracking.
-- Drift monitoring.
+- walk-forward validation
+- rolling-window experiments
+- probability calibration
+- stronger baselines
+- feature diagnostics
+- tree-based and pooled models
+- experiment tracking and model versioning
+- drift monitoring
 
-### Application
+### Application and operations
 
-- Public deployment.
-- Production WSGI hosting.
-- `DataShepherdEngineering.com` custom domain.
-- Automated market-data refresh.
-- Richer Top 10 comparison charts.
-- Expanded stock-universe navigation.
-- Historical prediction tracking.
+- production WSGI server
+- public deployment
+- custom domain `DataShepherdEngineering.com`
+- containerization
+- alerting and health monitoring
+- cloud migration/evolution
 
 ### Trading research
 
-Before any model is considered for automated execution, the project should add a rigorous research layer covering:
+- realistic backtesting
+- transaction costs and slippage
+- risk-adjusted metrics
+- position sizing and exposure limits
+- paper trading
 
-- Walk-forward backtesting.
-- Transaction costs and slippage.
-- Position sizing.
-- Maximum exposure.
-- Drawdown controls.
-- Risk-adjusted performance.
-- Paper trading.
-- Monitoring and kill-switch behavior.
+## Design Philosophy
 
-Prediction accuracy alone is not sufficient evidence of a profitable or safe trading strategy.
-
----
-
-## 15. Design Philosophy
-
-Data Shepherd Engineering treats the stock-market project as an engineering system first and an ML experiment second.
-
-The core principle is:
-
-> Reliable predictions require reliable data, reproducible transformations, leakage-aware evaluation, measurable baselines, and disciplined risk research.
-
-The architecture therefore builds upward from data quality and reproducibility rather than treating the machine-learning model as an isolated component.
-
----
+The platform treats machine learning as one layer in a larger engineering system. Reliable market intelligence depends on reliable data, reproducible transformations, transparent evaluation, disciplined automation, and operational resilience.
 
 ## Related Documentation
 
-- [`../README.md`](../README.md) — Stock Market AI Platform overview and setup.
-- [`MACHINE_LEARNING.md`](MACHINE_LEARNING.md) — detailed machine-learning design, features, training, evaluation, and limitations.
-- [`../../README.md`](../../README.md) — Data Shepherd Engineering repository overview.
+- [`../README.md`](../README.md) — platform overview
+- [`MACHINE_LEARNING.md`](MACHINE_LEARNING.md) — detailed model design
+- [`ingestion-architecture.md`](ingestion-architecture.md) — ingestion and refresh design
