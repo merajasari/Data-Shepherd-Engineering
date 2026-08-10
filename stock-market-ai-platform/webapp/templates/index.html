@@ -116,6 +116,14 @@ h3 {
 }
 
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+
 .online {
     display: flex;
     align-items: center;
@@ -132,6 +140,50 @@ h3 {
         rgba(13,28,49,.85);
 
     font-weight: 900;
+}
+
+
+.logout-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 14px 20px;
+
+    border:
+        1px solid rgba(255,102,128,.45);
+
+    border-radius: 999px;
+
+    background:
+        rgba(255,102,128,.08);
+
+    color: #ff9caf;
+
+    font-size: .82rem;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-decoration: none;
+
+    transition:
+        background .2s ease,
+        border-color .2s ease,
+        color .2s ease,
+        transform .2s ease;
+}
+
+
+.logout-button:hover {
+    background:
+        rgba(255,102,128,.16);
+
+    border-color:
+        var(--red);
+
+    color: #ffffff;
+
+    transform:
+        translateY(-1px);
 }
 
 
@@ -694,6 +746,15 @@ footer {
         flex-direction: column;
     }
 
+    .header-actions {
+        width: 100%;
+    }
+
+    .online,
+    .logout-button {
+        flex: 1 1 auto;
+    }
+
     .selector-card form,
     .selector-card select {
         width: 100%;
@@ -749,11 +810,22 @@ data engineering, feature engineering and machine learning.
 </div>
 
 
+<div class="header-actions">
+
 <div class="online">
 
 <span class="dot"></span>
 
 PLATFORM ONLINE
+
+</div>
+
+<a
+class="logout-button"
+href="{{ url_for('logout') }}"
+>
+LOGOUT
+</a>
 
 </div>
 
