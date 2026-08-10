@@ -49,6 +49,32 @@ Each artifact contains the information needed for consistent inference, includin
 
 Keeping the scaling statistics with the model is essential because inference must transform new feature vectors using the same training-derived preprocessing.
 
+## 26-Stock Forecast View
+
+The application now converts each model's five-day directional probabilities into a normalized trend score:
+
+```text
+forecast_score = (probability_up - probability_down) * 100
+```
+
+The score ranges from `-100` to `+100`:
+
+```text
++100 -> strongest bullish model output
+   0 -> neutral balance
+-100 -> strongest bearish model output
+```
+
+The dashboard ranks all 26 symbols from most bullish to most bearish and displays each symbol's:
+
+- forecast score
+- trend label
+- UP probability
+- model accuracy
+- majority baseline
+
+This is a **directional model visualization**, not a future price target. A large forecast score also does not imply strong validated accuracy.
+
 ## Training and Retraining
 
 `ml/train_all.py` trains the full configured universe.
@@ -64,6 +90,22 @@ Tiingo refresh
   -> Features
   -> train all models
 ```
+
+## Model Serving
+
+Saved artifacts are loaded through the prediction service and exposed through Flask/Gunicorn.
+
+The production serving path is:
+
+```text
+model artifact
+  -> prediction_service.py
+  -> forecast_service.py
+  -> /api/forecast
+  -> 26-stock dashboard forecast
+```
+
+The public application is served by Gunicorn behind a Cloudflare Tunnel.
 
 ## Model Quality
 
