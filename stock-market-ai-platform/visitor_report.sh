@@ -32,27 +32,19 @@ printf "%-40s %-8s %-22s %-22s %-22s %-24s %s\n" \
   "------------------------" \
   "------------------------"
 
-awk '
-{
-    ip=$1
-
-    if (
-        ip != "127.0.0.1" &&
-        ip != "::1" &&
-        ip != "203.0.113.99" &&
-        ip != "-" &&
-        (ip ~ /\./ || ip ~ /:/)
-    ) {
-        print ip
-    }
+extract_ips() {
+    cut -d' ' -f1 "$LOG" |
+    grep -E '[.:]' |
+    grep -Ev '^(127\.0\.0\.1|::1|203\.0\.113\.99|-)$'
 }
-' "$LOG" |
+
+extract_ips |
 sort |
 uniq -c |
 sort -nr |
 while read -r count ip
 do
-    lines=$(awk -v ip="$ip" '$1 == ip {print}' "$LOG")
+    lines=$(grep -F "${ip} " "$LOG" || true)
 
     first_seen=$(printf '%s\n' "$lines" | head -1 | sed -n 's/.*\[\([^]]*\)\].*/\1/p')
     last_seen=$(printf '%s\n' "$lines" | tail -1 | sed -n 's/.*\[\([^]]*\)\].*/\1/p')
@@ -111,21 +103,7 @@ echo
 echo "Summary"
 echo "-------"
 
-unique_ips=$(awk '
-{
-    ip=$1
-    if (
-        ip != "127.0.0.1" &&
-        ip != "::1" &&
-        ip != "203.0.113.99" &&
-        ip != "-" &&
-        (ip ~ /\./ || ip ~ /:/)
-    ) {
-        print ip
-    }
-}
-' "$LOG" | sort -u | wc -l | tr -d ' ')
-
+unique_ips=$(extract_ips | sort -u | wc -l | tr -d ' ')
 linkedin_hits=$(grep -Eic 'linkedin\.com|linkedinapp|android-app://com\.linkedin' "$LOG" || true)
 bot_hits=$(grep -Eic 'facebookexternalhit|facebot|twitterbot|claude-searchbot|googlebot|bingbot|crawler|spider|scanner' "$LOG" || true)
 dashboard_hits=$(grep -Ec '"GET /dashboard|"GET /api/' "$LOG" || true)
