@@ -83,6 +83,36 @@ header {
 }
 
 
+.dashboard-brand {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    min-width: 0;
+}
+
+
+.dashboard-logo-link {
+    display: block;
+    flex: 0 0 auto;
+}
+
+
+.dashboard-logo {
+    display: block;
+    width: 175px;
+    height: 100px;
+    object-fit: contain;
+    border-radius: 16px;
+    filter:
+        drop-shadow(0 0 18px rgba(54,216,255,.16));
+}
+
+
+.dashboard-title-block {
+    min-width: 0;
+}
+
+
 .eyebrow,
 .label {
     color: var(--cyan);
@@ -746,6 +776,18 @@ footer {
         flex-direction: column;
     }
 
+    .dashboard-brand {
+        width: 100%;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .dashboard-logo {
+        width: 145px;
+        height: 82px;
+    }
+
     .header-actions {
         width: 100%;
     }
@@ -792,7 +834,21 @@ footer {
 
 <header>
 
-<div>
+<div class="dashboard-brand">
+
+<a
+class="dashboard-logo-link"
+href="{{ url_for('dashboard') }}"
+aria-label="Data Shepherd Engineering dashboard"
+>
+<img
+class="dashboard-logo"
+src="{{ url_for('static', filename='images/data-shepherd-logo.png') }}"
+alt="Data Shepherd Engineering"
+>
+</a>
+
+<div class="dashboard-title-block">
 
 <div class="eyebrow">
 DATA SHEPHERD ENGINEERING
@@ -806,6 +862,8 @@ Stock Market AI Platform
 End-to-end market intelligence powered by
 data engineering, feature engineering and machine learning.
 </p>
+
+</div>
 
 </div>
 
