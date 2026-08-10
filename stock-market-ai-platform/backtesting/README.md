@@ -2,7 +2,7 @@
 
 This module is the planned validation layer for turning model outputs into evidence about strategy behavior.
 
-The platform now has a functioning data pipeline, live market feed, automated retraining workflow, and dashboard. The next research priority is stronger out-of-sample validation before treating any model output as a trading signal.
+The platform now has a functioning data pipeline, live market feed, automated retraining workflow, public dashboard, and a 26-stock five-day trend forecast. The next research priority is stronger out-of-sample validation before treating any model output as a trading signal.
 
 ## Why Backtesting Matters
 
@@ -22,12 +22,26 @@ A model can have acceptable accuracy and still produce a poor strategy because o
 
 Backtesting is therefore a separate research layer, not a replacement for model evaluation.
 
+## Relationship to the Forecast Dashboard
+
+The current 26-stock forecast uses:
+
+```text
+forecast_score = (probability_up - probability_down) * 100
+```
+
+That score is useful for ranking current model outputs, but it is **not yet a validated trading signal**.
+
+Backtesting should test whether decisions based on forecast score, probability thresholds, or baseline-relative model quality would have produced repeatable out-of-sample value.
+
 ## Planned Flow
 
 ```text
 Historical feature data
       +
-Stored model predictions
+Stored historical model predictions
+      +
+Forecast-score history
       +
 Strategy rules
       |
@@ -47,6 +61,7 @@ Performance and risk metrics
 ## Planned Capabilities
 
 - walk-forward prediction generation
+- historical forecast-score persistence
 - entry and exit rules
 - threshold-based strategy definitions
 - realistic transaction costs
@@ -56,7 +71,7 @@ Performance and risk metrics
 - benchmark comparison
 - drawdown analysis
 - rolling performance
-- historical prediction persistence
+- per-symbol and portfolio-level analysis
 
 ## Metrics
 
@@ -76,15 +91,28 @@ Planned metrics include:
 
 ## Research Standard
 
-The current machine-learning models include symbols that materially underperform their majority-class baseline. Backtesting should therefore begin only after walk-forward model evaluation is implemented and should preserve strict chronological separation between training and future evaluation periods.
+The current machine-learning models include symbols that underperform their majority-class baseline. Backtesting should therefore begin only after walk-forward model evaluation is implemented and should preserve strict chronological separation between training and future evaluation periods.
 
-Any future strategy should be judged on repeatable out-of-sample results, not a single favorable historical period.
+Any future strategy should be judged on repeatable out-of-sample results, not a single favorable historical period or a visually strong forecast score.
 
 ## Live Data Relationship
 
 The Tiingo IEX feed currently powers live dashboard pricing. It does not yet provide the historical intraday event store required for intraday backtesting.
 
-If the project evolves toward intraday ML, it will need a separate persistent intraday dataset, feature definition, targets, and execution simulator.
+If the project evolves toward intraday ML, it will need a separate persistent intraday dataset, feature definition, targets, validation design, and execution simulator.
+
+## Production Context
+
+The research dashboard is now publicly delivered through:
+
+```text
+Cloudflare DNS / HTTPS
+  -> Cloudflare Tunnel
+  -> Gunicorn
+  -> Flask application
+```
+
+Public availability improves observability and usability, but it does not change the research standard for validating model performance.
 
 ## Safety and Scope
 
