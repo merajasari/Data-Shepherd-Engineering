@@ -2,11 +2,16 @@
 
 ## Overview
 
-The Stock Market AI Platform is a multi-stock data engineering, machine-learning, live-market, automation, and analytics system. It now contains two coordinated data paths: a historical/end-of-day pipeline used for analytics and model training, and a live Tiingo IEX WebSocket path used for intraday reference prices.
+The Stock Market AI Platform is a 26-stock data engineering, machine-learning, live-market, forecasting, automation, and public web system.
 
-The architecture deliberately separates ingestion, transformation, feature engineering, training, inference, live market state, presentation, scheduling, and process supervision so each layer can evolve independently.
+It now contains four coordinated paths:
 
-> Experimental research platform. Model outputs are not financial advice or guaranteed trading signals.
+1. historical/end-of-day ingestion and Medallion processing
+2. live Tiingo IEX market data
+3. five-day ML inference and 26-stock trend scoring
+4. public delivery through Gunicorn and Cloudflare Tunnel
+
+> Experimental research platform. Forecasts are directional model outputs, not guaranteed trading signals or future price targets.
 
 ## Architecture at a Glance
 
@@ -20,146 +25,133 @@ The architecture deliberately separates ingestion, transformation, feature engin
                |                                             |
                v                                             v
             Bronze                                   Live Quote Cache
-               |                                             |
-               v                                             |
-            Silver                                           |
-               |                                             |
-               v                                             |
-             Gold --------------------+                      |
-               |                      |                      |
-               v                      v                      |
-            Features             Market Analytics            |
-               |                      |                      |
-               v                      |                      |
-         Model Training               |                      |
-               |                      |                      |
-               v                      |                      |
-            Inference                 |                      |
-               +-----------+----------+----------------------+
-                           |
-                           v
-                    Flask Services / APIs
-                           |
-                           v
-                   Interactive Dashboard
-                           |
-                           v
-                   10-second browser polling
+               |
+               v
+            Silver
+               |
+               v
+             Gold --------------------+
+               |                      |
+               v                      v
+            Features             Market Analytics
+               |
+               v
+         Model Training
+               |
+               v
+            Inference
+               |
+               +--> 26-stock forecast score
+               |
+               +----------------------+----------------------+
+                                      |
+                                      v
+                              Flask services / APIs
+                                      |
+                                      v
+                                   Gunicorn
+                                      |
+                                      v
+                              Cloudflare Tunnel
+                                      |
+                                      v
+                     datashepherdengineering.com
+                                      |
+                                      v
+                              Browser dashboard
 ```
 
 ## 1. Stock Universe
 
-The processing and training universe contains 26 equities configured centrally in `data-ingestion/symbols.py`:
+The processing, training, live-stream, and forecast universe contains 26 equities configured centrally in `data-ingestion/symbols.py`.
 
-`AAPL`, `MSFT`, `NVDA`, `AMZN`, `GOOGL`, `META`, `TSLA`, `AVGO`, `AMD`, `ORCL`, `CRM`, `JPM`, `BAC`, `V`, `MA`, `WMT`, `COST`, `HD`, `JNJ`, `UNH`, `LLY`, `XOM`, `CVX`, `CAT`, `NFLX`, `DIS`.
-
-The dashboard currently emphasizes a Top 10 subset for comparison and detailed navigation.
+The detailed dashboard still emphasizes a Top 10 subset, while the new forecast view ranks all 26 models.
 
 ## 2. Historical Ingestion
 
-`data-ingestion/tiingo_multi_ingest.py` retrieves daily Tiingo price history for the configured symbols and writes canonical Bronze CSV files.
-
-The historical ingestion window uses a dynamic current end date rather than a fixed snapshot.
-
-Flow:
+`data-ingestion/tiingo_multi_ingest.py` retrieves daily Tiingo history and writes Bronze CSV files.
 
 ```text
-Tiingo EOD API
-    -> validation
-    -> Bronze CSV
-    -> Silver Parquet
-    -> Gold Parquet
-    -> Feature Parquet
+Tiingo EOD
+  -> Bronze CSV
+  -> Silver Parquet
+  -> Gold Parquet
+  -> Feature Parquet
 ```
+
+The historical path supplies analytics, feature engineering, training, evaluation, and EOD fallback prices.
 
 ## 3. Live IEX Ingestion
 
-`data-ingestion/iex_stream.py` provides the intraday market path.
+`data-ingestion/iex_stream.py` connects to Tiingo IEX over WebSocket, subscribes to all 26 symbols, and writes:
 
-Responsibilities:
+```text
+data/live/latest_quotes.json
+```
 
-- connect to Tiingo IEX over WebSocket
-- subscribe to all 26 configured symbols
-- process informational messages and heartbeats
-- receive market updates when available
-- maintain the latest quote per symbol
-- write runtime state to `data/live/latest_quotes.json`
-- terminate cleanly rather than entering an unwanted reconnect loop on Ctrl+C
+Live state is runtime-only and ignored by Git.
 
-The live cache is runtime state and is intentionally ignored by Git.
+The IEX process now runs as its own runit service named:
 
-## 4. Medallion Data Architecture
+```text
+iex-stream
+```
 
-### Bronze
+This separates live-feed failures from web-server failures.
+
+## 4. Medallion Architecture
 
 ```text
 data/bronze/stocks/<SYMBOL>/<SYMBOL>_prices.csv
-```
-
-Preserves canonical ingested OHLCV observations.
-
-### Silver
-
-```text
 data/silver/stocks/<SYMBOL>/<SYMBOL>_prices.parquet
-```
-
-Cleans, standardizes, validates, and types Bronze records.
-
-### Gold
-
-```text
 data/gold/stocks/<SYMBOL>/<SYMBOL>_prices.parquet
-```
-
-Provides analytics-ready market data used by the web application and feature pipeline.
-
-### Features
-
-```text
 data/features/stocks/<SYMBOL>/<SYMBOL>_features.parquet
 ```
 
-Contains model-ready technical and statistical features.
+Bronze preserves canonical source observations, Silver standardizes/validates them, Gold provides analytics-ready data, and Features contains model-ready signals.
 
 ## 5. Machine-Learning Architecture
 
 Each symbol receives its own NumPy logistic-regression artifact predicting five-trading-day direction.
 
 ```text
-Feature data
+Features
   -> chronological 80/20 split
   -> training-only standardization
   -> logistic regression + L2
   -> holdout evaluation
-  -> serialized model artifact
+  -> serialized artifact
   -> prediction service
 ```
 
-Metrics include accuracy, precision, recall, F1, and majority-class baseline. Several current models remain below baseline; the architecture treats that transparently as a research finding.
+Metrics include accuracy, precision, recall, F1, and majority baseline.
 
-## 6. Live Market Service
+## 6. Forecast Layer
 
-`webapp/services/live_market_service.py` isolates the Flask application from the file-based live cache.
-
-It returns a consistent quote structure even when no live tick is available. The UI can therefore use:
+`webapp/services/forecast_service.py` converts existing model probabilities into a market-wide trend score:
 
 ```text
-live quote available -> LIVE IEX price
-no live quote        -> latest EOD price
+forecast_score = (probability_up - probability_down) * 100
 ```
 
-This prevents the dashboard from depending on active market hours to render successfully.
+Score range:
 
-## 7. Flask Presentation Layer
+```text
+-100 ... 0 ... +100
+bearish   neutral   bullish
+```
 
-The Flask app combines three service concerns:
+The forecast API returns all 26 symbols ranked from most bullish to most bearish:
 
-- historical market analytics
-- saved-model inference
-- live IEX quote state
+```text
+GET /api/forecast
+```
 
-Current routes include:
+The forecast is intentionally described as a **directional trend score**, not a future price forecast.
+
+## 7. Flask Services and APIs
+
+Current routes:
 
 ```text
 /
@@ -167,32 +159,25 @@ Current routes include:
 /api/prices/<symbol>
 /api/live
 /api/live/<symbol>
+/api/forecast
 /health
 ```
 
-The selected-stock market card shows live price state when available. The Top 10 table also includes a Price column that can transition from EOD to live values.
+The presentation layer combines historical analytics, saved-model inference, live quote state, and market-wide forecast data.
 
-## 8. Browser Auto-Refresh
+## 8. Browser Layer
 
-`webapp/static/js/dashboard.js` polls live Flask endpoints every 10 seconds while the page is visible.
+`webapp/static/js/dashboard.js` refreshes live and forecast state every 10 seconds while the page is visible.
 
-It updates:
+The page includes:
 
-- the selected stock's main price
-- the LIVE IEX / LATEST EOD indicator
-- the Top 10 Price column
+- live/EOD selected-stock price
+- Top 10 live price table
+- 26-stock five-day forecast view
+- bullish / neutral / bearish summary counts
+- model probability, accuracy, and baseline context
 
-The page does not need a full browser reload for new live values.
-
-Polling is paused while the tab is hidden to avoid unnecessary requests.
-
-## 9. Automated EOD Refresh
-
-`refresh_pipeline.sh` orchestrates historical refreshes.
-
-The first design ran the entire 26-symbol historical pipeline on every schedule. After encountering Tiingo HTTP 429 responses during repeated testing, the architecture was changed to use a low-cost sentinel check.
-
-Current flow:
+## 9. Scheduled EOD Refresh
 
 ```text
 cron at minute 05
@@ -201,82 +186,85 @@ cron at minute 05
 flock overlap guard
       |
       v
-query recent AAPL EOD data
+EOD sentinel freshness check
       |
-      +--> no newer timestamp -> stop
-      |
-      v
-new EOD bar exists
+      +--> unchanged -> stop
       |
       v
-refresh all 26 symbols
+new EOD bar
+      -> refresh 26 symbols
       -> Silver
       -> Gold
       -> Features
-      -> train all models
+      -> retrain 26 models
 ```
 
-This avoids unnecessary downstream work and materially reduces API usage.
+The sentinel design reduces unnecessary Tiingo calls and retraining.
 
-## 10. Cron and Overlap Protection
+## 10. Production Web Server
 
-The refresh is scheduled through `crond`.
+The public application no longer relies on Flask/Werkzeug's development server.
 
-The current crontab uses `flock -n` so an hourly invocation exits if the previous refresh is still running. This protects against duplicate ingestion, duplicate model training, and race conditions caused by overlapping jobs.
+`stock-market-ai` now runs Gunicorn:
 
-## 11. Process Supervision
+```text
+gunicorn
+  --bind 127.0.0.1:5000
+  --workers 2
+  --timeout 120
+  webapp.app:app
+```
 
-The Android/Termux deployment now uses `termux-services` and runit.
+Gunicorn logs are written under `logs/`.
 
-Supervised services:
+## 11. Cloudflare Public Edge
+
+The public request path is:
+
+```text
+Internet
+  -> Cloudflare DNS
+  -> Cloudflare Universal HTTPS
+  -> named Cloudflare Tunnel: data-shepherd
+  -> 127.0.0.1:5000
+  -> Gunicorn
+  -> Flask
+```
+
+Public hostnames:
+
+```text
+https://datashepherdengineering.com
+https://www.datashepherdengineering.com
+```
+
+The origin does not require a public inbound port. `cloudflared` establishes outbound tunnel connections from the Termux device.
+
+## 12. Service Supervision
+
+Termux Services/runit supervises four independent services:
 
 ```text
 crond
 stock-market-ai
+iex-stream
+cloudflared
 ```
 
-The `stock-market-ai` runit service launches:
+Responsibilities:
 
-```text
-Tiingo IEX WebSocket process
-Flask web application
-```
+- `crond`: scheduled historical refresh
+- `stock-market-ai`: Gunicorn web server
+- `iex-stream`: Tiingo IEX WebSocket
+- `cloudflared`: permanent Cloudflare Tunnel
 
-It monitors both child processes and exits if either child fails, allowing runit to restart the service.
+This is more fault-isolated than the earlier design where the IEX process and Flask server shared one supervisor script.
 
-## 12. Boot Persistence
+## 13. Boot Persistence
 
-The Google Play Termux build supports boot scripts from:
+The existing `~/.termux/boot/` startup path starts `runsvdir`. Because all production services are enabled, they can return after Android/Termux restart without manually launching each process.
 
-```text
-~/.termux/boot/
-```
-
-The configured boot script starts `runsvdir`. Because `crond` and `stock-market-ai` are enabled services, both return automatically after Android reboot.
-
-This behavior was tested successfully. After reboot, the following were verified without manually launching the platform:
-
-- `runsvdir` running
-- `crond` running
-- `stock-market-ai` running
-- Flask returning HTTP 200
-
-## 13. Manual Process Manager
-
-`run_platform.sh` remains available as a manual process manager and supports:
-
-```text
-start
-stop
-status
-restart
-```
-
-It uses PID files and duplicate-process checks. Under normal persistent operation, runit is the preferred supervisor.
-
-## 14. Runtime and Repository Boundaries
-
-Tracked source should include code, scripts, documentation, configuration templates, and tests.
+## 14. Runtime and Secret Boundaries
 
 Generated/runtime state is ignored:
 
@@ -292,84 +280,75 @@ run/
 *.lock
 ```
 
-Secrets such as `.env` and API tokens must never be committed.
+Cloudflare credentials are also secret runtime state and must not be committed:
+
+```text
+~/.cloudflared/cert.pem
+~/.cloudflared/*.json
+```
 
 ## 15. Operational Verification
-
-Useful checks:
 
 ```bash
 sv status crond
 sv status stock-market-ai
-pgrep -a runsvdir
-crontab -l
+sv status iex-stream
+sv status cloudflared
 curl -I http://127.0.0.1:5000
+curl -I https://datashepherdengineering.com
+curl -s https://datashepherdengineering.com/health
 ```
 
-A healthy web service returns HTTP 200.
+A healthy local response should show `Server: gunicorn`. A healthy public response is proxied through Cloudflare and returns HTTP 200.
 
 ## 16. Current Strengths
 
-The current architecture demonstrates:
+The architecture now demonstrates:
 
-- multi-symbol market ingestion
-- layered Bronze/Silver/Gold/Feature data design
-- live WebSocket ingestion
-- EOD fallback behavior
+- 26-symbol historical and live market coverage
+- Bronze/Silver/Gold/Feature layering
+- rate-limit-aware sentinel refreshes
 - per-symbol model artifacts
-- chronological evaluation
-- baseline-aware reporting
-- browser-side live refresh
-- API-efficient sentinel scheduling
-- `flock` overlap protection
-- cron automation
-- runit service supervision
-- Android reboot persistence
-- generated-data isolation from source control
+- transparent baseline comparisons
+- 26-stock trend scoring
+- browser auto-refresh
+- Gunicorn production serving
+- Cloudflare DNS + HTTPS + Tunnel
+- independent runit services
+- Android boot persistence
+- public custom-domain deployment
 
 ## 17. Planned Evolution
-
-### Data engineering
-
-- incremental historical ingestion
-- stronger schema contracts and data-quality gates
-- structured logging and monitoring
-- cloud-backed storage
 
 ### Machine learning
 
 - walk-forward validation
-- rolling-window experiments
 - probability calibration
-- stronger baselines
-- feature diagnostics
-- tree-based and pooled models
-- experiment tracking and model versioning
-- drift monitoring
-
-### Application and operations
-
-- production WSGI server
-- public deployment
-- custom domain `DataShepherdEngineering.com`
-- containerization
-- alerting and health monitoring
-- cloud migration/evolution
+- stronger baselines and model families
+- feature/coefficients diagnostics
+- model versioning and drift monitoring
 
 ### Trading research
 
 - realistic backtesting
 - transaction costs and slippage
-- risk-adjusted metrics
-- position sizing and exposure limits
-- paper trading
+- historical forecast logging
+- paper-trading evaluation
+
+### Platform engineering
+
+- incremental EOD ingestion
+- structured observability and alerts
+- conventional cloud/container deployment when scale requires it
+- automated deployment and secrets management
 
 ## Design Philosophy
 
-The platform treats machine learning as one layer in a larger engineering system. Reliable market intelligence depends on reliable data, reproducible transformations, transparent evaluation, disciplined automation, and operational resilience.
+Machine learning is one layer of the system. Reliable market intelligence depends on reliable data, reproducible transformations, transparent evaluation, resilient automation, and production-grade delivery.
 
 ## Related Documentation
 
-- [`../README.md`](../README.md) — platform overview
-- [`MACHINE_LEARNING.md`](MACHINE_LEARNING.md) — detailed model design
-- [`ingestion-architecture.md`](ingestion-architecture.md) — ingestion and refresh design
+- [`../README.md`](../README.md)
+- [`MACHINE_LEARNING.md`](MACHINE_LEARNING.md)
+- [`ingestion-architecture.md`](ingestion-architecture.md)
+- [`OPERATIONS.md`](OPERATIONS.md)
