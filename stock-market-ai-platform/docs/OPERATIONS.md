@@ -2,163 +2,245 @@
 
 ## Purpose
 
-This runbook documents the current Android/Termux operating model for the Stock Market AI Platform.
+This runbook documents the current public Android/Termux production-style deployment for the Stock Market AI Platform.
 
-The production-style local stack consists of:
+Public site:
+
+```text
+https://datashepherdengineering.com
+https://www.datashepherdengineering.com
+```
+
+## Production Service Layout
 
 ```text
 runsvdir
   ├── crond
-  └── stock-market-ai
-        ├── Tiingo IEX WebSocket
-        └── Flask web application
+  ├── stock-market-ai
+  │     └── Gunicorn -> Flask
+  ├── iex-stream
+  │     └── Tiingo IEX WebSocket
+  └── cloudflared
+        └── named tunnel: data-shepherd
 ```
 
-The historical refresh pipeline is scheduled independently through cron and protected from overlapping runs with `flock`.
+The historical EOD refresh pipeline runs through cron and remains separate from the continuously running live stream and public web path.
 
 ## Service Status
 
 ```bash
 sv status crond
 sv status stock-market-ai
+sv status iex-stream
+sv status cloudflared
 ```
 
 Healthy services report `run:`.
 
-## Restart the Platform
+## Restart Services
 
 ```bash
 sv restart stock-market-ai
+sv restart iex-stream
+sv restart cloudflared
 ```
 
-This restarts both the WebSocket and Flask children through the supervised service.
-
-## Stop / Start
+Cron can be restarted with:
 
 ```bash
-sv down stock-market-ai
-sv up stock-market-ai
+sv restart crond
 ```
 
-For cron:
-
-```bash
-sv down crond
-sv up crond
-```
-
-## Verify the Dashboard
+## Local Web Verification
 
 ```bash
 curl -I http://127.0.0.1:5000
 ```
 
-Expected result:
+Expected server header:
 
 ```text
-HTTP/1.1 200 OK
+Server: gunicorn
 ```
 
-The local dashboard is available at:
+Gunicorn currently binds only to loopback:
 
 ```text
-http://127.0.0.1:5000
+127.0.0.1:5000
 ```
 
-When binding to `0.0.0.0`, Flask may also report the device's LAN address for access from another device on the same network.
+The origin port is not intended to be exposed directly to the Internet.
 
-## Live Feed Checks
+## Public Verification
 
 ```bash
-tail -20 logs/iex_stream.log
+curl -I https://datashepherdengineering.com
+curl -I https://www.datashepherdengineering.com
+curl -s https://datashepherdengineering.com/health
+```
+
+A healthy public response should return HTTP 200 through Cloudflare. The health endpoint should include:
+
+```json
+{"status":"healthy"}
+```
+
+`live_symbols: 0` can be normal outside active market periods when no current IEX quote is cached.
+
+## Gunicorn
+
+The `stock-market-ai` runit service runs Gunicorn rather than Flask/Werkzeug's development server.
+
+Conceptual command:
+
+```bash
+gunicorn \
+  --bind 127.0.0.1:5000 \
+  --workers 2 \
+  --timeout 120 \
+  webapp.app:app
+```
+
+Logs:
+
+```text
+logs/gunicorn-access.log
+logs/gunicorn-error.log
+```
+
+## Live IEX Service
+
+The Tiingo IEX stream is now isolated in its own runit service:
+
+```text
+iex-stream
+```
+
+Useful checks:
+
+```bash
+sv status iex-stream
+ps -ef | grep '[i]ex_stream.py'
+tail -40 logs/iex_stream.log
 cat data/live/latest_quotes.json
 ```
 
-A healthy closed-market stream may show:
+The UI falls back to latest EOD pricing when live data is unavailable.
 
-- successful WebSocket connection
-- successful subscription
-- heartbeats
-- no current quote values
+## Cloudflare Tunnel
 
-That is normal. The dashboard falls back to latest EOD pricing.
+The public site is delivered through a named Cloudflare Tunnel:
 
-## Flask Checks
-
-```bash
-tail -20 logs/webapp.log
-curl -I http://127.0.0.1:5000
+```text
+data-shepherd
 ```
 
-If Flask reports `Address already in use`, identify and stop the stale Python process before restarting the supervised service.
+Request flow:
 
-## Scheduled Refresh
+```text
+Cloudflare edge
+  -> encrypted outbound tunnel
+  -> 127.0.0.1:5000
+  -> Gunicorn
+  -> Flask
+```
 
-Current cron schedule:
+Useful checks:
+
+```bash
+sv status cloudflared
+cloudflared tunnel list
+```
+
+Tunnel config is stored locally under:
+
+```text
+~/.cloudflared/config.yml
+```
+
+Credential files such as `cert.pem` and tunnel JSON files are secrets and must never be committed.
+
+## DNS / Domain
+
+The domain is registered with Namecheap and uses Cloudflare nameservers.
+
+The web hostnames are routed to the named tunnel rather than to a public origin IP:
+
+```text
+datashepherdengineering.com
+www.datashepherdengineering.com
+```
+
+Cloudflare provides public HTTPS at the edge.
+
+## Scheduled Historical Refresh
+
+Current cron cadence:
 
 ```text
 5 * * * *
 ```
 
-The job runs at minute 05 of every hour.
-
-Check the installed crontab:
+Check it with:
 
 ```bash
 crontab -l
 ```
 
-The job uses `flock -n` to prevent overlapping refresh processes.
+The refresh job uses `flock -n` to prevent overlap.
 
 ## Refresh Pipeline Behavior
 
-`refresh_pipeline.sh` first performs a sentinel EOD freshness check.
+`refresh_pipeline.sh` performs an EOD freshness check before rebuilding the full pipeline.
 
 ```text
-newer EOD timestamp absent -> exit cleanly
-newer EOD timestamp present -> full pipeline
+no newer EOD timestamp -> exit cleanly
+newer EOD timestamp    -> full refresh
 ```
 
-Full pipeline:
+Full refresh:
 
 ```text
-Tiingo ingestion
+Tiingo historical ingestion
   -> Silver
   -> Gold
   -> Features
-  -> train all models
+  -> train all 26 models
 ```
 
-This is intentionally separate from the continuously running live IEX WebSocket.
+This is intentionally independent of the live IEX WebSocket.
 
 ## Rate Limits
 
-Repeated manual full-universe requests can trigger Tiingo HTTP 429 responses. Avoid repeatedly launching full ingestion during the same rate-limit window.
+Repeated manual full-universe Tiingo requests can return HTTP 429. Avoid unnecessary back-to-back full refreshes. The sentinel design exists to minimize API usage.
 
-The sentinel design exists specifically to minimize unnecessary calls.
+## Forecast Verification
 
-## Manual Manager
-
-`run_platform.sh` can manage the Flask and IEX processes manually when runit is not being used:
+The new five-day market-wide forecast endpoint covers all 26 symbols:
 
 ```bash
-./run_platform.sh start
-./run_platform.sh stop
-./run_platform.sh status
-./run_platform.sh restart
+curl -s http://127.0.0.1:5000/api/forecast
 ```
 
-Do not run the manual manager on top of an already active runit-managed `stock-market-ai` service, because that can create duplicate WebSocket processes or a port-5000 conflict.
+Expected metadata includes:
+
+```text
+symbol_count: 26
+available_count: 26
+```
+
+The chart is a directional trend visualization, not a future price target.
 
 ## Boot Persistence
 
-The Google Play Termux build uses a boot script under:
+The Termux boot script starts `runsvdir`. The following services are enabled:
 
 ```text
-~/.termux/boot/
+crond
+stock-market-ai
+iex-stream
+cloudflared
 ```
-
-The configured script starts the Termux service supervisor. Both `crond` and `stock-market-ai` are enabled services.
 
 After reboot, verify:
 
@@ -166,48 +248,65 @@ After reboot, verify:
 pgrep -a runsvdir
 sv status crond
 sv status stock-market-ai
-curl -I http://127.0.0.1:5000
+sv status iex-stream
+sv status cloudflared
+curl -I https://datashepherdengineering.com
 ```
-
-The reboot recovery path has been tested successfully.
 
 ## Runtime Files
 
-Do not commit runtime state:
+Do not commit:
 
 ```text
 data/live/
 logs/
 run/
 *.lock
+models/*.pkl
 ```
 
-Generated market data and model artifacts are also ignored.
-
-## Secret Handling
+## Secrets
 
 Never commit:
 
 ```text
 .env
 API tokens
-credentials
+Cloudflare cert.pem
+Cloudflare tunnel credential JSON
+payment/account credentials
 secret-bearing logs
 ```
 
-If an API token is exposed in terminal output, screenshots, logs, or public messages, rotate it with the data provider and update the local `.env` file.
+If a provider token is exposed, rotate it and update the local `.env`.
 
-## Troubleshooting Sequence
+## Troubleshooting Order
 
-For a general platform issue, use this order:
+For a public-site issue:
 
 ```bash
 sv status stock-market-ai
-sv status crond
 curl -I http://127.0.0.1:5000
-tail -40 logs/webapp.log
-tail -40 logs/iex_stream.log
-crontab -l
+sv status cloudflared
+curl -I https://datashepherdengineering.com
+tail -40 logs/gunicorn-error.log
 ```
 
-This separates web-service failures, live-feed failures, and scheduled-pipeline failures before changing code.
+For live-market issues:
+
+```bash
+sv status iex-stream
+tail -40 logs/iex_stream.log
+cat data/live/latest_quotes.json
+```
+
+For scheduled historical issues:
+
+```bash
+sv status crond
+crontab -l
+tail -40 logs/cron.log
+tail -40 logs/refresh_pipeline.log
+```
+
+This ordering separates origin-server failures, tunnel failures, live-feed failures, and scheduled-pipeline failures before changing code.
