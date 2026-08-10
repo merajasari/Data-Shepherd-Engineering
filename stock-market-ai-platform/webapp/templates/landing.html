@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Shepherd Engineering</title>
+
+<style>
+:root {
+    --bg: #08131f;
+    --panel: #10283c;
+    --text: #f4f8fb;
+    --muted: #9eb2c3;
+    --accent: #20d6c7;
+    --accent2: #55b7ff;
+    --border: rgba(125,188,224,.20);
+    --danger: #ff7b7b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text);
+    background:
+        radial-gradient(circle at top left, rgba(32,214,199,.09), transparent 32%),
+        radial-gradient(circle at top right, rgba(85,183,255,.08), transparent 28%),
+        linear-gradient(180deg, #07111b, #0b1825 45%, #09131e);
+    min-height: 100vh;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+}
+
+.shell {
+    width: min(1180px, calc(100% - 32px));
+    margin: auto;
+}
+
+.nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-bottom: 1px solid var(--border);
+    background: rgba(7,17,27,.90);
+}
+
+.nav-inner {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+}
+
+.brand-logo {
+    width: 150px;
+    height: 56px;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 0 26px rgba(32,214,199,.18);
+}
+
+.nav-links {
+    display: flex;
+    gap: 20px;
+    color: var(--muted);
+}
+
+.hero {
+    padding: 70px 0 45px;
+}
+
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1.15fr .85fr;
+    gap: 36px;
+    align-items: center;
+}
+
+.eyebrow {
+    display: inline-block;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: #b8fff7;
+    background: rgba(32,214,199,.06);
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+h1 {
+    margin: 20px 0 18px;
+    font-size: clamp(2.8rem, 7vw, 5.3rem);
+    line-height: .98;
+    letter-spacing: -.05em;
+}
+
+.gradient-text {
+    background: linear-gradient(90deg, var(--accent), #8ed7ff);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+}
+
+.hero-copy {
+    color: var(--muted);
+    font-size: 1.08rem;
+    line-height: 1.75;
+}
+
+.hero-points {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 26px;
+}
+
+.pill {
+    padding: 9px 13px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(255,255,255,.03);
+    color: #d8e7f1;
+    font-size: .84rem;
+}
+
+.login-card {
+    padding: 28px;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(17,40,59,.97), rgba(9,24,37,.96));
+    box-shadow: 0 24px 60px rgba(0,0,0,.30);
+}
+
+.login-card h2 {
+    margin: 0 0 8px;
+}
+
+.login-card p {
+    margin: 0 0 22px;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.field {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.field label {
+    font-size: .9rem;
+    font-weight: 700;
+}
+
+.field input {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    outline: none;
+    background: #071520;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.field input:focus {
+    border-color: var(--accent);
+}
+
+.login-button,
+.member-link {
+    display: block;
+    width: 100%;
+    padding: 13px 17px;
+    border: 0;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.login-button {
+    color: #04201e;
+    background: linear-gradient(90deg, var(--accent), #8ce6ff);
+}
+
+.member-link {
+    margin-top: 10px;
+    border: 1px solid rgba(32,214,199,.35);
+    color: #c8fff9;
+    background: rgba(32,214,199,.08);
+}
+
+.login-error {
+    margin-bottom: 15px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255,107,107,.32);
+    border-radius: 10px;
+    color: #ffc6c6;
+    background: rgba(255,107,107,.08);
+}
+.section {
+    padding: 46px 0;
+}
+
+.section-heading {
+    margin-bottom: 24px;
+}
+
+.section-heading h2 {
+    margin: 0 0 10px;
+    font-size: clamp(2rem, 4vw, 3rem);
+    letter-spacing: -.035em;
+}
+
+.section-heading p {
+    margin: 0;
+    max-width: 780px;
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.feature-card {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: rgba(255,255,255,.025);
+}
+
+.feature-card strong {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.feature-card span {
+    color: var(--muted);
+    line-height: 1.55;
+    font-size: .9rem;
+}
+
+.hero-image-wrap {
+    margin-top: 24px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: #07131e;
+    box-shadow: 0 20px 48px rgba(0,0,0,.25);
+}
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.gallery-card {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--panel);
+}
+
+.gallery-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #06121c;
+}
+
+.gallery-card.portrait img {
+    object-fit: contain;
+    max-height: 760px;
+}
+
+.cta {
+    margin: 46px 0 64px;
+    padding: 28px;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: linear-gradient(140deg, rgba(32,214,199,.08), rgba(85,183,255,.06));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.cta p {
+    margin: 6px 0 0;
+    color: var(--muted);
+}
+
+.cta a {
+    padding: 12px 17px;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #04201e;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+footer {
+    padding: 26px 0 36px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: .88rem;
+}
+
+@media (max-width: 920px) {
+    .hero-grid,
+    .gallery {
+        grid-template-columns: 1fr;
+    }
+
+    .feature-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .nav-links {
+        display: none;
+    }
+}
+
+@media (max-width: 620px) {
+    .shell {
+        width: min(100% - 22px, 1180px);
+    }
+
+    .feature-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cta {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .cta a {
+        text-align: center;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<nav class="nav">
+    <div class="shell nav-inner">
+        <a class="brand" href="/">
+            <img
+                class="brand-logo"
+                src="{{ url_for(
+                    'static',
+                    filename='images/data-shepherd-logo.png'
+                ) }}"
+                alt="Data Shepherd Engineering"
+            >
+            <span>Data Shepherd Engineering</span>
+        </a>
+
+        <div class="nav-links">
+            <a href="#platform">Platform</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#members">Members</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+
+<section class="hero">
+    <div class="shell hero-grid">
+        <div>
+            <div class="eyebrow">
+                Data Engineering • AI • Market Intelligence
+            </div>
+
+            <h1>
+                Engineering data into
+                <span class="gradient-text">
+                    actionable intelligence.
+                </span>
+            </h1>
+
+            <p class="hero-copy">
+                Data Shepherd Engineering builds an end-to-end
+                stock market intelligence platform combining
+                automated ingestion, layered data engineering,
+                live IEX market updates, machine-learning
+                inference, 26-stock forecasting, secure member
+                access, and production-grade public deployment.
+            </p>
+
+            <div class="hero-points">
+                <span class="pill">26-stock universe</span>
+                <span class="pill">Live Tiingo IEX</span>
+                <span class="pill">Bronze / Silver / Gold</span>
+                <span class="pill">5-day forecasting</span>
+                <span class="pill">Gunicorn + Cloudflare</span>
+                <span class="pill">Automated hourly refresh checks</span>
+            </div>
+        </div>
+
+        <div class="login-card" id="members">
+            {% if authenticated %}
+
+            <h2>Member Session Active</h2>
+            <p>
+                You are authenticated and can continue
+                directly to the Stock Market AI Platform.
+            </p>
+
+            <a class="member-link" href="{{ url_for('dashboard') }}">
+                Open Member Dashboard
+            </a>
+
+            <a class="member-link" href="{{ url_for('logout') }}">
+                Sign Out
+            </a>
+
+            {% else %}
+
+            <h2>Member Login</h2>
+            <p>
+                Secure access to the private market
+                intelligence dashboard.
+            </p>
+
+            {% if login_error %}
+            <div class="login-error">
+                {{ login_error }}
+            </div>
+            {% endif %}
+
+            <form method="post" action="{{ url_for('login') }}">
+                <div class="field">
+                    <label for="username">Username</label>
+                    <input
+                        id="username"
+                        name="username"
+                        type="text"
+                        autocomplete="username"
+                        required
+                    >
+                </div>
+
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                    >
+                </div>
+
+                <button class="login-button" type="submit">
+                    Sign In
+                </button>
+            </form>
+
+            {% endif %}
+        </div>
+    </div>
+</section>
+<section class="section" id="platform">
+    <div class="shell">
+        <div class="section-heading">
+            <h2>Stock Market AI Platform</h2>
+            <p>
+                The platform connects live and historical market data,
+                automated pipelines, machine-learning models,
+                member-facing analytics, operational monitoring,
+                and secure public infrastructure into one continuously
+                evolving engineering system.
+            </p>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <strong>Live Market Intelligence</strong>
+                <span>
+                    Tiingo IEX WebSocket data feeds runtime quote state
+                    with latest-EOD fallback when live data is unavailable.
+                </span>
+            </div>
+
+            <div class="feature-card">
+                <strong>Forecast Intelligence</strong>
+                <span>
+                    Five-trading-day directional scoring across the complete
+                    26-stock universe.
+                </span>
+            </div>
+
+            <div class="feature-card">
+                <strong>Automated Data Engineering</strong>
+                <span>
+                    Bronze, Silver, Gold, feature, and model pipelines
+                    rebuild only when newer EOD data is detected.
+                </span>
+            </div>
+
+            <div class="feature-card">
+                <strong>Production Operations</strong>
+                <span>
+                    Gunicorn, runit, cron, Cloudflare Tunnel, HTTPS,
+                    health checks, and visitor logging.
+                </span>
+            </div>
+        </div>
+
+        <div class="hero-image-wrap">
+            <img
+                src="{{ url_for('static', filename='images/landing/platform-overview-2026.png') }}"
+                alt="Updated Stock Market AI Platform overview"
+            >
+        </div>
+    </div>
+</section>
+
+<section class="section" id="architecture">
+    <div class="shell">
+        <div class="section-heading">
+            <h2>Platform Architecture & Evolution</h2>
+            <p>
+                A curated set of engineering views showing the platform's
+                architecture, data pipeline, dashboard experience,
+                and development journey.
+            </p>
+        </div>
+
+        <div class="gallery">
+            <div class="gallery-card">
+                <img
+                    src="{{ url_for('static', filename='images/landing/platform-architecture.png') }}"
+                    alt="Platform architecture infographic"
+                    loading="lazy"
+                >
+            </div>
+
+            <div class="gallery-card portrait">
+                <img
+                    src="{{ url_for('static', filename='images/landing/platform-pipeline.png') }}"
+                    alt="Platform data pipeline infographic"
+                    loading="lazy"
+                >
+            </div>
+
+            <div class="gallery-card portrait">
+                <img
+                    src="{{ url_for('static', filename='images/landing/platform-engineering.png') }}"
+                    alt="Data Shepherd engineering infographic"
+                    loading="lazy"
+                >
+            </div>
+
+            <div class="gallery-card">
+                <img
+                    src="{{ url_for('static', filename='images/landing/platform-dashboard.png') }}"
+                    alt="Stock Market AI dashboard infographic"
+                    loading="lazy"
+                >
+            </div>
+        </div>
+
+        <div class="cta">
+            <div>
+                <strong>Member intelligence is protected.</strong>
+                <p>
+                    Authenticate above to access the live dashboard,
+                    forecasts, and analytics.
+                </p>
+            </div>
+
+            {% if authenticated %}
+            <a href="{{ url_for('dashboard') }}">
+                Open Dashboard
+            </a>
+            {% else %}
+            <a href="#members">
+                Member Login
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="shell">
+        Data Shepherd Engineering •
+        Stock Market AI Platform •
+        Research and engineering use only
+    </div>
+</footer>
+
+</body>
+</html>
