@@ -6,6 +6,7 @@ Combines:
 - Machine-learning inference
 - Live Tiingo IEX quote data
 - Top 10 stock comparison
+- 26-stock future trend forecasting
 """
 
 import sys
@@ -20,6 +21,12 @@ from flask import (
 )
 
 sys.path.append("data-ingestion")
+
+from symbols import SYMBOLS
+
+from webapp.services.forecast_service import (
+    build_market_forecast,
+)
 
 from webapp.services.live_market_service import (
     get_all_live_quotes,
@@ -54,7 +61,10 @@ TOP_SYMBOLS = [
 
 
 def build_stock_dashboard(symbol):
-    """Build combined market, prediction, and live data."""
+    """
+    Build combined market, prediction, and live data
+    for one dashboard symbol.
+    """
 
     market = get_market_summary(
         symbol
@@ -156,7 +166,10 @@ def build_stock_dashboard(symbol):
 
 @app.route("/")
 def index():
-    """Render selected-stock detail plus Top 10 analytics."""
+    """
+    Render selected-stock detail plus
+    Top 10 analytics.
+    """
 
     selected_symbol = (
         request.args.get(
@@ -245,12 +258,17 @@ def index():
 
         stock_count=
             len(stocks),
+
+        forecast_symbol_count=
+            len(SYMBOLS),
     )
 
 
 @app.route("/api/stocks")
 def api_stocks():
-    """Return Top 10 stock/model/live data."""
+    """
+    Return Top 10 stock/model/live data.
+    """
 
     stocks = [
         build_stock_dashboard(
@@ -268,7 +286,9 @@ def api_stocks():
     "/api/prices/<symbol>"
 )
 def api_prices(symbol):
-    """Return recent historical price data."""
+    """
+    Return recent historical price data.
+    """
 
     symbol = symbol.upper()
 
@@ -292,7 +312,10 @@ def api_prices(symbol):
     "/api/live/<symbol>"
 )
 def api_live_quote(symbol):
-    """Return latest live quote for one symbol."""
+    """
+    Return latest live quote
+    for one symbol.
+    """
 
     symbol = symbol.upper()
 
@@ -307,16 +330,59 @@ def api_live_quote(symbol):
     "/api/live"
 )
 def api_live_quotes():
-    """Return all currently cached live quotes."""
+    """
+    Return all currently cached live quotes.
+    """
 
     return jsonify(
         get_all_live_quotes()
     )
 
 
+@app.route(
+    "/api/forecast"
+)
+def api_forecast():
+    """
+    Return 5-trading-day directional forecasts
+    for the complete 26-stock universe.
+    """
+
+    forecasts = build_market_forecast(
+        SYMBOLS
+    )
+
+    valid_count = len(
+        [
+            forecast
+            for forecast in forecasts
+            if "forecast_score"
+            in forecast
+        ]
+    )
+
+    return jsonify(
+        {
+            "horizon_days":
+                5,
+
+            "symbol_count":
+                len(SYMBOLS),
+
+            "available_count":
+                valid_count,
+
+            "forecasts":
+                forecasts,
+        }
+    )
+
+
 @app.route("/health")
 def health():
-    """Return application health state."""
+    """
+    Return application health state.
+    """
 
     live_state = (
         get_all_live_quotes()
@@ -332,6 +398,9 @@ def health():
 
             "dashboard_symbols":
                 len(TOP_SYMBOLS),
+
+            "forecast_symbols":
+                len(SYMBOLS),
 
             "live_symbols":
                 live_state[

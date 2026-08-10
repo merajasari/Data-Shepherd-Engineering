@@ -1,5 +1,8 @@
-massive
+flask
+gunicorn
+numpy
 pandas
-python-dotenv
 pyarrow
+python-dotenv
 requests
+websocket-client
