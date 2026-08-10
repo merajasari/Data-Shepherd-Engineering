@@ -2,11 +2,11 @@
 
 ## Overview
 
-The Stock Market AI Platform currently uses a per-symbol binary classification model to research **five-trading-day stock direction**.
+The Stock Market AI Platform uses one binary classification model per configured symbol to research **five-trading-day stock direction**.
 
-The implementation intentionally begins with a transparent baseline: NumPy logistic regression. The goal is not to maximize model complexity; it is to establish a reproducible benchmark that can be compared honestly against future model families.
+The current model family is NumPy logistic regression. The system deliberately emphasizes reproducibility, baseline comparison, and transparent evaluation over model complexity.
 
-> Experimental research only. Model outputs are not trading recommendations.
+> Experimental research only. Model outputs and forecast scores are not trading recommendations or future price targets.
 
 ## Prediction Target
 
@@ -23,95 +23,74 @@ Interpretation:
 0 (DOWN) -> price is not higher five trading days later
 ```
 
-The model returns a probability between 0 and 1 and currently uses a 0.50 classification threshold.
+The current classification threshold is 0.50.
+
+## Forecast Score Layer
+
+The dashboard now adds a market-wide trend view covering all 26 symbols.
+
+`webapp/services/forecast_service.py` transforms the model probabilities into a normalized score:
 
 ```text
-probability >= 0.50 -> UP
-probability <  0.50 -> DOWN
+forecast_score = (probability_up - probability_down) * 100
 ```
 
-This is a **direction classification model**, not a direct future-price forecast.
+Because `probability_down = 1 - probability_up`, the score spans approximately:
 
-## Why Logistic Regression?
+```text
+-100 ... 0 ... +100
+```
 
-The current NumPy logistic-regression baseline provides:
+Interpretation:
 
-- transparent mathematical behavior
-- fast training across 26 symbols
-- probabilistic output
-- inspectable coefficients
-- small portable artifacts
-- a clear benchmark for future models
+```text
++50 to +100   strong bullish bias
++20 to +50    bullish bias
+-20 to +20    neutral zone
+-50 to -20    bearish bias
+-100 to -50   strong bearish bias
+```
 
-A more complex model should only replace or complement it if it demonstrates stronger out-of-sample performance under better validation.
+The score is **not** a predicted percentage return and is **not** a future price estimate. It is a visualization of directional model imbalance.
 
 ## Feature Vector
 
-The current model uses 26 numerical features:
+The current model uses 26 numerical features spanning:
 
-| Category | Features |
-|---|---|
-| Returns | `daily_return`, `cumulative_return`, `return_5d`, `return_10d`, `return_20d` |
-| Trend | `sma_7`, `sma_20`, `sma_50`, `sma_200` |
-| Price vs Trend | `price_vs_sma_7`, `price_vs_sma_20`, `price_vs_sma_50`, `price_vs_sma_200` |
-| Moving-Average Relationships | `sma_7_vs_sma_20`, `sma_20_vs_sma_50`, `sma_50_vs_sma_200` |
-| Volume | `volume_sma_20`, `volume_ratio`, `volume_change_5d` |
-| Volatility / Range | `daily_volatility`, `volatility_5d`, `volatility_20d`, `intraday_range`, `open_close_range` |
-| Momentum | `rsi_14`, `momentum_10d` |
+- returns
+- moving averages
+- price-vs-trend relationships
+- volume
+- volatility
+- RSI
+- momentum
 
-The model does not train directly on live IEX ticks. Live quotes are a presentation and market-state path today; model training remains based on the historical feature pipeline.
+The model does not train directly on live IEX ticks. Live quotes remain a presentation/market-state path.
 
 ## Training Flow
 
 ```text
 Gold market data
-       |
-       v
-Feature engineering
-       |
-       v
-26 features + target_up_5d
-       |
-       v
-Chronological 80/20 split
-       |
-       +----------------------+
-       |                      |
-       v                      v
-Training 80%             Holdout 20%
-       |
-       v
-Training-only mean/std
-       |
-       v
-Feature standardization
-       |
-       v
-NumPy logistic regression
-       |
-       v
-Holdout evaluation
-       |
-       v
-Serialized model artifact
-       |
-       v
-Prediction service
-       |
-       v
-Flask dashboard
+  -> feature engineering
+  -> 26 features + target_up_5d
+  -> chronological 80/20 split
+  -> training-only scaling
+  -> NumPy logistic regression
+  -> holdout evaluation
+  -> serialized artifact
+  -> prediction service
+  -> forecast service
+  -> Flask API/dashboard
 ```
 
 ## Leakage Awareness
 
-Two important safeguards are already in place:
+Current safeguards include:
 
-1. Observations remain in chronological order rather than being randomly shuffled.
-2. Feature means and standard deviations are calculated from the training partition only.
+1. chronological ordering rather than random shuffling
+2. scaling statistics derived from the training partition only
 
-The same training-derived scaling is then applied to the holdout data and future inference rows.
-
-These practices reduce common forms of time-series leakage, but they do not by themselves make the evaluation production-grade.
+These reduce common leakage risks but do not replace walk-forward validation.
 
 ## Optimization
 
@@ -124,17 +103,9 @@ L2 penalty:    0.001
 Threshold:     0.50
 ```
 
-The sigmoid transformation is:
-
-```text
-p = 1 / (1 + exp(-z))
-```
-
-L2 regularization discourages unnecessarily large coefficients.
-
 ## One Model Per Symbol
 
-The platform currently trains independent models for all 26 configured symbols.
+The platform trains independent models for all 26 configured symbols.
 
 Examples:
 
@@ -145,13 +116,11 @@ models/nvda_direction_model.pkl
 ...
 ```
 
-`ml/train_all.py` orchestrates the full universe.
+A complete training run produces up to 26 artifacts.
 
-This design allows each model to learn its own coefficients. Future research should compare it with pooled, cross-sectional, sector-aware, and regime-aware approaches.
+## Artifact Contents
 
-## Model Artifact Contents
-
-Each serialized artifact contains enough information to reproduce inference consistently, including:
+Each artifact includes:
 
 ```text
 model_type
@@ -171,7 +140,7 @@ training_rows
 test_rows
 ```
 
-Generated `.pkl` artifacts are intentionally ignored by Git.
+Generated `.pkl` files are intentionally excluded from Git.
 
 ## Evaluation Metrics
 
@@ -180,109 +149,121 @@ The holdout period reports:
 - accuracy
 - precision
 - recall
-- F1 score
+- F1
 - confusion-matrix counts
 - majority-class baseline
 - training/test row counts
 
-### Why the Majority Baseline Matters
+## Why the Majority Baseline Matters
 
-A model should not be considered useful just because its raw accuracy sounds reasonable. If the holdout set contains many more observations of one class, always predicting that majority class may outperform the trained model.
+A model is not automatically useful because its raw accuracy sounds reasonable. A trivial always-majority classifier can outperform a trained model when the classes are imbalanced.
 
-The dashboard therefore displays **Accuracy vs Baseline** for each symbol.
+The dashboard therefore exposes **accuracy vs baseline** for each symbol.
 
 ## Probability Is Not Accuracy
 
-A model output such as:
+A prediction such as:
 
 ```text
 UP probability: 0.90
 ```
 
-does **not** mean the model has historically been correct 90% of the time.
+means the current feature vector produced a strong UP model output. It does **not** mean the model has historically been correct 90% of the time.
 
-That value is the model's output for one feature vector. Accuracy is a separate holdout metric measured across many labeled observations. Calibration, precision, recall, F1, and baseline-relative performance all answer different questions.
+Likewise, a forecast score of `+80` is not an expected 80% return. It simply reflects a large probability imbalance toward UP.
 
-## Current Observed Model Quality
+## Current Model Quality
 
-The current dashboard makes a critical result visible: several symbol models remain below their majority baseline.
+Several current symbol models remain below their majority baseline. The platform intentionally surfaces this fact in the dashboard and in the 26-stock forecast view.
 
-Examples observed in the current research run include large negative baseline edges for symbols such as AAPL, AMD, and ORCL, while a smaller number of symbols outperform baseline.
-
-This should not be interpreted as a failure of the platform. It is exactly why the system exposes model-quality metrics instead of hiding them behind high prediction probabilities.
-
-The infrastructure is currently more mature than the predictive model. Improving validation and modeling is now a primary research priority.
+This is important because the infrastructure is currently more mature than the predictive model. The next research phase should focus on evidence quality rather than visual confidence.
 
 ## Automated Retraining
 
-Model retraining is integrated into `refresh_pipeline.sh`.
-
-Retraining does **not** occur every hour by default. The scheduled job first checks whether a newer EOD bar exists using a sentinel symbol. If historical data has not advanced, downstream feature rebuilding and model training are skipped.
-
-When new EOD data is detected, the workflow becomes:
+`refresh_pipeline.sh` retrains models only when new EOD data is detected.
 
 ```text
-refresh 26 symbols
-  -> Silver
-  -> Gold
-  -> Features
-  -> train all 26 models
+sentinel freshness check
+  -> no new bar: stop
+  -> new bar:
+       refresh 26 symbols
+       -> Silver
+       -> Gold
+       -> Features
+       -> train all 26 models
 ```
-
-This reduces unnecessary API calls and unnecessary retraining.
 
 ## Relationship to Live Market Data
 
-The platform now has a live Tiingo IEX path, but the ML architecture remains deliberately separate:
-
 ```text
-Live IEX quote -> dashboard live price
-Historical EOD -> features -> trained model -> prediction
+Live IEX quote -> displayed live price
+Historical EOD -> features -> trained model -> prediction/forecast score
 ```
 
-The current live quote does not automatically become a new training observation or recompute technical features every 10 seconds.
+The live quote does not automatically become a training observation or recompute the model every 10 seconds.
 
-A future intraday ML architecture would require a separate feature definition, target definition, validation design, and retraining/inference strategy.
+## Forecast API
+
+The production API exposes all 26 model trend records:
+
+```text
+GET /api/forecast
+```
+
+Each valid forecast includes values such as:
+
+```text
+symbol
+prediction
+probability_up
+probability_down
+confidence
+forecast_score
+trend_strength
+accuracy
+majority_baseline
+horizon_days
+reference_close
+prediction_timestamp
+```
 
 ## Current Limitations
 
-Important limitations include:
-
-- a single chronological 80/20 split is not sufficient for robust time-series validation
-- several current models underperform a trivial majority baseline
-- model probabilities may be poorly calibrated
-- technical features alone may not contain enough predictive information
+- one chronological 80/20 split is not sufficient for robust time-series validation
+- several models underperform a majority baseline
+- probabilities may be poorly calibrated
+- technical features alone may have limited predictive information
 - market regimes change
-- transaction costs and slippage are not represented by classification metrics
-- accuracy is not profitability
-- no walk-forward or rolling-window validation is implemented yet
-- live market prices are not yet part of the ML feature/training path
+- classification accuracy is not profitability
+- transaction costs/slippage are not represented
+- no walk-forward validation yet
+- no historical forecast-performance tracking yet
+- live prices are not part of the training path
+- forecast scores are directional, not return forecasts
 
 ## Research Priorities
-
-The next ML phase should focus on evidence quality before model complexity:
 
 1. walk-forward / rolling-window validation
 2. baseline diagnostics by symbol
 3. probability calibration
-4. coefficient and feature analysis
+4. feature and coefficient analysis
 5. class-balance diagnostics
-6. alternative decision thresholds
-7. additional simple baselines
-8. tree-based model experiments
-9. pooled and cross-symbol models
-10. sector and market-regime features
-11. model versioning and experiment tracking
-12. drift and performance monitoring
-13. historical prediction logging
-14. backtesting with realistic costs and slippage
+6. threshold tuning
+7. stronger simple baselines
+8. alternative model families
+9. pooled/cross-symbol models
+10. regime and sector features
+11. experiment tracking and model versioning
+12. drift monitoring
+13. historical prediction/forecast logging
+14. realistic backtesting with costs and slippage
 
 ## Research Standard
 
-A future model should only be considered an improvement if it adds repeatable out-of-sample value beyond simple baselines across multiple time windows.
+A future model should only be considered an improvement if it demonstrates repeatable out-of-sample value beyond simple baselines across multiple time windows.
 
-The goal is not to produce confident-looking predictions. The goal is to determine scientifically whether the model contains measurable predictive information.
+The goal is not to produce confident-looking predictions. The goal is to determine whether the model contains measurable predictive information.
 
 ## Disclaimer
 
-This machine-learning system is built for software engineering and research. It does not guarantee profitable trades and should not be interpreted as personalized financial advice. Any future trading use should require stronger validation, realistic backtesting, risk controls, and independent review.
+This machine-learning system is built for software engineering and research. It does not guarantee profitable trades and should not be interpreted as personalized financial advice.
