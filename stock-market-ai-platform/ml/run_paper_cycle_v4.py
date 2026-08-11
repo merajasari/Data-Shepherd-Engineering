@@ -5,7 +5,8 @@ Workflow:
   1. Load latest V4 rankings
   2. Build rebalance plan
   3. Execute simulated rebalance if needed
-  4. Print portfolio summary
+  4. Append one forward journal observation
+  5. Print portfolio summary
 
 Simulation only.
 No real brokerage orders are placed.
@@ -27,6 +28,10 @@ sys.path.insert(
 )
 
 from symbols import SYMBOLS
+
+from webapp.services.paper_journal_service import (
+    append_cycle_observation,
+)
 
 from webapp.services.paper_trading_service import (
     build_rebalance_plan,
@@ -114,6 +119,20 @@ def main():
         summary = (
             get_portfolio_summary()
         )
+
+    journal_entry = append_cycle_observation(
+        summary=summary,
+        top_five_symbols=plan[
+            "target_v4_symbols"
+        ],
+        trade_actions=trade_actions,
+    )
+
+    print()
+    print(
+        "Forward journal observation appended "
+        f"at {journal_entry['timestamp']}."
+    )
 
     print()
     print("PORTFOLIO")
