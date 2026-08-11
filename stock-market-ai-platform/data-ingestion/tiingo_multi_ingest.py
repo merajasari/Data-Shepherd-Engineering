@@ -15,7 +15,7 @@ from symbols import get_symbols
 from tiingo_client import TiingoClient
 
 
-START_DATE = "2024-08-01"
+START_DATE = "2016-08-01"
 
 # Always request through today's date.
 END_DATE = date.today().isoformat()

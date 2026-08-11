@@ -37,3 +37,9 @@ run/
 
 # Refresh lock files
 *.lock
+
+# Generated model-training datasets
+data/model/
+
+# Paper-trading runtime state
+data/paper_trading/

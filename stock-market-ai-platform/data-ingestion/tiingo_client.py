@@ -6,6 +6,7 @@ Bronze schema used by the Stock Market AI Platform.
 """
 
 import os
+from pathlib import Path
 from datetime import datetime
 
 import pandas as pd
@@ -13,7 +14,11 @@ import requests
 from dotenv import load_dotenv
 
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+load_dotenv(
+    PROJECT_ROOT / ".env"
+)
 
 
 class TiingoClient:
@@ -84,11 +89,11 @@ class TiingoClient:
                         self._timestamp_ms(
                             item["date"]
                         ),
-                    "open": item["open"],
-                    "high": item["high"],
-                    "low": item["low"],
-                    "close": item["close"],
-                    "volume": item["volume"],
+                    "open": item["adjOpen"],
+                    "high": item["adjHigh"],
+                    "low": item["adjLow"],
+                    "close": item["adjClose"],
+                    "volume": item["adjVolume"],
                     "vwap": None,
                 }
             )

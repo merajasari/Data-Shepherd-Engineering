@@ -61,6 +61,10 @@ from webapp.services.prediction_service import (
     get_latest_prediction,
 )
 
+from webapp.services.paper_trading_service import (
+    get_portfolio_summary,
+)
+
 
 app = Flask(__name__)
 
@@ -576,6 +580,16 @@ def api_forecast():
             "forecasts":
                 forecasts,
         }
+    )
+
+
+@app.route("/api/paper-portfolio")
+@login_required
+def api_paper_portfolio():
+    """Return the current simulated paper-trading portfolio."""
+
+    return jsonify(
+        get_portfolio_summary()
     )
 
 

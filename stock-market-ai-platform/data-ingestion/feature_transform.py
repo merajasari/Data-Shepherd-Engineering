@@ -17,9 +17,12 @@ def transform_to_features(df: pd.DataFrame) -> pd.DataFrame:
     # ---------------------------------------------------------
     # Price momentum
     # ---------------------------------------------------------
+    result["return_2d"] = result["close"].pct_change(2)
+    result["return_3d"] = result["close"].pct_change(3)
     result["return_5d"] = result["close"].pct_change(5)
     result["return_10d"] = result["close"].pct_change(10)
     result["return_20d"] = result["close"].pct_change(20)
+    result["return_60d"] = result["close"].pct_change(60)
 
     # ---------------------------------------------------------
     # Price relative to moving averages
@@ -88,6 +91,47 @@ def transform_to_features(df: pd.DataFrame) -> pd.DataFrame:
         result["daily_return"].rolling(20).std()
     )
 
+    result["volatility_ratio_5_20"] = (
+        result["volatility_5d"]
+        / result["volatility_20d"]
+    )
+
+    result["trend_20_50"] = (
+        result["sma_20"]
+        / result["sma_50"]
+        - 1
+    )
+
+    result["trend_50_200"] = (
+        result["sma_50"]
+        / result["sma_200"]
+        - 1
+    )
+
+    rolling_high_20 = (
+        result["high"]
+        .rolling(20)
+        .max()
+    )
+
+    rolling_low_20 = (
+        result["low"]
+        .rolling(20)
+        .min()
+    )
+
+    result["distance_from_20d_high"] = (
+        result["close"]
+        / rolling_high_20
+        - 1
+    )
+
+    result["distance_from_20d_low"] = (
+        result["close"]
+        / rolling_low_20
+        - 1
+    )
+
     # ---------------------------------------------------------
     # RSI
     # ---------------------------------------------------------
@@ -102,6 +146,11 @@ def transform_to_features(df: pd.DataFrame) -> pd.DataFrame:
     rs = avg_gain / avg_loss
 
     result["rsi_14"] = 100 - (100 / (1 + rs))
+
+    result["rsi_centered"] = (
+        result["rsi_14"]
+        - 50.0
+    ) / 50.0
 
     # ---------------------------------------------------------
     # Momentum
@@ -123,6 +172,14 @@ def transform_to_features(df: pd.DataFrame) -> pd.DataFrame:
     # Binary target for classification models.
     result["target_up_5d"] = (
         result["forward_return_5d"] > 0
+    ).astype("int8")
+
+    # V3 selective-trading target.
+    #
+    # A positive class means the stock gained more than 1%
+    # over the next 5 trading days.
+    result["target_trade_5d"] = (
+        result["forward_return_5d"] > 0.01
     ).astype("int8")
 
     return result

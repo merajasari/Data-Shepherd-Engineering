@@ -170,7 +170,7 @@ def get_paths(symbol: str):
     )
 
     model_path = Path(
-        f"models/{symbol.lower()}_direction_model.pkl"
+        f"models/{symbol.lower()}_trade_model_v3.pkl"
     )
 
     return (
@@ -200,7 +200,7 @@ def load_dataset(
     df = df.dropna(
         subset=[
             "forward_return_5d",
-            "target_up_5d",
+            "target_trade_5d",
         ]
     )
 
@@ -535,7 +535,7 @@ def train_model(
     )
 
     y = df[
-        "target_up_5d"
+        "target_trade_5d"
     ].to_numpy(
         dtype=int
     )
@@ -665,16 +665,16 @@ def train_model(
 
     artifact = {
         "model_type":
-            "numpy_logistic_regression",
+            "numpy_logistic_regression_v3_trade_target",
 
         "version":
-            1,
+            3,
 
         "symbol":
             symbol,
 
         "target":
-            "target_up_5d",
+            "target_trade_5d",
 
         "target_horizon_days":
             5,
