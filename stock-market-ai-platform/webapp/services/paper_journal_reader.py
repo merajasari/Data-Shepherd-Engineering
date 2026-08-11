@@ -114,6 +114,36 @@ def summarize_journal():
         else 0.0
     )
 
+    benchmark_rows = [
+        row
+        for row in rows
+        if row.get("benchmark_price") is not None
+    ]
+
+    if benchmark_rows:
+        benchmark_start_price = float(
+            benchmark_rows[0]["benchmark_price"]
+        )
+
+        benchmark_end_price = float(
+            benchmark_rows[-1]["benchmark_price"]
+        )
+
+        benchmark_return = (
+            benchmark_end_price
+            / benchmark_start_price
+            - 1.0
+        )
+    else:
+        benchmark_start_price = None
+        benchmark_end_price = None
+        benchmark_return = 0.0
+
+    excess_return = (
+        forward_return
+        - benchmark_return
+    )
+
     return {
         "observation_count":
             len(rows),
@@ -159,4 +189,28 @@ def summarize_journal():
                 "trade_count",
                 0,
             ),
+
+        "benchmark_observation_count":
+            len(benchmark_rows),
+
+        "benchmark_symbol":
+            (
+                benchmark_rows[-1].get(
+                    "benchmark_symbol"
+                )
+                if benchmark_rows
+                else None
+            ),
+
+        "benchmark_start_price":
+            benchmark_start_price,
+
+        "benchmark_end_price":
+            benchmark_end_price,
+
+        "benchmark_return":
+            benchmark_return,
+
+        "excess_return":
+            excess_return,
     }

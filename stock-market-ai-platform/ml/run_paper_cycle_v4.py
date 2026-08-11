@@ -36,6 +36,7 @@ from webapp.services.paper_journal_service import (
 from webapp.services.paper_trading_service import (
     build_rebalance_plan,
     execute_rebalance,
+    get_execution_price,
     get_portfolio_summary,
 )
 
@@ -120,12 +121,23 @@ def main():
             get_portfolio_summary()
         )
 
+    benchmark = get_execution_price(
+        "SPY"
+    )
+
     journal_entry = append_cycle_observation(
         summary=summary,
         top_five_symbols=plan[
             "target_v4_symbols"
         ],
         trade_actions=trade_actions,
+        benchmark_symbol="SPY",
+        benchmark_price=benchmark.get(
+            "price"
+        ),
+        benchmark_source=benchmark.get(
+            "source"
+        ),
     )
 
     print()

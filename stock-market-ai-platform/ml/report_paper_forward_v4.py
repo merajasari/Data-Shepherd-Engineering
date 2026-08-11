@@ -70,6 +70,42 @@ def main():
 
     print()
 
+    print("BENCHMARK")
+    print("-" * 56)
+
+    print(
+        f"Benchmark:          "
+        f"{summary['benchmark_symbol'] or '-'}"
+    )
+
+    print(
+        f"Benchmark obs:      "
+        f"{summary['benchmark_observation_count']}"
+    )
+
+    if summary["benchmark_start_price"] is not None:
+        print(
+            f"Start price:        "
+            f"${summary['benchmark_start_price']:,.2f}"
+        )
+
+        print(
+            f"End price:          "
+            f"${summary['benchmark_end_price']:,.2f}"
+        )
+
+    print(
+        f"Benchmark return:   "
+        f"{summary['benchmark_return']:.4%}"
+    )
+
+    print(
+        f"Excess return:      "
+        f"{summary['excess_return']:.4%}"
+    )
+
+    print()
+
     print(
         f"Rebalance cycles:   "
         f"{summary['rebalance_cycles']}"

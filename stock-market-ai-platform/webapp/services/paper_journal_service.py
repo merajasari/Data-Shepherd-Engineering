@@ -26,6 +26,9 @@ def build_cycle_observation(
     summary,
     top_five_symbols,
     trade_actions,
+    benchmark_symbol=None,
+    benchmark_price=None,
+    benchmark_source=None,
 ):
     """
     Build one serializable forward-test observation.
@@ -140,6 +143,19 @@ def build_cycle_observation(
 
         "trade_actions":
             actions,
+
+        "benchmark_symbol":
+            benchmark_symbol,
+
+        "benchmark_price":
+            (
+                float(benchmark_price)
+                if benchmark_price is not None
+                else None
+            ),
+
+        "benchmark_source":
+            benchmark_source,
     }
 
 
@@ -147,6 +163,9 @@ def append_cycle_observation(
     summary,
     top_five_symbols,
     trade_actions,
+    benchmark_symbol=None,
+    benchmark_price=None,
+    benchmark_source=None,
 ):
     """
     Append exactly one paper-cycle observation to the JSONL journal.
@@ -156,6 +175,9 @@ def append_cycle_observation(
         summary=summary,
         top_five_symbols=top_five_symbols,
         trade_actions=trade_actions,
+        benchmark_symbol=benchmark_symbol,
+        benchmark_price=benchmark_price,
+        benchmark_source=benchmark_source,
     )
 
     JOURNAL_DIR.mkdir(
