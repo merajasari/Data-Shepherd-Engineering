@@ -43,3 +43,7 @@ data/model/
 
 # Paper-trading runtime state
 data/paper_trading/
+
+# Local source backups
+*.backup-before-login
+*_backup.py
