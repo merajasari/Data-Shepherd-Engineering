@@ -489,6 +489,7 @@ h3 {
 
 .chart-card {
     margin-top: 22px;
+    margin-bottom: 22px;
 }
 
 
@@ -524,9 +525,84 @@ h3 {
     height: 100%;
 }
 
+#primary-chart {
+    cursor: crosshair;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.chart-scrubber {
+    margin-top: 18px;
+
+    padding: 18px;
+
+    border:
+        1px solid var(--border);
+
+    border-radius: 18px;
+
+    background:
+        rgba(7,16,31,.55);
+}
+
+.chart-scrubber-readout {
+    display: grid;
+
+    grid-template-columns:
+        repeat(5, 1fr);
+
+    gap: 12px;
+
+    margin-bottom: 18px;
+}
+
+.chart-scrubber-readout div {
+    min-width: 0;
+}
+
+.chart-scrubber-readout span {
+    display: block;
+
+    color: var(--muted);
+
+    font-size: .68rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+}
+
+.chart-scrubber-readout strong {
+    display: block;
+
+    margin-top: 5px;
+
+    font-size: 1rem;
+}
+
+.chart-scrubber-input {
+    width: 100%;
+
+    accent-color: var(--cyan);
+
+    cursor: pointer;
+}
+
+.chart-scrubber-hint {
+    margin-top: 9px;
+
+    color: var(--muted);
+
+    font-size: .78rem;
+}
+
 
 .section-title {
     margin-top: 30px;
+}
+
+
+#v4-strategy-section {
+    margin-bottom: 22px;
 }
 
 
@@ -817,6 +893,11 @@ footer {
         height: 300px;
     }
 
+    .chart-scrubber-readout {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
 }
 
 </style>
@@ -887,46 +968,125 @@ LOGOUT
 </header>
 
 
-<section class="card section-title" id="future-forecast-section">
+<section class="card section-title" id="v4-strategy-section">
 
 <div class="label">
-FUTURE TREND FORECAST
+V4 FORWARD STRATEGY
 </div>
 
 <h2>
-5-Day Direction Forecast — All 26 Stocks
+Paper-Trading Strategy Monitor
 </h2>
 
 <p class="subtitle" style="margin-bottom:24px;">
-Directional model forecast ranked from most bullish to most bearish.
-This is not a future price target.
+Frozen V4 cross-sectional strategy monitored against SPY.
+Simulation only — no brokerage orders are placed.
 </p>
 
 <div
-id="forecast-summary"
-style="
-display:grid;
-grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-gap:12px;
-margin-bottom:22px;
-"
+id="v4-forward-metrics"
+class="metrics"
+style="margin-top:0;"
 >
+
+<div class="metric">
+<span>PORTFOLIO EQUITY</span>
+<strong id="v4-equity">Loading...</strong>
 </div>
 
+<div class="metric">
+<span>FORWARD RETURN</span>
+<strong id="v4-return">—</strong>
+</div>
+
+<div class="metric">
+<span>SPY RETURN</span>
+<strong id="v4-benchmark-return">—</strong>
+</div>
+
+<div class="metric">
+<span>EXCESS RETURN</span>
+<strong id="v4-excess-return">—</strong>
+</div>
+
+<div class="metric">
+<span>MAX DRAWDOWN</span>
+<strong id="v4-drawdown">—</strong>
+</div>
+
+<div class="metric">
+<span>OBSERVATIONS</span>
+<strong id="v4-observations">—</strong>
+</div>
+
+</div>
+
+<div class="detail-grid">
+
+<div class="card">
+
+<div class="label">
+CURRENT V4 TOP FIVE
+</div>
+
+<h3>
+Active 40% Strategy Sleeve
+</h3>
+
 <div
-id="forecast-chart"
+id="v4-top-five"
 style="
 display:flex;
-flex-direction:column;
-gap:9px;
+flex-wrap:wrap;
+gap:10px;
+margin-top:18px;
 "
 >
-<div style="color:var(--muted);">
-Loading 26-stock forecast...
+<span class="subtitle">
+Loading rankings...
+</span>
 </div>
+
+</div>
+
+<div class="card">
+
+<div class="label">
+PORTFOLIO STRUCTURE
+</div>
+
+<h3>
+Core + V4
+</h3>
+
+<div class="model-row">
+<span>SPY Core</span>
+<strong>60%</strong>
+</div>
+
+<div class="model-row">
+<span>V4 Strategy</span>
+<strong>40%</strong>
+</div>
+
+<div class="model-row">
+<span>Open Positions</span>
+<strong id="v4-open-positions">—</strong>
+</div>
+
+<div class="model-row">
+<span>Total Trades</span>
+<strong id="v4-trade-count">—</strong>
+</div>
+
+</div>
+
 </div>
 
 </section>
+
+
+
 
 <section class="selector-card">
 
@@ -945,12 +1105,12 @@ Detailed Market Analysis
 
 <form
 method="get"
-action="/"
+action="{{ url_for('dashboard') }}"
 >
 
 <select
+id="primary-stock-selector"
 name="symbol"
-onchange="this.form.submit()"
 >
 
 {% for symbol in top_symbols %}
@@ -976,6 +1136,93 @@ selected
 
 
 
+
+<section class="card chart-card">
+
+<div class="chart-head">
+
+<div>
+
+<div class="label">
+MARKET TREND
+</div>
+
+<h2 id="market-trend-title">
+{{ selected_symbol }} Recent Price History
+</h2>
+
+</div>
+
+
+<div class="chart-legend">
+
+<span style="color:#36d8ff">● Close</span>
+<span style="color:#39e3a1">● SMA 20</span>
+<span style="color:#9b65ff">● SMA 50</span>
+<span style="color:#efc56b">● SMA 200</span>
+
+</div>
+
+</div>
+
+
+<div
+id="primary-chart"
+class="chart-box"
+></div>
+
+<div class="chart-scrubber">
+
+<div class="chart-scrubber-readout">
+
+<div>
+<span>DATE</span>
+<strong id="chart-selected-date">—</strong>
+</div>
+
+<div>
+<span>CLOSE</span>
+<strong id="chart-selected-close">—</strong>
+</div>
+
+<div>
+<span>SMA 20</span>
+<strong id="chart-selected-sma20">—</strong>
+</div>
+
+<div>
+<span>SMA 50</span>
+<strong id="chart-selected-sma50">—</strong>
+</div>
+
+<div>
+<span>SMA 200</span>
+<strong id="chart-selected-sma200">—</strong>
+</div>
+
+</div>
+
+<input
+id="chart-scrubber"
+class="chart-scrubber-input"
+type="range"
+min="0"
+max="0"
+value="0"
+step="1"
+aria-label="Move through historical price data"
+>
+
+<div class="chart-scrubber-hint">
+Drag the slider to explore historical price movement.
+</div>
+
+</div>
+
+</section>
+
+
+
 <section class="hero">
 
 
@@ -990,12 +1237,12 @@ MARKET
 
 <div>
 
-<div class="symbol">
+<div class="symbol" id="market-symbol">
 {{ market.symbol }}
 </div>
 
-<div class="date">
-{{ market.timestamp }}
+<div class="date" id="market-date">
+{{ market.timestamp }} · {{ price_source }}
 </div>
 
 </div>
@@ -1003,14 +1250,15 @@ MARKET
 
 <div class="price-block">
 
-<div class="price">
+<div class="price" id="market-price">
 
-${{ "%.2f"|format(market.close) }}
+${{ "%.2f"|format(display_price) }}
 
 </div>
 
 
 <div
+id="market-change"
 class="
 {% if market.price_change < 0 %}
 negative
@@ -1050,6 +1298,7 @@ market.price_change_pct * 100
 <div class="direction-row">
 
 <div
+id="prediction-direction"
 class="
 direction
 {% if prediction.prediction == 'UP' %}
@@ -1067,7 +1316,7 @@ down
 
 <div class="output">
 
-<strong>
+<strong id="prediction-confidence">
 
 {{ "%.1f"|format(
 prediction.confidence * 100
@@ -1091,6 +1340,7 @@ MODEL OUTPUT PROBABILITY
 <div class="bar">
 
 <div
+id="prediction-up-bar"
 class="bar-up"
 style="
 width:
@@ -1100,7 +1350,7 @@ width:
 
 </div>
 
-<strong>
+<strong id="prediction-up-value">
 
 {{ "%.1f"|format(
 prediction.probability_up * 100
@@ -1118,6 +1368,7 @@ prediction.probability_up * 100
 <div class="bar">
 
 <div
+id="prediction-down-bar"
 class="bar-down"
 style="
 width:
@@ -1127,7 +1378,7 @@ width:
 
 </div>
 
-<strong>
+<strong id="prediction-down-value">
 
 {{ "%.1f"|format(
 prediction.probability_down * 100
@@ -1147,73 +1398,38 @@ prediction.probability_down * 100
 
 <div class="metric">
 <span>RSI 14</span>
-<strong>{{ "%.2f"|format(market.rsi_14) }}</strong>
+<strong id="metric-rsi-14">{{ "%.2f"|format(market.rsi_14) }}</strong>
 </div>
 
 <div class="metric">
 <span>SMA 20</span>
-<strong>${{ "%.2f"|format(market.sma_20) }}</strong>
+<strong id="metric-sma-20">${{ "%.2f"|format(market.sma_20) }}</strong>
 </div>
 
 <div class="metric">
 <span>SMA 50</span>
-<strong>${{ "%.2f"|format(market.sma_50) }}</strong>
+<strong id="metric-sma-50">${{ "%.2f"|format(market.sma_50) }}</strong>
 </div>
 
 <div class="metric">
 <span>SMA 200</span>
-<strong>${{ "%.2f"|format(market.sma_200) }}</strong>
+<strong id="metric-sma-200">${{ "%.2f"|format(market.sma_200) }}</strong>
 </div>
 
 <div class="metric">
 <span>20D VOLATILITY</span>
-<strong>{{ "%.2f"|format(market.volatility_20d * 100) }}%</strong>
+<strong id="metric-volatility-20d">{{ "%.2f"|format(market.volatility_20d * 100) }}%</strong>
 </div>
 
 <div class="metric">
 <span>VOLUME RATIO</span>
-<strong>{{ "%.2f"|format(market.volume_ratio) }}x</strong>
+<strong id="metric-volume-ratio">{{ "%.2f"|format(market.volume_ratio) }}x</strong>
 </div>
 
 </section>
 
 
 
-<section class="card chart-card">
-
-<div class="chart-head">
-
-<div>
-
-<div class="label">
-MARKET TREND
-</div>
-
-<h2>
-{{ selected_symbol }} Recent Price History
-</h2>
-
-</div>
-
-
-<div class="chart-legend">
-
-<span style="color:#36d8ff">● Close</span>
-<span style="color:#39e3a1">● SMA 20</span>
-<span style="color:#9b65ff">● SMA 50</span>
-<span style="color:#efc56b">● SMA 200</span>
-
-</div>
-
-</div>
-
-
-<div
-id="primary-chart"
-class="chart-box"
-></div>
-
-</section>
 
 
 
@@ -1327,6 +1543,47 @@ negative
 
 
 
+
+<section class="card section-title" id="future-forecast-section">
+
+<div class="label">
+FUTURE TREND FORECAST
+</div>
+
+<h2>
+5-Day Direction Forecast — All 26 Stocks
+</h2>
+
+<p class="subtitle" style="margin-bottom:24px;">
+Directional model forecast ranked from most bullish to most bearish.
+This is not a future price target.
+</p>
+
+<div
+id="forecast-summary"
+style="
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+gap:12px;
+margin-bottom:22px;
+"
+>
+</div>
+
+<div
+id="forecast-chart"
+style="
+display:flex;
+flex-direction:column;
+gap:9px;
+"
+>
+<div style="color:var(--muted);">
+Loading 26-stock forecast...
+</div>
+</div>
+
+</section>
 <section class="top10-charts">
 
 
@@ -1457,7 +1714,7 @@ width:
 RECENT MARKET DATA
 </div>
 
-<h2>
+<h2 id="recent-market-title">
 Latest {{ selected_symbol }} Trading Sessions
 </h2>
 
@@ -1482,7 +1739,7 @@ Latest {{ selected_symbol }} Trading Sessions
 </thead>
 
 
-<tbody>
+<tbody id="recent-market-body">
 
 {% for row in recent_prices[-10:]|reverse %}
 
@@ -1532,7 +1789,7 @@ ${{ "%.2f"|format(row.close) }}
 MODEL PERFORMANCE
 </div>
 
-<h2>
+<h2 id="model-performance-title">
 {{ selected_symbol }} Baseline ML Model
 </h2>
 
@@ -1541,7 +1798,7 @@ MODEL PERFORMANCE
 
 <span>Accuracy</span>
 
-<strong>
+<strong id="model-accuracy">
 {{ "%.1f"|format(prediction.accuracy * 100) }}%
 </strong>
 
@@ -1552,7 +1809,7 @@ MODEL PERFORMANCE
 
 <span>Majority Baseline</span>
 
-<strong>
+<strong id="model-majority-baseline">
 {{ "%.1f"|format(prediction.majority_baseline * 100) }}%
 </strong>
 
@@ -1563,7 +1820,7 @@ MODEL PERFORMANCE
 
 <span>Precision</span>
 
-<strong>
+<strong id="model-precision">
 {{ "%.1f"|format(prediction.precision * 100) }}%
 </strong>
 
@@ -1574,7 +1831,7 @@ MODEL PERFORMANCE
 
 <span>Recall</span>
 
-<strong>
+<strong id="model-recall">
 {{ "%.1f"|format(prediction.recall * 100) }}%
 </strong>
 
@@ -1585,7 +1842,7 @@ MODEL PERFORMANCE
 
 <span>F1 Score</span>
 
-<strong>
+<strong id="model-f1">
 {{ "%.1f"|format(prediction.f1 * 100) }}%
 </strong>
 
@@ -1669,7 +1926,128 @@ Not financial advice.
 
 <script>
 
-const rows =
+async function loadV4ForwardStrategy() {
+    try {
+        const response = await fetch(
+            "/api/v4-forward"
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                `HTTP ${response.status}`
+            );
+        }
+
+        const data = await response.json();
+
+        const forward = data.forward;
+        const portfolio = data.portfolio;
+
+        const percent = value =>
+            `${(Number(value) * 100).toFixed(4)}%`;
+
+        const money = value =>
+            `$${Number(value).toLocaleString(
+                undefined,
+                {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }
+            )}`;
+
+        document.getElementById(
+            "v4-equity"
+        ).textContent =
+            money(portfolio.equity);
+
+        document.getElementById(
+            "v4-return"
+        ).textContent =
+            percent(forward.forward_return);
+
+        document.getElementById(
+            "v4-benchmark-return"
+        ).textContent =
+            percent(forward.benchmark_return);
+
+        document.getElementById(
+            "v4-excess-return"
+        ).textContent =
+            percent(forward.excess_return);
+
+        document.getElementById(
+            "v4-drawdown"
+        ).textContent =
+            percent(forward.max_drawdown);
+
+        document.getElementById(
+            "v4-observations"
+        ).textContent =
+            forward.observation_count;
+
+        document.getElementById(
+            "v4-open-positions"
+        ).textContent =
+            portfolio.open_position_count;
+
+        document.getElementById(
+            "v4-trade-count"
+        ).textContent =
+            portfolio.trade_count;
+
+        const topFive =
+            document.getElementById(
+                "v4-top-five"
+            );
+
+        topFive.innerHTML = "";
+
+        forward.latest_top_five.forEach(
+            (symbol, index) => {
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+                item.style.padding =
+                    "10px 14px";
+
+                item.style.border =
+                    "1px solid var(--border)";
+
+                item.style.borderRadius =
+                    "12px";
+
+                item.style.background =
+                    "var(--panel2)";
+
+                item.style.fontWeight =
+                    "900";
+
+                item.textContent =
+                    `${index + 1}. ${symbol}`;
+
+                topFive.appendChild(
+                    item
+                );
+            }
+        );
+
+    } catch (error) {
+        console.error(
+            "V4 forward dashboard error:",
+            error
+        );
+
+        document.getElementById(
+            "v4-equity"
+        ).textContent =
+            "Unavailable";
+    }
+}
+
+
+let rows =
 {{ recent_prices | tojson }};
 
 
@@ -1720,7 +2098,7 @@ return result;
 
 
 
-function drawChart() {
+function drawChart(selectedIndex) {
 
 const container =
 document.getElementById(
@@ -1818,6 +2196,43 @@ height-padY*2
 );
 
 
+const selectedX =
+x(selectedIndex);
+
+
+const selectedY =
+y(closes[selectedIndex]);
+
+
+const labelOnRight =
+selectedX < width / 2;
+
+
+const labelX =
+selectedX +
+(labelOnRight ? 12 : -12);
+
+
+const priceLabelY =
+selectedY < 70
+? selectedY + 24
+: selectedY - 26;
+
+
+const dateLabelY =
+priceLabelY + 18;
+
+
+const labelAnchor =
+labelOnRight ? "start" : "end";
+
+
+const selectedDate =
+formatChartDate(
+rows[selectedIndex].timestamp
+);
+
+
 function path(
 values
 ) {
@@ -1876,6 +2291,17 @@ viewBox="0 0 ${width} ${height}"
 preserveAspectRatio="none"
 >
 
+<line
+x1="${x(selectedIndex)}"
+y1="${padY}"
+x2="${x(selectedIndex)}"
+y2="${height-padY}"
+stroke="#9fb3c8"
+stroke-width="2"
+stroke-opacity="0.65"
+stroke-dasharray="5 7"
+/>
+
 <path
 d="${path(closes)}"
 fill="none"
@@ -1905,28 +2331,51 @@ stroke-width="2"
 />
 
 <circle
-cx="${x(closes.length-1)}"
-cy="${y(closes[closes.length-1])}"
+cx="${selectedX}"
+cy="${selectedY}"
 r="6"
 fill="#36d8ff"
 stroke="white"
 stroke-width="2"
 />
 
+<g
+aria-label="${selectedDate}, $${closes[selectedIndex].toFixed(2)}"
+>
+
 <text
-x="${x(closes.length-1)-10}"
-y="${y(closes[closes.length-1])-12}"
-text-anchor="end"
+x="${labelX}"
+y="${priceLabelY}"
+text-anchor="${labelAnchor}"
 fill="white"
 font-size="18"
 font-weight="700"
+stroke="#07101f"
+stroke-width="5"
+paint-order="stroke"
 >
 
-$${closes[
-closes.length-1
-].toFixed(2)}
+$${closes[selectedIndex].toFixed(2)}
 
 </text>
+
+<text
+x="${labelX}"
+y="${dateLabelY}"
+text-anchor="${labelAnchor}"
+fill="#d7e3f0"
+font-size="15"
+font-weight="700"
+stroke="#07101f"
+stroke-width="5"
+paint-order="stroke"
+>
+
+${selectedDate}
+
+</text>
+
+</g>
 
 </svg>
 
@@ -1935,7 +2384,305 @@ closes.length-1
 }
 
 
-drawChart();
+const chartScrubber =
+document.getElementById(
+"chart-scrubber"
+);
+
+
+function formatChartValue(value) {
+
+return value === null
+? "—"
+: `$${value.toFixed(2)}`;
+
+}
+
+
+function formatChartDate(timestamp) {
+
+return new Date(
+timestamp
+).toLocaleDateString(
+undefined,
+{
+month: "short",
+day: "numeric",
+year: "numeric",
+timeZone: "UTC"
+}
+);
+
+}
+
+
+function selectChartPoint(index) {
+
+const selectedIndex =
+Math.max(
+0,
+Math.min(index, rows.length-1)
+);
+
+
+const closes =
+rows.map(
+r => Number(r.close)
+);
+
+
+document.getElementById(
+"chart-selected-date"
+).textContent =
+formatChartDate(
+rows[selectedIndex].timestamp
+);
+
+
+document.getElementById(
+"chart-selected-close"
+).textContent =
+formatChartValue(
+closes[selectedIndex]
+);
+
+
+document.getElementById(
+"chart-selected-sma20"
+).textContent =
+formatChartValue(
+rollingAverage(closes, 20)[selectedIndex]
+);
+
+
+document.getElementById(
+"chart-selected-sma50"
+).textContent =
+formatChartValue(
+rollingAverage(closes, 50)[selectedIndex]
+);
+
+
+document.getElementById(
+"chart-selected-sma200"
+).textContent =
+formatChartValue(
+rollingAverage(closes, 200)[selectedIndex]
+);
+
+
+chartScrubber.value =
+selectedIndex;
+
+
+chartScrubber.setAttribute(
+"aria-valuetext",
+`${rows[selectedIndex].timestamp}, $${closes[selectedIndex].toFixed(2)}`
+);
+
+
+drawChart(selectedIndex);
+
+}
+
+
+if (rows.length > 0) {
+
+chartScrubber.max =
+rows.length-1;
+
+
+chartScrubber.addEventListener(
+"input",
+event =>
+selectChartPoint(
+Number(event.target.value)
+)
+);
+
+
+const chartContainer =
+document.getElementById(
+"primary-chart"
+);
+
+
+let chartPointerId = null;
+
+
+function selectChartPointFromPointer(event) {
+
+const bounds =
+chartContainer.getBoundingClientRect();
+
+
+const plotLeft =
+bounds.left + bounds.width * 0.05;
+
+
+const plotWidth =
+bounds.width * 0.9;
+
+
+const index =
+Math.round(
+(event.clientX - plotLeft) /
+Math.max(plotWidth, 1) *
+(rows.length - 1)
+);
+
+
+selectChartPoint(index);
+
+}
+
+
+chartContainer.addEventListener(
+"pointerdown",
+event => {
+
+chartPointerId = event.pointerId;
+
+chartContainer.setPointerCapture(
+event.pointerId
+);
+
+selectChartPointFromPointer(event);
+
+event.preventDefault();
+
+}
+);
+
+
+chartContainer.addEventListener(
+"pointermove",
+event => {
+
+if (event.pointerId !== chartPointerId) {
+return;
+}
+
+selectChartPointFromPointer(event);
+
+event.preventDefault();
+
+}
+);
+
+
+function releaseChartPointer(event) {
+
+if (event.pointerId === chartPointerId) {
+chartPointerId = null;
+}
+
+}
+
+
+chartContainer.addEventListener(
+"pointerup",
+releaseChartPointer
+);
+
+
+chartContainer.addEventListener(
+"pointercancel",
+releaseChartPointer
+);
+
+
+selectChartPoint(
+rows.length-1
+);
+
+} else {
+
+chartScrubber.disabled = true;
+
+}
+
+
+
+const primaryStockSelector = document.getElementById("primary-stock-selector");
+
+function formatNumber(value, decimals = 2) {
+return Number(value).toFixed(decimals);
+}
+
+function updateSelectedStock(data) {
+const market = data.market;
+const prediction = data.prediction;
+const percentUp = Number(prediction.probability_up) * 100;
+const percentDown = Number(prediction.probability_down) * 100;
+const change = Number(market.price_change);
+
+document.getElementById("market-trend-title").textContent = `${data.symbol} Recent Price History`;
+document.getElementById("market-symbol").textContent = data.symbol;
+document.getElementById("market-date").textContent = `${market.timestamp} · ${data.price_source}`;
+document.getElementById("market-price").textContent = `$${formatNumber(data.display_price)}`;
+const marketChange = document.getElementById("market-change");
+marketChange.className = change < 0 ? "negative" : "positive";
+marketChange.textContent = `${change >= 0 ? "+" : ""}${formatNumber(change)} (${Number(market.price_change_pct) >= 0 ? "+" : ""}${formatNumber(Number(market.price_change_pct) * 100)}%)`;
+
+const direction = document.getElementById("prediction-direction");
+direction.textContent = prediction.prediction;
+direction.className = `direction ${prediction.prediction === "UP" ? "up" : "down"}`;
+document.getElementById("prediction-confidence").textContent = `${formatNumber(Number(prediction.confidence) * 100, 1)}%`;
+document.getElementById("prediction-up-value").textContent = `${formatNumber(percentUp, 1)}%`;
+document.getElementById("prediction-down-value").textContent = `${formatNumber(percentDown, 1)}%`;
+document.getElementById("prediction-up-bar").style.width = `${percentUp}%`;
+document.getElementById("prediction-down-bar").style.width = `${percentDown}%`;
+
+document.getElementById("metric-rsi-14").textContent = formatNumber(market.rsi_14);
+document.getElementById("metric-sma-20").textContent = `$${formatNumber(market.sma_20)}`;
+document.getElementById("metric-sma-50").textContent = `$${formatNumber(market.sma_50)}`;
+document.getElementById("metric-sma-200").textContent = `$${formatNumber(market.sma_200)}`;
+document.getElementById("metric-volatility-20d").textContent = `${formatNumber(Number(market.volatility_20d) * 100)}%`;
+document.getElementById("metric-volume-ratio").textContent = `${formatNumber(market.volume_ratio)}x`;
+
+document.getElementById("recent-market-title").textContent = `Latest ${data.symbol} Trading Sessions`;
+document.getElementById("recent-market-body").innerHTML = data.recent_prices.slice(-10).reverse().map(row => `<tr><td>${String(row.timestamp).slice(0, 10)}</td><td>$${formatNumber(row.open)}</td><td>$${formatNumber(row.high)}</td><td>$${formatNumber(row.low)}</td><td>$${formatNumber(row.close)}</td><td>${Number(row.volume).toLocaleString(undefined, {maximumFractionDigits: 0})}</td></tr>`).join("");
+
+document.getElementById("model-performance-title").textContent = `${data.symbol} Baseline ML Model`;
+document.getElementById("model-accuracy").textContent = `${formatNumber(Number(prediction.accuracy) * 100, 1)}%`;
+document.getElementById("model-majority-baseline").textContent = `${formatNumber(Number(prediction.majority_baseline) * 100, 1)}%`;
+document.getElementById("model-precision").textContent = `${formatNumber(Number(prediction.precision) * 100, 1)}%`;
+document.getElementById("model-recall").textContent = `${formatNumber(Number(prediction.recall) * 100, 1)}%`;
+document.getElementById("model-f1").textContent = `${formatNumber(Number(prediction.f1) * 100, 1)}%`;
+
+rows = data.recent_prices;
+chartScrubber.disabled = rows.length === 0;
+chartScrubber.max = Math.max(rows.length - 1, 0);
+if (rows.length > 0) {
+selectChartPoint(rows.length - 1);
+}
+
+const url = new URL(window.location.href);
+url.searchParams.set("symbol", data.symbol);
+window.history.replaceState({}, "", url);
+}
+
+primaryStockSelector.addEventListener("change", async event => {
+const previousSymbol = new URL(window.location.href).searchParams.get("symbol") || "{{ selected_symbol }}";
+const requestedSymbol = event.target.value;
+event.target.disabled = true;
+try {
+const response = await fetch(`/api/dashboard-stock/${encodeURIComponent(requestedSymbol)}`, {headers: {"Accept": "application/json"}});
+if (!response.ok) {
+throw new Error(`HTTP ${response.status}`);
+}
+updateSelectedStock(await response.json());
+} catch (error) {
+console.error("Selected stock update failed:", error);
+event.target.value = previousSymbol;
+} finally {
+event.target.disabled = false;
+}
+});
+loadV4ForwardStrategy();
+
+
 
 </script>
 

@@ -13,6 +13,7 @@
     --muted: #9eb2c3;
     --accent: #20d6c7;
     --accent2: #55b7ff;
+    --green: #39e3a1;
     --border: rgba(125,188,224,.20);
     --danger: #ff7b7b;
 }
@@ -51,46 +52,105 @@ img {
     margin: auto;
 }
 
-.nav {
-    position: sticky;
-    top: 0;
-    z-index: 20;
+.landing-header {
     border-bottom: 1px solid var(--border);
-    background: rgba(7,17,27,.90);
+    background:
+        radial-gradient(circle at 10% 0%, rgba(54,216,255,.10), transparent 30%),
+        radial-gradient(circle at 90% 0%, rgba(155,101,255,.10), transparent 30%),
+        #07101f;
 }
 
-.nav-inner {
-    min-height: 168px;
+.landing-header-inner {
+    width: min(1450px, 94%);
+    margin: auto;
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 24px;
+    align-items: center;
+    gap: 30px;
+    padding: 45px 0 30px;
 }
 
-.brand {
+.landing-brand {
     display: flex;
     align-items: center;
-    gap: 20px;
-    font-weight: 800;
+    gap: 22px;
+    min-width: 0;
 }
 
-.brand-logo {
-width: clamp(400px, 50vw, 600px);
-    height: auto;
+.landing-logo-link {
+    display: block;
+    flex: 0 0 auto;
+}
+
+.landing-logo {
+    display: block;
+    width: 220px;
+    height: 125px;
     object-fit: contain;
-    border-radius: 18px;
-    box-shadow: 0 0 34px rgba(32,214,199,.20);
+    border-radius: 16px;
+    transform: scale(1.55);
+    transform-origin: center center;
+    filter: drop-shadow(0 0 18px rgba(54,216,255,.16));
 }
 
-.brand > span {
-    font-size: clamp(1rem, 1.7vw, 1.35rem);
-    white-space: nowrap;
+.landing-title-block {
+    min-width: 0;
 }
 
-.nav-links {
-    display: flex;
-    gap: 20px;
+.landing-eyebrow {
+    color: #36d8ff;
+    font-size: .75rem;
+    font-weight: 900;
+    letter-spacing: .16em;
+}
+
+.landing-platform-title {
+    margin: 8px 0;
+    font-size: clamp(2.1rem, 4vw, 3.7rem);
+}
+
+.landing-subtitle {
+    margin: 0;
     color: var(--muted);
+    font-size: 1.05rem;
+}
+
+.landing-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.landing-login-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 20px;
+    border: 1px solid var(--green);
+    border-radius: 999px;
+    background: rgba(57,227,161,.08);
+    color: var(--green);
+    font-size: .82rem;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-decoration: none;
+    transition:
+        background .2s ease,
+        border-color .2s ease,
+        color .2s ease,
+        transform .2s ease;
+}
+
+.landing-login-button:hover {
+    background: rgba(57,227,161,.16);
+    border-color: #67eab8;
+    color: #67eab8;
+    transform: translateY(-1px);
+}
+
+#member-login {
+    scroll-margin-top: 32px;
 }
 
 .hero {
@@ -350,40 +410,38 @@ footer {
     .feature-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+}
 
-    .nav-links {
-        display: none;
+@media (max-width: 650px) {
+    .landing-header-inner {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
-    .nav-inner {
-        min-height: 142px;
+    .landing-brand {
+        width: 100%;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 14px;
     }
 
-    .brand-logo {
-        width: clamp(260px, 42vw, 390px);
+    .landing-logo {
+        width: 185px;
+        height: 105px;
+    }
+
+    .landing-header-actions {
+        width: 100%;
+    }
+
+    .landing-login-button {
+        flex: 1 1 auto;
     }
 }
 
 @media (max-width: 620px) {
     .shell {
         width: min(100% - 22px, 1180px);
-    }
-
-    .nav-inner {
-        min-height: 116px;
-    }
-
-    .brand {
-        width: 100%;
-        justify-content: flex-start;
-    }
-
-    .brand-logo {
-        width: min(72vw, 330px);
-    }
-
-    .brand > span {
-        display: none;
     }
 
     .feature-grid {
@@ -404,27 +462,50 @@ footer {
 
 <body>
 
-<nav class="nav">
-    <div class="shell nav-inner">
-        <a class="brand" href="/">
-            <img
-                class="brand-logo"
+<header class="landing-header">
+    <div class="landing-header-inner">
+        <div class="landing-brand">
+            <a
+                class="landing-logo-link"
+                href="{{ url_for('home') }}"
+                aria-label="Data Shepherd Engineering home"
+            >
+                <img
+                class="landing-logo"
                 src="{{ url_for(
                     'static',
                     filename='images/data-shepherd-logo.png'
                 ) }}"
                 alt="Data Shepherd Engineering"
             >
-            <span>Data Shepherd Engineering</span>
-        </a>
+            </a>
 
-        <div class="nav-links">
-            <a href="#platform">Platform</a>
-            <a href="#architecture">Architecture</a>
-            <a href="#members">Members</a>
+            <div class="landing-title-block">
+                <div class="landing-eyebrow">
+                    DATA SHEPHERD ENGINEERING
+                </div>
+
+                <h1 class="landing-platform-title">
+                    Stock Market AI Platform
+                </h1>
+
+                <p class="landing-subtitle">
+                    End-to-end market intelligence powered by
+                    data engineering, feature engineering and machine learning.
+                </p>
+            </div>
+        </div>
+
+        <div class="landing-header-actions">
+            <a
+                class="landing-login-button"
+                href="#member-login"
+            >
+                LOGIN
+            </a>
         </div>
     </div>
-</nav>
+</header>
 
 <main>
 
@@ -461,7 +542,7 @@ footer {
             </div>
         </div>
 
-        <div class="login-card" id="members">
+        <div class="login-card" id="member-login">
             {% if authenticated %}
 
             <h2>Member Session Active</h2>
@@ -572,7 +653,7 @@ footer {
         </div>
 
         <div class="hero-image-wrap">
-            <img
+                <img
                 src="{{ url_for('static', filename='images/landing/platform-overview-2026.png') }}"
                 alt="Updated Stock Market AI Platform overview"
             >
@@ -639,7 +720,7 @@ footer {
                 Open Dashboard
             </a>
             {% else %}
-            <a href="#members">
+            <a href="#member-login">
                 Member Login
             </a>
             {% endif %}

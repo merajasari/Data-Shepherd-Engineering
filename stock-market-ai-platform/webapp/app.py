@@ -65,6 +65,10 @@ from webapp.services.paper_trading_service import (
     get_portfolio_summary,
 )
 
+from webapp.services.paper_journal_reader import (
+    summarize_journal,
+)
+
 
 app = Flask(__name__)
 
@@ -264,6 +268,35 @@ def build_stock_dashboard(symbol):
 
         "f1":
             prediction["f1"],
+    }
+
+
+def build_selected_stock_dashboard(symbol):
+    """Build all data used by the selected-stock dashboard UI."""
+
+    market = get_market_summary(symbol)
+    prediction = get_latest_prediction(symbol)
+    live = get_live_quote(symbol)
+
+    return {
+        "symbol": symbol,
+        "market": market,
+        "prediction": prediction,
+        "live": live,
+        "display_price": (
+            live["reference_price"]
+            if live["available"]
+            else market["close"]
+        ),
+        "price_source": (
+            "LIVE IEX"
+            if live["available"]
+            else "LATEST EOD"
+        ),
+        "recent_prices": get_recent_prices(
+            symbol,
+            limit=60,
+        ),
     }
 
 
@@ -483,6 +516,23 @@ def api_stocks():
     )
 
 
+@app.route("/api/dashboard-stock/<symbol>")
+@login_required
+def api_dashboard_stock(symbol):
+    """Return all selected-stock dashboard data."""
+
+    symbol = symbol.upper().strip()
+
+    if symbol not in TOP_SYMBOLS:
+        return jsonify(
+            {"error": "unsupported symbol"}
+        ), 404
+
+    return jsonify(
+        build_selected_stock_dashboard(symbol)
+    )
+
+
 @app.route(
     "/api/prices/<symbol>"
 )
@@ -590,6 +640,25 @@ def api_paper_portfolio():
 
     return jsonify(
         get_portfolio_summary()
+    )
+
+
+@app.route("/api/v4-forward")
+@login_required
+def api_v4_forward():
+    """
+    Return V4 forward-test metrics and
+    current simulated portfolio state.
+    """
+
+    return jsonify(
+        {
+            "forward":
+                summarize_journal(),
+
+            "portfolio":
+                get_portfolio_summary(),
+        }
     )
 
 
