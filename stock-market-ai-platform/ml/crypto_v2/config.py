@@ -19,6 +19,17 @@ OVERLAP_DIAGNOSTICS_PATH = MODEL_ROOT / "overlap_diagnostics.csv"
 BASELINE_MANIFEST_PATH = MODEL_ROOT / "baseline_manifest.json"
 RECONCILIATION_MANIFEST_PATH = MODEL_ROOT / "reconciliation_manifest.json"
 
+KRAKEN_PROVIDER_NAME = "kraken_exchange"
+KRAKEN_OHLCVT_ARCHIVE_FILE_ID = "1ptNqWYidLkhb2VAKuLCxmp2OXEfGO-AP"
+KRAKEN_OHLCVT_SOURCE_PAGE = (
+    "https://support.kraken.com/articles/"
+    "360047124832-downloadable-historical-ohlcvt-open-high-low-close-volume-trades-data"
+)
+KRAKEN_OHLCVT_ARCHIVE_URL = (
+    "https://drive.usercontent.google.com/download?export=download&confirm=t&id="
+    + KRAKEN_OHLCVT_ARCHIVE_FILE_ID
+)
+
 HISTORICAL_POLICY = (
     "Observed provider gaps remain missing. No forward-fill, backward-fill, "
     "interpolation, synthetic OHLCV, silent provider overwrite, or "
