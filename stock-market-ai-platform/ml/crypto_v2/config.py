@@ -22,6 +22,8 @@ RECONCILIATION_MANIFEST_PATH = MODEL_ROOT / "reconciliation_manifest.json"
 CANONICAL_HISTORY_PATH = MODEL_ROOT / "canonical_history.parquet"
 CANONICAL_PROVENANCE_PATH = MODEL_ROOT / "canonical_provenance.csv"
 CANONICAL_MANIFEST_PATH = MODEL_ROOT / "canonical_manifest.json"
+DATASET_MANIFEST_PATH = MODEL_ROOT / "dataset_manifest.json"
+LABELED_PANEL_PATH = MODEL_ROOT / "labeled_panel.parquet"
 
 COINBASE_PROVIDER_NAME = "coinbase_exchange"
 KRAKEN_PROVIDER_NAME = "kraken_exchange"
@@ -29,6 +31,15 @@ CANONICAL_PROVIDER_PRIORITY = (
     COINBASE_PROVIDER_NAME,
     KRAKEN_PROVIDER_NAME,
 )
+
+# Phase 2 dataset contract. These values are pre-registered independently of
+# any Crypto V2 model result. Features are trailing-only; labels require exact
+# future UTC endpoints and are never forward-filled across observed gaps.
+BENCHMARK_PRODUCT = "BTC-USD"
+FORWARD_HORIZONS_DAYS = (1, 3, 7)
+MINIMUM_HISTORY_DAYS = 60
+LIQUIDITY_LOOKBACK_DAYS = 30
+MINIMUM_MEDIAN_DAILY_DOLLAR_VOLUME = 1_000_000.0
 
 KRAKEN_OHLCVT_ARCHIVE_FILE_ID = "1ptNqWYidLkhb2VAKuLCxmp2OXEfGO-AP"
 KRAKEN_OHLCVT_SOURCE_PAGE = (
@@ -59,4 +70,13 @@ CANONICAL_HISTORY_POLICY = (
     "are never averaged, interpolated, synthesized, or selected using future "
     "returns, model performance, or provider disagreement magnitude. The "
     "selected provider is retained on every canonical row."
+)
+
+DATASET_POLICY = (
+    "Crypto V2 Phase 2 reads the frozen canonical history only. Features use "
+    "information available at or before the decision timestamp and continuous "
+    "calendar windows only. Missing calendar observations remain missing. "
+    "Forward labels require an observed exact UTC endpoint at t+h. Provider "
+    "provenance is retained but is not a predictive feature or a source-selection "
+    "criterion. No model outcome may alter dataset construction."
 )
