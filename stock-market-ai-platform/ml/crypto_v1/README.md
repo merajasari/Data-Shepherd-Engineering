@@ -3,6 +3,8 @@
 Crypto V1 is isolated from Stock V4, Stock V5, and the production dashboard.
 Phase 1 provides a provider-neutral historical candle boundary, a Coinbase
 adapter, Bronze ingestion, versioned research contracts, and storage paths.
+Phase 2 adds strict Bronze validation and leakage-safe daily research datasets;
+it does not train a model or execute trades.
 
 ## Architecture
 
@@ -54,6 +56,12 @@ Ingest the full daily universe (end is exclusive):
 
 ```bash
 python -m ml.crypto_v1.ingest --start 2020-01-01 --end 2026-01-01
+```
+
+Prepare all Phase 2 datasets after ingestion:
+
+```bash
+python -m ml.crypto_v1.prepare_dataset
 ```
 
 Ingest a small daily subset or an hourly development sample:
