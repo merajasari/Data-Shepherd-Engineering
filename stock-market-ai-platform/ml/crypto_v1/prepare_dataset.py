@@ -2,8 +2,10 @@
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -221,6 +223,52 @@ def add_targets(panel):
     return result
 
 
+
+def build_horizon_research_panel(labeled, horizon, generated_at_utc=None):
+    """Filter and rank the exact eligible universe for one target horizon."""
+    if horizon not in FORWARD_HORIZONS_DAYS:
+        raise ValueError(f"Unsupported target horizon: {horizon}")
+    target = f"forward_return_relative_to_btc_{horizon}d"
+    mask = (labeled["is_eligible"] & labeled[list(REQUIRED_FEATURES)].notna().all(axis=1)
+            & labeled[target].notna())
+    official = labeled.loc[mask].copy()
+    values = official[target]
+    official[f"target_percentile_rank_{horizon}d"] = values.groupby(
+        official["timestamp_utc"]).rank(pct=True)
+    descending = values.groupby(official["timestamp_utc"]).rank(
+        method="first", ascending=False)
+    official[f"target_top_3_{horizon}d"] = descending.le(3).astype("boolean")
+    official[f"target_top_5_{horizon}d"] = descending.le(5).astype("boolean")
+    official["research_version"] = RESEARCH_VERSION
+    official["dataset_created_at_utc"] = generated_at_utc or datetime.now(timezone.utc)
+    return official.sort_values(["timestamp_utc", "product_id"]).reset_index(drop=True)
+
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _date_range(frame):
+    return {
+        "start_utc": frame["timestamp_utc"].min().isoformat(),
+        "end_utc": frame["timestamp_utc"].max().isoformat(),
+    }
+
+
+def _git_commit_hash():
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], check=True, capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 def build_all(bronze_root=BRONZE_ROOT, silver_root=SILVER_ROOT, gold_root=GOLD_ROOT,
               model_root=MODEL_ROOT, provider=PROVIDER_NAME, granularity=DEFAULT_GRANULARITY,
               completed_before_utc=None):
@@ -231,30 +279,91 @@ def build_all(bronze_root=BRONZE_ROOT, silver_root=SILVER_ROOT, gold_root=GOLD_R
     gold_path = Path(gold_root) / provider / granularity / "research_panel.parquet"
     gold_path.parent.mkdir(parents=True, exist_ok=True)
     labeled.to_parquet(gold_path, index=False)
-    required_targets = [f"forward_return_relative_to_btc_{horizon}d" for horizon in FORWARD_HORIZONS_DAYS]
-    official_mask = (labeled["is_eligible"] & labeled[list(REQUIRED_FEATURES)].notna().all(axis=1)
+
+    generated_at = datetime.now(timezone.utc)
+    horizon_datasets = {}
+    for horizon in FORWARD_HORIZONS_DAYS:
+        horizon_official = build_horizon_research_panel(labeled, horizon, generated_at)
+        horizon_path = Path(model_root) / f"research_panel_{horizon}d.parquet"
+        horizon_path.parent.mkdir(parents=True, exist_ok=True)
+        horizon_official.to_parquet(horizon_path, index=False)
+        horizon_datasets[f"{horizon}d"] = {
+            "path": str(horizon_path),
+            "row_count": len(horizon_official),
+            "date_range": _date_range(horizon_official),
+            "columns": list(horizon_official.columns),
+            "sha256": _sha256(horizon_path),
+        }
+
+    # Retain the common-target panel as an audit/compatibility artifact. Horizon
+    # files above are the authoritative model-training inputs.
+    required_targets = [
+        f"forward_return_relative_to_btc_{horizon}d"
+        for horizon in FORWARD_HORIZONS_DAYS
+    ]
+    official_mask = (labeled["is_eligible"]
+                     & labeled[list(REQUIRED_FEATURES)].notna().all(axis=1)
                      & labeled[required_targets].notna().all(axis=1))
     official = labeled.loc[official_mask].copy()
     official["research_version"] = RESEARCH_VERSION
-    official["dataset_created_at_utc"] = datetime.now(timezone.utc)
+    official["dataset_created_at_utc"] = generated_at
     model_path = Path(model_root) / "research_panel.parquet"
     model_path.parent.mkdir(parents=True, exist_ok=True)
     official.to_parquet(model_path, index=False)
+
+    validation_reports = [report.as_dict() for report in reports]
     manifest = {
-        "research_version": RESEARCH_VERSION, "provider": provider,
-        "granularity": granularity, "benchmark_product": BENCHMARK_PRODUCT,
+        "research_version": RESEARCH_VERSION,
+        "provider": provider,
+        "granularity": granularity,
+        "benchmark_product": BENCHMARK_PRODUCT,
+        "generated_at_utc": generated_at.isoformat(),
+        "git_commit_hash": _git_commit_hash(),
+        "configured_crypto_universe": list(CRYPTO_UNIVERSE),
+        "target_horizons_days": list(FORWARD_HORIZONS_DAYS),
+        "required_features": list(REQUIRED_FEATURES),
+        "eligibility_configuration": {
+            "minimum_history_days": MINIMUM_HISTORY_DAYS,
+            "liquidity_lookback_days": LIQUIDITY_LOOKBACK_DAYS,
+            "minimum_median_daily_dollar_volume": MINIMUM_MEDIAN_DAILY_DOLLAR_VOLUME,
+        },
         "silver_files": [str(path) for path in silver_paths],
-        "gold_path": str(gold_path), "model_path": str(model_path),
-        "gold_rows": len(labeled), "official_research_rows": len(official),
-        "bronze_validation": [report.as_dict() for report in reports],
-        "decision_target_convention": "completed UTC close at t -> exact UTC close at t+h",
+        "gold_path": str(gold_path),
+        "model_path": str(model_path),
+        "gold_rows": len(labeled),
+        "official_research_rows": len(official),
+        "gold_date_range": _date_range(labeled),
+        "horizon_datasets": horizon_datasets,
+        "dataset_sha256": {
+            "gold": _sha256(gold_path),
+            "combined_reference": _sha256(model_path),
+            **{key: value["sha256"] for key, value in horizon_datasets.items()},
+        },
+        "combined_reference_columns": list(official.columns),
+        "coinbase_bronze_validation_summary": {
+            "file_count": len(validation_reports),
+            "total_rows": sum(report["row_count"] for report in validation_reports),
+            "files_with_gaps": sum(
+                report["gap_count"] > 0 for report in validation_reports),
+            "total_missing_intervals": sum(
+                report["missing_interval_count"] for report in validation_reports),
+            "reports": validation_reports,
+        },
+        "bronze_validation": validation_reports,
+        "decision_target_convention": (
+            "completed UTC close at t -> exact UTC close at t+h"),
+        "primary_training_datasets": {
+            key: value["path"] for key, value in horizon_datasets.items()
+        },
     }
     manifest_path = Path(model_root) / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8")
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8")
     return manifest
 
 
 def main():
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", default=PROVIDER_NAME)
     parser.add_argument("--granularity", default=DEFAULT_GRANULARITY, choices=("daily",))

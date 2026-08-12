@@ -3,11 +3,17 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
+import pandas as pd
+
 from ml.crypto_v1.config import (
     BENCHMARK_PRODUCT, CRYPTO_UNIVERSE, FORWARD_HORIZONS_DAYS,
     TOP_COUNTS, ALLOW_LEVERAGE,
 )
 from ml.crypto_v1.providers.coinbase import CoinbaseExchangeProvider
+from ml.crypto_v1.prepare_dataset import (
+    REQUIRED_FEATURES, build_horizon_research_panel,
+)
 
 
 class FakeCoinbase(CoinbaseExchangeProvider):
@@ -51,6 +57,68 @@ class CryptoV1ContractTests(unittest.TestCase):
         self.assertEqual(len(candles), 650)
         self.assertEqual(candles[0].timestamp_utc, start)
         self.assertEqual(candles[-1].timestamp_utc, end - timedelta(days=1))
+
+
+    def test_horizon_panels_recompute_ranks_after_xrp_boundary_filter(self):
+        """XRP may remain in short horizons when its 7d endpoint is absent."""
+        dates = pd.date_range("2021-01-14", "2021-01-19", tz="UTC")
+        products = [
+            "BTC-USD", "ETH-USD", "XRP-USD", "LTC-USD", "BCH-USD", "XLM-USD",
+        ]
+        rows = []
+        for timestamp in dates:
+            for index, product in enumerate(products):
+                row = {
+                    "product_id": product,
+                    "timestamp_utc": timestamp,
+                    "is_eligible": True,
+                    "forward_return_relative_to_btc_1d": index / 100,
+                    "forward_return_relative_to_btc_3d": index / 50,
+                    "forward_return_relative_to_btc_7d": index / 25,
+                }
+                row.update({feature: 1.0 for feature in REQUIRED_FEATURES})
+                rows.append(row)
+        labeled = pd.DataFrame(rows)
+        xrp = labeled["product_id"].eq("XRP-USD")
+        cutoffs = {
+            1: pd.Timestamp("2021-01-19", tz="UTC"),
+            3: pd.Timestamp("2021-01-17", tz="UTC"),
+            7: pd.Timestamp("2021-01-13", tz="UTC"),
+        }
+        for horizon, cutoff in cutoffs.items():
+            labeled.loc[xrp & labeled["timestamp_utc"].ge(cutoff),
+                        f"forward_return_relative_to_btc_{horizon}d"] = np.nan
+
+        for horizon in FORWARD_HORIZONS_DAYS:
+            panel = build_horizon_research_panel(labeled, horizon)
+            target = f"forward_return_relative_to_btc_{horizon}d"
+            expected_sizes = labeled[labeled[target].notna()].groupby(
+                "timestamp_utc").size()
+            self.assertTrue(panel.groupby("timestamp_utc").size().equals(
+                expected_sizes))
+            sizes = panel.groupby("timestamp_utc").size()
+            self.assertTrue(panel.groupby("timestamp_utc")[
+                f"target_top_3_{horizon}d"].sum().equals(
+                    sizes.clip(upper=3).astype("Int64")))
+            self.assertTrue(panel.groupby("timestamp_utc")[
+                f"target_top_5_{horizon}d"].sum().equals(
+                    sizes.clip(upper=5).astype("Int64")))
+            expected_xrp_dates = set(dates[dates < cutoffs[horizon]])
+            actual_xrp_dates = set(panel.loc[
+                panel["product_id"].eq("XRP-USD"), "timestamp_utc"])
+            self.assertEqual(actual_xrp_dates, expected_xrp_dates)
+            self.assertFalse(
+                panel.duplicated(["product_id", "timestamp_utc"]).any())
+            keys = panel[["product_id", "timestamp_utc"]]
+            self.assertTrue(keys.reset_index(drop=True).equals(
+                keys.sort_values(
+                    ["timestamp_utc", "product_id"]).reset_index(drop=True)))
+
+    def test_required_features_exclude_all_targets(self):
+        self.assertFalse(any(
+            feature.startswith(("target_", "forward_"))
+            for feature in REQUIRED_FEATURES
+        ))
 
 
 if __name__ == "__main__":
