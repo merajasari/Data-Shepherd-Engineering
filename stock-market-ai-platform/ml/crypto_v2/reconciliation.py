@@ -114,6 +114,16 @@ def run_reconciliation(bronze_root=BRONZE_ROOT, output_root=MODEL_ROOT,
     diagnostics_path = output_root / OVERLAP_DIAGNOSTICS_PATH.name
     manifest_path = output_root / RECONCILIATION_MANIFEST_PATH.name
     diagnostics.to_csv(diagnostics_path, index=False)
+    if len(diagnostics):
+        next_step = (
+            "Freeze a deterministic canonical-history source policy before any merge; "
+            "provider selection must not use realized returns or model performance."
+        )
+    else:
+        next_step = (
+            "Ingest at least one independent provider, rerun overlap diagnostics, "
+            "then pre-register a deterministic canonical-history policy before any merge."
+        )
     manifest = {
         "research_version": RESEARCH_VERSION,
         "stage": "provider_overlap_diagnostics",
@@ -124,10 +134,7 @@ def run_reconciliation(bronze_root=BRONZE_ROOT, output_root=MODEL_ROOT,
         "provider_pair_rows": int(len(diagnostics)),
         "products_with_provider_overlap": int(diagnostics["product_id"].nunique()) if len(diagnostics) else 0,
         "output": str(diagnostics_path),
-        "next_step": (
-            "Ingest at least one independent provider, rerun overlap diagnostics, "
-            "then pre-register a deterministic canonical-history policy before any merge."
-        ),
+        "next_step": next_step,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest, diagnostics
