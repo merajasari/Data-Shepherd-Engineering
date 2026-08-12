@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -90,7 +91,7 @@ class ReadOnlyIntegrationTests(unittest.TestCase):
             predictions_path = root / "predictions.parquet"
             daily_path = root / "daily_metrics.csv"
             summary_path = root / "metrics_summary.csv"
-            predictions.to_parquet(predictions_path, index=False)
+            predictions_path.write_bytes(b"frozen-phase3-predictions")
             daily.to_csv(daily_path, index=False)
             summary.to_csv(summary_path, index=False)
 
@@ -98,9 +99,13 @@ class ReadOnlyIntegrationTests(unittest.TestCase):
                 path.name: path.read_bytes()
                 for path in (predictions_path, daily_path, summary_path)
             }
-            manifest, frames = run_diagnostics(
-                root, output, bootstrap_samples=50, seed=7
-            )
+            with patch(
+                "ml.crypto_v1.diagnostics.pd.read_parquet",
+                return_value=predictions.copy(),
+            ):
+                manifest, frames = run_diagnostics(
+                    root, output, bootstrap_samples=50, seed=7
+                )
             after = {
                 path.name: path.read_bytes()
                 for path in (predictions_path, daily_path, summary_path)
