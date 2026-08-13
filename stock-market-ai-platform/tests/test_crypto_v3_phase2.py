@@ -88,7 +88,7 @@ class CryptoV3Phase2Tests(unittest.TestCase):
             "model_id": ["x"] * 4,
             "split": ["development"] * 4,
             "actual_risk_adjusted_return_7d": [-0.2, -0.1, 0.1, 0.2],
-            "predicted_risk_adjusted_return_7d": [-0.15, -0.05, 0.05, 0.15],
+            "predicted_risk_adjusted_return_7d": [-0.15, -0.075, 0.075, 0.15],
         })
         out = summarize_regressor(pred)
         self.assertEqual(len(out), 1)
