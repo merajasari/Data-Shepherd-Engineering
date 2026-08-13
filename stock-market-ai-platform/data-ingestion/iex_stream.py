@@ -1,8 +1,13 @@
 """
 Tiingo IEX real-time reference-price stream.
 
-Subscribes to the configured stock universe and maintains
-a JSON cache containing the latest live reference price.
+Subscribes to a configured stock universe and maintains a JSON cache containing
+the latest live reference price.
+
+The default remains the legacy 26-symbol universe so existing phone/V4 runtime
+behavior does not change.  Set ``IEX_SYMBOL_SET=v5`` on the Mac runtime to
+subscribe to the 100 V5 candidates plus SPY.  ``IEX_SYMBOLS`` may be used for a
+small explicit comma-separated test set.
 
 Cache:
     data/live/latest_quotes.json
@@ -24,7 +29,31 @@ CACHE_PATH = Path(
     "data/live/latest_quotes.json"
 )
 
-SYMBOLS = get_symbols()
+
+def get_stream_symbols():
+    """Return the requested live universe without changing legacy defaults."""
+
+    explicit = os.getenv("IEX_SYMBOLS", "").strip()
+    if explicit:
+        symbols = [value.strip().upper() for value in explicit.split(",") if value.strip()]
+        return list(dict.fromkeys(symbols))
+
+    symbol_set = os.getenv("IEX_SYMBOL_SET", "legacy").strip().lower()
+
+    if symbol_set in {"legacy", "v4", "26"}:
+        return get_symbols()
+
+    if symbol_set in {"v5", "101"}:
+        from v5_symbols import get_v5_data_symbols
+
+        return get_v5_data_symbols()
+
+    raise RuntimeError(
+        "Unsupported IEX_SYMBOL_SET. Use legacy, v5, or provide IEX_SYMBOLS."
+    )
+
+
+SYMBOLS = get_stream_symbols()
 
 latest_quotes = {}
 
