@@ -169,17 +169,32 @@ def transform_to_features(df: pd.DataFrame) -> pd.DataFrame:
         result["close"].shift(-5) / result["close"] - 1
     )
 
-    # Binary target for classification models.
-    result["target_up_5d"] = (
-        result["forward_return_5d"] > 0
+    # Binary classification targets must remain unknown whenever the
+    # corresponding forward return is not yet observable.  Using ordinary
+    # bool -> int8 conversion would silently turn those tail NaNs into zero
+    # labels, incorrectly treating an unknown future outcome as a loss.
+    known_forward = result["forward_return_5d"].notna()
+
+    result["target_up_5d"] = pd.Series(
+        pd.NA,
+        index=result.index,
+        dtype="Int8",
+    )
+    result.loc[known_forward, "target_up_5d"] = (
+        result.loc[known_forward, "forward_return_5d"] > 0
     ).astype("int8")
 
     # V3 selective-trading target.
     #
     # A positive class means the stock gained more than 1%
     # over the next 5 trading days.
-    result["target_trade_5d"] = (
-        result["forward_return_5d"] > 0.01
+    result["target_trade_5d"] = pd.Series(
+        pd.NA,
+        index=result.index,
+        dtype="Int8",
+    )
+    result.loc[known_forward, "target_trade_5d"] = (
+        result.loc[known_forward, "forward_return_5d"] > 0.01
     ).astype("int8")
 
     return result
