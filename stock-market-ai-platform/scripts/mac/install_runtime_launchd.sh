@@ -39,7 +39,7 @@ write_plist "$WEB_LABEL" "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <key>Label</key><string>$WEB_LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>cd '$PROJECT_DIR' &amp;&amp; set -a &amp;&amp; source .env &amp;&amp; set +a &amp;&amp; exec '$GUNICORN' --bind 127.0.0.1:5001 --workers 2 --timeout 120 --access-logfile '$LOG_DIR/gunicorn-access.log' --error-logfile '$LOG_DIR/gunicorn-error.log' webapp.app:app</string>
+<string>cd '$PROJECT_DIR' &amp;&amp; exec '$GUNICORN' --bind 127.0.0.1:5001 --workers 2 --timeout 120 --access-logfile '$LOG_DIR/gunicorn-access.log' --error-logfile '$LOG_DIR/gunicorn-error.log' webapp.app:app</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>KeepAlive</key><true/>
