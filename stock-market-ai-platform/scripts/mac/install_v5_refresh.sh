@@ -10,12 +10,12 @@ PLIST="$LAUNCH_DIR/$LABEL.plist"
 LOCK_DIR="$LOG_DIR/v5_refresh.lockdir"
 UID_VALUE="$(id -u)"
 
-# Tiingo's previous runtime contract reserved 45 requests per hour. Running
-# every five minutes gives 12 opportunities per hour, so cap each invocation
-# at 3 requests. That keeps the scheduler comfortably below the prior hourly
-# budget (<=36 requests/hour, including the SPY sentinel request each run).
+# Invoke frequently, but let Python's persistent rolling quota ledger decide
+# how many Tiingo REST calls are safe right now. This allows a startup catch-up
+# to consume available capacity immediately while never intentionally exceeding
+# the configured 45 attempts in any rolling 60-minute scheduler window.
 INTERVAL_SECONDS=300
-MAX_REQUESTS_PER_RUN=3
+HOURLY_REQUEST_LIMIT=45
 
 mkdir -p "$LAUNCH_DIR" "$LOG_DIR"
 
@@ -31,7 +31,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; exec '$PYTHON' -u -m ml.run_v5_data_refresh --max-requests $MAX_REQUESTS_PER_RUN; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; exec '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -49,5 +49,6 @@ echo "Installed $LABEL"
 echo "Startup catch-up: enabled (RunAtLoad)"
 echo "Schedule: every 5 minutes"
 echo "Overlap guard: $LOCK_DIR"
-echo "Request budget: $MAX_REQUESTS_PER_RUN Tiingo calls/run (<=36/hour)"
+echo "Rolling Tiingo scheduler limit: $HOURLY_REQUEST_LIMIT requests / 60 minutes"
+echo "Catch-up policy: use all currently available rolling-hour capacity"
 echo "Logs: $LOG_DIR/v5_refresh.log"
