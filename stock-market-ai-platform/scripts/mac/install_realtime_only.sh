@@ -17,7 +17,7 @@ cat > "$LAUNCH_DIR/com.datashepherd.web.plist" <<EOF
 <key>Label</key><string>com.datashepherd.web</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>cd '$PROJECT_DIR' &amp;&amp; set -a &amp;&amp; source .env &amp;&amp; set +a &amp;&amp; exec '$GUNICORN' --bind 127.0.0.1:5001 --workers 2 --timeout 120 --access-logfile '$LOG_DIR/gunicorn-access.log' --error-logfile '$LOG_DIR/gunicorn-error.log' webapp.app:app</string>
+<string>cd '$PROJECT_DIR' &amp;&amp; exec '$GUNICORN' --bind 127.0.0.1:5001 --workers 2 --timeout 120 --access-logfile '$LOG_DIR/gunicorn-access.log' --error-logfile '$LOG_DIR/gunicorn-error.log' webapp.app:app</string>
 </array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LOG_DIR/web-launchd.out.log</string>
