@@ -73,11 +73,17 @@ def _write_request_timestamps(timestamps, path=REQUEST_LEDGER_PATH, updated_at=N
     temp.replace(path)
 
 
-def prune_request_ledger(now=None, path=REQUEST_LEDGER_PATH):
-    """Keep only requests still inside the rolling one-hour quota window."""
+def _active_request_timestamps(now=None, path=REQUEST_LEDGER_PATH):
+    """Return ledger requests active in the rolling window without mutating state."""
     now = now or _utc_now()
     cutoff = now - REQUEST_WINDOW
-    kept = [ts for ts in _load_request_timestamps(path) if ts > cutoff and ts <= now]
+    return [ts for ts in _load_request_timestamps(path) if cutoff < ts <= now]
+
+
+def prune_request_ledger(now=None, path=REQUEST_LEDGER_PATH):
+    """Persist only requests still inside the rolling one-hour quota window."""
+    now = now or _utc_now()
+    kept = _active_request_timestamps(now=now, path=path)
     _write_request_timestamps(kept, path, updated_at=now)
     return kept
 
@@ -85,14 +91,14 @@ def prune_request_ledger(now=None, path=REQUEST_LEDGER_PATH):
 def available_request_budget(hourly_limit=DEFAULT_HOURLY_REQUEST_LIMIT, now=None, path=REQUEST_LEDGER_PATH):
     if hourly_limit < 1:
         raise ValueError("hourly_limit must be at least 1")
-    used = len(prune_request_ledger(now=now, path=path))
+    used = len(_active_request_timestamps(now=now, path=path))
     return max(0, hourly_limit - used), used
 
 
 def record_request_attempt(now=None, path=REQUEST_LEDGER_PATH):
     """Record a Tiingo REST attempt before it is sent, conservatively counting failures."""
     now = now or _utc_now()
-    timestamps = prune_request_ledger(now=now, path=path)
+    timestamps = _load_request_timestamps(path)
     timestamps.append(now)
     _write_request_timestamps(timestamps, path, updated_at=now)
 
@@ -171,6 +177,7 @@ def run_data_refresh(
     print(f"Available request budget now: {available}")
 
     if available < 1:
+        prune_request_ledger(path=ledger_path)
         print("No Tiingo REST budget available yet; waiting for the rolling window to free capacity.")
         return "quota_wait"
 
@@ -181,6 +188,7 @@ def run_data_refresh(
         hourly_limit=hourly_request_limit,
         path=ledger_path,
     )
+    prune_request_ledger(path=ledger_path)
 
     print(f"Target EOD session: {state['target_date_utc']}")
     print(f"Tiingo requests used this run: {state['requests_used']}")
