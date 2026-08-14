@@ -61,12 +61,13 @@ def _load_request_timestamps(path=REQUEST_LEDGER_PATH):
     return out
 
 
-def _write_request_timestamps(timestamps, path=REQUEST_LEDGER_PATH):
+def _write_request_timestamps(timestamps, path=REQUEST_LEDGER_PATH, updated_at=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(".tmp")
+    updated_at = updated_at or _utc_now()
     payload = {
         "request_timestamps_utc": [ts.astimezone(timezone.utc).isoformat() for ts in timestamps],
-        "updated_at_utc": _utc_now().isoformat(),
+        "updated_at_utc": updated_at.astimezone(timezone.utc).isoformat(),
     }
     temp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     temp.replace(path)
@@ -77,7 +78,7 @@ def prune_request_ledger(now=None, path=REQUEST_LEDGER_PATH):
     now = now or _utc_now()
     cutoff = now - REQUEST_WINDOW
     kept = [ts for ts in _load_request_timestamps(path) if ts > cutoff and ts <= now]
-    _write_request_timestamps(kept, path)
+    _write_request_timestamps(kept, path, updated_at=now)
     return kept
 
 
@@ -93,7 +94,7 @@ def record_request_attempt(now=None, path=REQUEST_LEDGER_PATH):
     now = now or _utc_now()
     timestamps = prune_request_ledger(now=now, path=path)
     timestamps.append(now)
-    _write_request_timestamps(timestamps, path)
+    _write_request_timestamps(timestamps, path, updated_at=now)
 
 
 class QuotaTrackingTiingoClient:
