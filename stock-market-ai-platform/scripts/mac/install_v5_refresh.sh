@@ -11,9 +11,10 @@ LOCK_DIR="$LOG_DIR/v5_refresh.lockdir"
 UID_VALUE="$(id -u)"
 
 # Invoke frequently, but let Python's persistent rolling quota ledger decide
-# how many Tiingo REST calls are safe right now. This allows a startup catch-up
-# to consume available capacity immediately while never intentionally exceeding
-# the configured 45 attempts in any rolling 60-minute scheduler window.
+# how many Tiingo REST calls are safe right now. After each successful refresh
+# invocation, regenerate the frozen V5 ranking snapshot. While Bronze is still
+# catching up this simply preserves rankings on the latest common EOD date;
+# once all data layers advance, rankings advance automatically too.
 INTERVAL_SECONDS=300
 HOURLY_REQUEST_LIMIT=45
 
@@ -31,7 +32,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; exec '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; exec '$PYTHON' -u -m ml.run_v5_inference; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -51,4 +52,5 @@ echo "Schedule: every 5 minutes"
 echo "Overlap guard: $LOCK_DIR"
 echo "Rolling Tiingo scheduler limit: $HOURLY_REQUEST_LIMIT requests / 60 minutes"
 echo "Catch-up policy: use all currently available rolling-hour capacity"
+echo "V5 inference: regenerate rankings after each successful refresh invocation"
 echo "Logs: $LOG_DIR/v5_refresh.log"
