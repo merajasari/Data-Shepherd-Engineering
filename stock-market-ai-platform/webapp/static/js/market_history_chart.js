@@ -73,7 +73,8 @@
   };
 
   const money = value => value == null || Number.isNaN(Number(value)) ? '—' : '$' + Number(value).toFixed(2);
-  const dateLabel = value => new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  const dateLabel = value => new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+  const shortDateLabel = value => new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',timeZone:'UTC'});
   let rows = [];
   let geometry = null;
 
@@ -197,7 +198,7 @@
     const labelIndexes = [0, Math.floor((rows.length-1)/3), Math.floor((rows.length-1)*2/3), rows.length-1];
     [...new Set(labelIndexes)].forEach(i => {
       const label = nsEl('text',{x:x(i),y:H-16,'text-anchor':'middle',fill:'#91a6c2','font-size':'11'});
-      label.textContent = new Date(rows[i].timestamp).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+      label.textContent = shortDateLabel(rows[i].timestamp);
     });
 
     renderSeries(rows.map((r,i)=>[x(i),Number(r.close)]),'#36d8ff',3);
