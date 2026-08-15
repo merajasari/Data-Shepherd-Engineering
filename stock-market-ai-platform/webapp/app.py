@@ -40,6 +40,27 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
 
+
+@app.after_request
+def inject_dashboard_market_chart(response):
+    """Load the interactive stock-history chart only on the member dashboard.
+
+    Keeping the chart implementation in a standalone static module avoids
+    coupling the market-history visualization to the frozen V5 inference code.
+    """
+    if (
+        request.path == "/dashboard"
+        and response.mimetype == "text/html"
+        and response.status_code == 200
+    ):
+        html = response.get_data(as_text=True)
+        marker = "</body>"
+        script = '<script src="/static/js/market_history_chart.js"></script>'
+        if marker in html and script not in html:
+            response.set_data(html.replace(marker, script + "\n" + marker, 1))
+    return response
+
+
 V5_SYMBOLS = get_v5_symbols()
 V5_SYMBOL_OPTIONS = get_v5_symbol_options()
 DEFAULT_SYMBOL = "AAPL"
@@ -109,35 +130,41 @@ def build_v4_dashboard_payload():
         for symbol in portfolio["top_five"]
     ]
 
-    # The journal begins after the simulated portfolio was initialized. Add a
-    # synthetic $100k baseline for context, then append a read-only current
-    # mark-to-market point so the chart always reaches the equity shown above.
     history = list(forward.get("equity_history", []))
-    forward["chart_history"] = [
+    chart_history = [
         {
             "timestamp": forward.get("start_timestamp"),
             "label": "Start",
             "equity": starting_cash,
             "synthetic_baseline": True,
-            "current_snapshot": False,
         },
         *[
             {
                 **row,
                 "label": None,
                 "synthetic_baseline": False,
-                "current_snapshot": False,
             }
             for row in history
         ],
-        {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "label": "Current",
-            "equity": equity,
-            "synthetic_baseline": False,
-            "current_snapshot": True,
-        },
     ]
+    current_timestamp = datetime.now(timezone.utc).isoformat()
+    if not chart_history or abs(float(chart_history[-1]["equity"]) - equity) > 1e-9:
+        chart_history.append(
+            {
+                "timestamp": current_timestamp,
+                "label": "Current",
+                "equity": equity,
+                "synthetic_baseline": False,
+                "current_mark": True,
+            }
+        )
+    elif chart_history:
+        chart_history[-1] = {
+            **chart_history[-1],
+            "label": "Current",
+            "current_mark": True,
+        }
+    forward["chart_history"] = chart_history
 
     return {"forward": forward, "portfolio": portfolio}
 
