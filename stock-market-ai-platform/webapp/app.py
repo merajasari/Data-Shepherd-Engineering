@@ -16,7 +16,11 @@ from werkzeug.security import check_password_hash
 load_dotenv()
 sys.path.append("data-ingestion")
 
-from v5_symbols import get_v5_symbols  # noqa: E402
+from v5_symbols import (  # noqa: E402
+    get_v5_company_name,
+    get_v5_symbol_options,
+    get_v5_symbols,
+)
 from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
@@ -37,6 +41,7 @@ app.config.update(
 )
 
 V5_SYMBOLS = get_v5_symbols()
+V5_SYMBOL_OPTIONS = get_v5_symbol_options()
 DEFAULT_SYMBOL = "AAPL"
 
 
@@ -64,6 +69,7 @@ def build_stock_dashboard(symbol):
     display_price = live["reference_price"] if live["available"] else market["close"]
     return {
         "symbol": symbol,
+        "company_name": get_v5_company_name(symbol),
         "timestamp": market["timestamp"],
         "close": market["close"],
         "display_price": display_price,
@@ -84,20 +90,20 @@ def build_v4_dashboard_payload():
     """Return V4 state with stable dashboard-facing compatibility keys."""
     forward = summarize_journal()
     portfolio = get_portfolio_summary()
-
-    # The journal is the authoritative source for the latest frozen V4 ranking.
-    # Expose aliases expected by the lightweight dashboard JS without changing
-    # the underlying journal/portfolio contracts.
     forward = dict(forward)
     portfolio = dict(portfolio)
     forward["observations"] = forward.get("observation_count", 0)
     portfolio["open_positions"] = portfolio.get("open_position_count", 0)
     portfolio["top_five"] = forward.get("latest_top_five", [])
+    return {"forward": forward, "portfolio": portfolio}
 
-    return {
-        "forward": forward,
-        "portfolio": portfolio,
-    }
+
+def enrich_ranking_rows(rows):
+    """Add presentation-only company names without changing V5 ranking data."""
+    return [
+        {**dict(row), "company_name": get_v5_company_name(row["symbol"])}
+        for row in rows
+    ]
 
 
 @app.route("/")
@@ -146,7 +152,7 @@ def dashboard():
     selected = build_stock_dashboard(selected_symbol)
     recent_prices = get_recent_prices(selected_symbol, limit=60)
     rankings_payload = get_v5_rankings()
-    rankings = rankings_payload["rankings"]
+    rankings = enrich_ranking_rows(rankings_payload["rankings"])
     top5 = rankings[:5]
 
     top10_rows = []
@@ -170,7 +176,7 @@ def dashboard():
         rankings=rankings,
         top5=top5,
         top10_rows=top10_rows,
-        v5_symbols=V5_SYMBOLS,
+        v5_symbols=V5_SYMBOL_OPTIONS,
         v5=rankings_payload,
     )
 
@@ -178,7 +184,9 @@ def dashboard():
 @app.route("/api/v5-rankings")
 @login_required
 def api_v5_rankings():
-    return jsonify(get_v5_rankings())
+    payload = dict(get_v5_rankings())
+    payload["rankings"] = enrich_ranking_rows(payload["rankings"])
+    return jsonify(payload)
 
 
 @app.route("/api/dashboard-stock/<symbol>")
