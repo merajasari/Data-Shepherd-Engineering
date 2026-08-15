@@ -164,6 +164,7 @@ def dashboard():
             row["display_price"] = (
                 live["reference_price"] if live["available"] else market["close"]
             )
+            row["eod_change_pct"] = market["price_change_pct"]
             row["rsi_14"] = market["rsi_14"]
             top10_rows.append(row)
         except Exception as exc:
