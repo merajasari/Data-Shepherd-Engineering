@@ -80,6 +80,26 @@ def build_stock_dashboard(symbol):
     }
 
 
+def build_v4_dashboard_payload():
+    """Return V4 state with stable dashboard-facing compatibility keys."""
+    forward = summarize_journal()
+    portfolio = get_portfolio_summary()
+
+    # The journal is the authoritative source for the latest frozen V4 ranking.
+    # Expose aliases expected by the lightweight dashboard JS without changing
+    # the underlying journal/portfolio contracts.
+    forward = dict(forward)
+    portfolio = dict(portfolio)
+    forward["observations"] = forward.get("observation_count", 0)
+    portfolio["open_positions"] = portfolio.get("open_position_count", 0)
+    portfolio["top_five"] = forward.get("latest_top_five", [])
+
+    return {
+        "forward": forward,
+        "portfolio": portfolio,
+    }
+
+
 @app.route("/")
 def home():
     return render_template(
@@ -203,7 +223,7 @@ def api_paper_portfolio():
 @app.route("/api/v4-forward")
 @login_required
 def api_v4_forward():
-    return jsonify({"forward": summarize_journal(), "portfolio": get_portfolio_summary()})
+    return jsonify(build_v4_dashboard_payload())
 
 
 @app.route("/health")
