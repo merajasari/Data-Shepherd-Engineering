@@ -117,7 +117,7 @@ def model_definitions(seed=RANDOM_SEED):
             ("model", LogisticRegression(
                 C=1.0,
                 max_iter=5000,
-                multi_class="auto",
+                solver="lbfgs",
                 random_state=seed,
             )),
         ]),
@@ -360,27 +360,21 @@ def run_phase2(dataset_path=DATASET_PATH, manifest_path=PHASE1_MANIFEST_PATH, ou
         "features": features,
         "models": {
             "majority_class": "training-fold majority class baseline",
-            "multinomial_logistic": "median imputation + standardization + multinomial logistic regression, fixed C=1.0",
+            "multinomial_logistic": "median imputation + standardization + logistic regression, fixed C=1.0, lbfgs solver; multiclass handled natively by the installed scikit-learn version",
             "hist_gradient_boosting": "median imputation + HistGradientBoostingClassifier, lr=.05 max_iter=150 max_leaf_nodes=15 l2=1",
         },
-        "selection_policy": (
-            "Phase 2 reports development-only evidence. No candidate is promoted, retuned, or selected "
-            "for future holdout based on these outputs without a separate governance decision."
-        ),
-        "input": {
-            "phase1_dataset": str(dataset_path),
-            "phase1_manifest": str(manifest_path),
-            "hashes": input_hashes_before,
-        },
+        "selection_policy": "development diagnostics only; do not tune models or future holdout from Phase 2 results",
+        "inputs": input_hashes_before,
         "outputs": {
             "predictions": str(predictions_path),
             "fold_metrics": str(metrics_path),
             "metrics_summary": str(summary_path),
             "artifacts": fitted_artifacts,
         },
-        "next_step": "Review development-only model quality and allocation economics; do not touch the September 2026 future holdout.",
+        "next_step": "Review fixed development-only model economics and class behavior before pre-registering any portfolio/allocation simulation."
     }
-    (output_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    manifest_path_out = output_root / "manifest.json"
+    manifest_path_out.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest, summary_df
 
 
@@ -392,8 +386,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     manifest, summary = run_phase2(args.dataset, args.phase1_manifest, args.output_root)
     print("CRYPTO V4 PHASE 2")
-    print("=" * 72)
-    print(f"Folds: {len(manifest['validation']['folds'])}")
+    print("=" * 64)
     print(summary.to_string(index=False))
     print(f"Output: {manifest['outputs']['metrics_summary']}")
     print("Future holdout remains untouched from 2026-09-01 UTC.")
