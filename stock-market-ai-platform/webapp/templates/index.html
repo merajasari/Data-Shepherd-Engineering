@@ -6,7 +6,7 @@
 <title>Data Shepherd Engineering — V5 Dashboard</title>
 <style>
 :root{--bg:#07101f;--panel:#0d1c31;--panel2:#10223b;--border:#244261;--text:#f2f6ff;--muted:#91a6c2;--cyan:#36d8ff;--green:#39e3a1;--red:#ff6680;--gold:#efc56b;--purple:#9b65ff}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{width:min(1450px,94%);margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:34px 0}.brand{display:flex;gap:18px;align-items:center}.brand img{width:150px}.eyebrow,.label{color:var(--cyan);font-size:.72rem;font-weight:900;letter-spacing:.16em}.muted{color:var(--muted)}h1{margin:6px 0;font-size:clamp(2rem,4vw,3.4rem)}h2,h3{margin-top:6px}.actions{display:flex;gap:12px;align-items:center}.pill,.logout{padding:11px 16px;border:1px solid var(--border);border-radius:999px;background:var(--panel);font-weight:800}.logout{color:#ff9caf;text-decoration:none}.grid{display:grid;gap:20px}.grid-2{grid-template-columns:1fr 1fr}.grid-3{grid-template-columns:repeat(3,1fr)}.metrics{grid-template-columns:repeat(6,1fr)}.card{background:linear-gradient(145deg,rgba(18,37,62,.97),rgba(8,20,36,.97));border:1px solid var(--border);border-radius:24px;padding:24px;box-shadow:0 16px 40px rgba(0,0,0,.2)}.metric{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:18px}.metric span{display:block;color:var(--muted);font-size:.68rem;font-weight:900;letter-spacing:.08em}.metric strong{display:block;margin-top:7px;font-size:1.35rem}.top5{display:flex;gap:10px;flex-wrap:wrap}.chip{padding:10px 14px;border-radius:999px;background:rgba(54,216,255,.08);border:1px solid rgba(54,216,255,.25);font-weight:900}.chip.top{background:rgba(57,227,161,.09);border-color:rgba(57,227,161,.35)}.selector{display:flex;justify-content:space-between;align-items:center;gap:18px}.selector select{min-width:180px;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-weight:800}.hero-value{font-size:3.2rem;font-weight:900}.positive{color:var(--green)}.negative{color:var(--red)}table{width:100%;border-collapse:collapse}th,td{padding:13px 10px;border-bottom:1px solid rgba(120,155,205,.12);text-align:right}th:first-child,td:first-child{text-align:left}th{font-size:.72rem;color:var(--muted);letter-spacing:.08em}.table-wrap{overflow-x:auto}.rank-board{max-height:620px;overflow:auto}.rank-row{display:grid;grid-template-columns:60px 90px 1fr 140px 100px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(120,155,205,.1)}.rank-row.top5row{background:rgba(57,227,161,.045)}.bar{height:9px;border-radius:99px;background:#172943;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--cyan))}.warning{padding:14px;border-radius:14px;border:1px solid rgba(239,197,107,.25);background:rgba(239,197,107,.07);color:var(--gold)}footer{padding:38px 0;text-align:center;color:var(--muted)}@media(max-width:1000px){.grid-2,.grid-3,.metrics{grid-template-columns:1fr 1fr}.selector{align-items:flex-start;flex-direction:column}}@media(max-width:650px){header{align-items:flex-start;flex-direction:column}.grid-2,.grid-3,.metrics{grid-template-columns:1fr}.rank-row{grid-template-columns:48px 72px 1fr 90px}.rank-row .sector{display:none}.brand{align-items:flex-start;flex-direction:column}.brand img{width:125px}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{width:min(1450px,94%);margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:34px 0}.brand{display:flex;gap:18px;align-items:center}.brand img{width:150px}.eyebrow,.label{color:var(--cyan);font-size:.72rem;font-weight:900;letter-spacing:.16em}.muted{color:var(--muted)}h1{margin:6px 0;font-size:clamp(2rem,4vw,3.4rem)}h2,h3{margin-top:6px}.actions{display:flex;gap:12px;align-items:center}.pill,.logout{padding:11px 16px;border:1px solid var(--border);border-radius:999px;background:var(--panel);font-weight:800}.logout{color:#ff9caf;text-decoration:none}.grid{display:grid;gap:20px}.grid-2{grid-template-columns:1fr 1fr}.grid-3{grid-template-columns:repeat(3,1fr)}.metrics{grid-template-columns:repeat(6,1fr)}.card{background:linear-gradient(145deg,rgba(18,37,62,.97),rgba(8,20,36,.97));border:1px solid var(--border);border-radius:24px;padding:24px;box-shadow:0 16px 40px rgba(0,0,0,.2)}.metric{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:18px}.metric span{display:block;color:var(--muted);font-size:.68rem;font-weight:900;letter-spacing:.08em}.metric strong{display:block;margin-top:7px;font-size:1.35rem}.top5{display:flex;gap:10px;flex-wrap:wrap}.chip{padding:10px 14px;border-radius:999px;background:rgba(54,216,255,.08);border:1px solid rgba(54,216,255,.25);font-weight:900}.chip.top{background:rgba(57,227,161,.09);border-color:rgba(57,227,161,.35)}.selector{display:flex;justify-content:space-between;align-items:center;gap:18px}.selector-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.selector input,.selector select{padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-weight:800}.selector input{min-width:250px}.selector select{min-width:260px}.hero-value{font-size:3.2rem;font-weight:900}.positive{color:var(--green)}.negative{color:var(--red)}table{width:100%;border-collapse:collapse}th,td{padding:13px 10px;border-bottom:1px solid rgba(120,155,205,.12);text-align:right}th:first-child,td:first-child{text-align:left}th{font-size:.72rem;color:var(--muted);letter-spacing:.08em}.table-wrap{overflow-x:auto}.rank-board{max-height:620px;overflow:auto}.rank-row{display:grid;grid-template-columns:60px 90px 1fr 140px 170px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(120,155,205,.1)}.rank-row.top5row{background:rgba(57,227,161,.045)}.bar{height:9px;border-radius:99px;background:#172943;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--cyan))}.warning{padding:14px;border-radius:14px;border:1px solid rgba(239,197,107,.25);background:rgba(239,197,107,.07);color:var(--gold)}.ticker-hover{position:relative;display:inline-block;cursor:help;border-bottom:1px dotted rgba(54,216,255,.7)}.ticker-hover::after{content:attr(data-company);position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);min-width:210px;max-width:320px;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:#081526;color:var(--text);font-size:.78rem;font-weight:700;line-height:1.35;white-space:normal;text-align:center;box-shadow:0 10px 28px rgba(0,0,0,.35);opacity:0;visibility:hidden;pointer-events:none;z-index:30;transition:opacity .15s ease,visibility .15s ease}.ticker-hover:hover::after,.ticker-hover:focus::after{opacity:1;visibility:visible}.company-subtitle{margin-top:4px;color:var(--muted);font-size:.92rem}footer{padding:38px 0;text-align:center;color:var(--muted)}@media(max-width:1000px){.grid-2,.grid-3,.metrics{grid-template-columns:1fr 1fr}.selector{align-items:flex-start;flex-direction:column}.selector-controls{width:100%}.selector input,.selector select{flex:1 1 260px}}@media(max-width:650px){header{align-items:flex-start;flex-direction:column}.grid-2,.grid-3,.metrics{grid-template-columns:1fr}.rank-row{grid-template-columns:48px 72px 1fr 90px}.rank-row .sector{display:none}.brand{align-items:flex-start;flex-direction:column}.brand img{width:125px}.selector input,.selector select{width:100%;min-width:0}}
 </style>
 </head>
 <body>
@@ -47,18 +47,25 @@
     <div class="metric"><span>BENCHMARK</span><strong>{{ v5.benchmark_symbol }}</strong></div>
     <div class="metric"><span>TOP N</span><strong>{{ v5.top_n }}</strong></div>
   </div>
-  <div class="top5" style="margin-top:18px">{% for row in top5 %}<div class="chip top">#{{ row.rank }} {{ row.symbol }} · {{ "%+.3f"|format(row.predicted_relative_return_5d*100) }}%</div>{% endfor %}</div>
+  <div class="top5" style="margin-top:18px">{% for row in top5 %}<div class="chip top">#{{ row.rank }} <span class="ticker-hover" data-company="{{ row.company_name }}" title="{{ row.company_name }}">{{ row.symbol }}</span> · {{ "%+.3f"|format(row.predicted_relative_return_5d*100) }}%</div>{% endfor %}</div>
 </section>
 
 <section class="card selector" style="margin-top:22px">
-  <div><div class="label">PRIMARY STOCK VIEW</div><h3>Detailed Market + V5 Rank</h3></div>
-  <form method="get" action="{{ url_for('dashboard') }}"><select name="symbol" onchange="this.form.submit()">{% for symbol in v5_symbols %}<option value="{{ symbol }}" {% if symbol == selected.symbol %}selected{% endif %}>{{ symbol }}</option>{% endfor %}</select></form>
+  <div><div class="label">PRIMARY STOCK VIEW</div><h3>Detailed Market + V5 Rank</h3><div class="muted">Search by ticker or company name, then choose a stock.</div></div>
+  <form id="stock-selector-form" method="get" action="{{ url_for('dashboard') }}">
+    <div class="selector-controls">
+      <input id="stock-search" type="search" placeholder="Search ticker or company…" autocomplete="off" aria-label="Search stocks">
+      <select id="stock-select" name="symbol" aria-label="Select stock">
+        {% for item in v5_symbols %}<option value="{{ item.symbol }}" data-company="{{ item.company_name }}" {% if item.symbol == selected.symbol %}selected{% endif %}>{{ item.symbol }} — {{ item.company_name }}</option>{% endfor %}
+      </select>
+    </div>
+  </form>
 </section>
 
 <section class="grid grid-2" style="margin-top:22px">
   <div class="card">
-    <div class="label">MARKET</div><h2>{{ selected.symbol }}</h2>
-    <div class="muted">{{ selected.timestamp }} · {{ selected.price_source }}</div>
+    <div class="label">MARKET</div><h2>{{ selected.symbol }}</h2><div class="company-subtitle">{{ selected.company_name }}</div>
+    <div class="muted" style="margin-top:8px">{{ selected.timestamp }} · {{ selected.price_source }}</div>
     <div class="hero-value" style="margin-top:18px">${{ "%.2f"|format(selected.display_price) }}</div>
     <div class="{% if selected.price_change < 0 %}negative{% else %}positive{% endif %}">{{ "%+.2f"|format(selected.price_change) }} ({{ "%+.2f"|format(selected.price_change_pct*100) }}%)</div>
   </div>
@@ -81,13 +88,13 @@
 
 <section class="card" style="margin-top:22px">
   <div class="label">V5 LEADERS</div><h2>Top 10 Cross-Sectional Rankings</h2>
-  <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Price</th><th>Rank</th><th>Percentile</th><th>Predicted vs SPY</th><th>Top 5</th><th>RSI</th></tr></thead><tbody>{% for row in top10_rows %}<tr><td><strong>{{ row.symbol }}</strong></td><td>${{ "%.2f"|format(row.display_price) }}</td><td>#{{ row.rank }}</td><td>{{ "%.1f"|format(row.rank_percentile*100) }}%</td><td class="{% if row.predicted_relative_return_5d >= 0 %}positive{% else %}negative{% endif %}">{{ "%+.3f"|format(row.predicted_relative_return_5d*100) }}%</td><td>{{ "YES" if row.selected_top5 else "NO" }}</td><td>{{ "%.1f"|format(row.rsi_14) }}</td></tr>{% endfor %}</tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Price</th><th>Rank</th><th>Percentile</th><th>Predicted vs SPY</th><th>Top 5</th><th>RSI</th></tr></thead><tbody>{% for row in top10_rows %}<tr><td><strong class="ticker-hover" data-company="{{ row.company_name }}" title="{{ row.company_name }}">{{ row.symbol }}</strong></td><td>${{ "%.2f"|format(row.display_price) }}</td><td>#{{ row.rank }}</td><td>{{ "%.1f"|format(row.rank_percentile*100) }}%</td><td class="{% if row.predicted_relative_return_5d >= 0 %}positive{% else %}negative{% endif %}">{{ "%+.3f"|format(row.predicted_relative_return_5d*100) }}%</td><td>{{ "YES" if row.selected_top5 else "NO" }}</td><td>{{ "%.1f"|format(row.rsi_14) }}</td></tr>{% endfor %}</tbody></table></div>
 </section>
 
 <section class="card" style="margin-top:22px">
   <div class="label">100-STOCK V5 RANKING BOARD</div><h2>Full Investable Universe</h2>
-  <p class="muted">Sorted from strongest to weakest predicted 5-day SPY-relative return.</p>
-  <div class="rank-board">{% for row in rankings %}<div class="rank-row {% if row.selected_top5 %}top5row{% endif %}"><strong>#{{ row.rank }}</strong><strong>{{ row.symbol }}</strong><div><div class="bar"><div class="fill" style="width:{{ row.rank_percentile*100 }}%"></div></div></div><div class="{% if row.predicted_relative_return_5d >= 0 %}positive{% else %}negative{% endif %}">{{ "%+.3f"|format(row.predicted_relative_return_5d*100) }}%</div><div class="sector muted">{{ row.sector }}</div></div>{% endfor %}</div>
+  <p class="muted">Sorted from strongest to weakest predicted 5-day SPY-relative return. Hover a ticker to see the full company name.</p>
+  <div class="rank-board">{% for row in rankings %}<div class="rank-row {% if row.selected_top5 %}top5row{% endif %}"><strong>#{{ row.rank }}</strong><strong><span class="ticker-hover" tabindex="0" data-company="{{ row.company_name }}" title="{{ row.company_name }}">{{ row.symbol }}</span></strong><div><div class="bar"><div class="fill" style="width:{{ row.rank_percentile*100 }}%"></div></div></div><div class="{% if row.predicted_relative_return_5d >= 0 %}positive{% else %}negative{% endif %}">{{ "%+.3f"|format(row.predicted_relative_return_5d*100) }}%</div><div class="sector muted">{{ row.sector }}</div></div>{% endfor %}</div>
 </section>
 
 <section class="grid grid-2" style="margin-top:22px">
@@ -104,6 +111,27 @@
 <script>
 async function loadV4(){try{const r=await fetch('/api/v4-forward');const d=await r.json();const f=d.forward||{},p=d.portfolio||{};document.getElementById('v4-equity').textContent='$'+Number(p.equity||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});document.getElementById('v4-return').textContent=((f.forward_return||0)*100).toFixed(4)+'%';document.getElementById('v4-spy').textContent=((f.benchmark_return||0)*100).toFixed(4)+'%';document.getElementById('v4-excess').textContent=((f.excess_return||0)*100).toFixed(4)+'%';document.getElementById('v4-dd').textContent=((f.max_drawdown||0)*100).toFixed(4)+'%';document.getElementById('v4-obs').textContent=f.observations??'—';const names=(p.top_five||p.top5||[]);document.getElementById('v4-top5').innerHTML=names.length?names.map((x,i)=>`<span class="chip">${i+1}. ${typeof x==='string'?x:(x.symbol||'')}</span>`).join(''):'No active ranking data';document.getElementById('v4-positions').textContent=`Open positions: ${p.open_positions??'—'} · Total trades: ${p.trade_count??p.total_trades??'—'}`;}catch(e){document.getElementById('v4-equity').textContent='Unavailable';}}
 loadV4();
+
+const selectorForm=document.getElementById('stock-selector-form');
+const stockSelect=document.getElementById('stock-select');
+const stockSearch=document.getElementById('stock-search');
+const originalOptions=Array.from(stockSelect.options).map(option=>({value:option.value,text:option.textContent,company:option.dataset.company||'',selected:option.selected}));
+
+function rebuildStockOptions(query){
+  const q=query.trim().toLowerCase();
+  const currentValue=stockSelect.value;
+  const matches=originalOptions.filter(item=>!q||item.value.toLowerCase().includes(q)||item.company.toLowerCase().includes(q));
+  stockSelect.innerHTML='';
+  if(!matches.length){
+    const empty=document.createElement('option');empty.textContent='No matching stocks';empty.disabled=true;empty.selected=true;stockSelect.appendChild(empty);return;
+  }
+  matches.forEach(item=>{const option=document.createElement('option');option.value=item.value;option.textContent=item.text;option.dataset.company=item.company;option.selected=item.value===currentValue||(!currentValue&&item.selected);stockSelect.appendChild(option);});
+  if(!Array.from(stockSelect.options).some(option=>option.selected)){stockSelect.options[0].selected=true;}
+}
+
+stockSearch.addEventListener('input',()=>rebuildStockOptions(stockSearch.value));
+stockSearch.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();if(stockSelect.options.length&& !stockSelect.options[0].disabled){stockSelect.selectedIndex=0;selectorForm.submit();}}});
+stockSelect.addEventListener('change',()=>selectorForm.submit());
 </script>
 </body>
 </html>
