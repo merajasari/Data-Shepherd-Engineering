@@ -43,11 +43,7 @@ app.config.update(
 
 @app.after_request
 def inject_dashboard_market_chart(response):
-    """Load the interactive stock-history chart only on the member dashboard.
-
-    Keeping the chart implementation in a standalone static module avoids
-    coupling the market-history visualization to the frozen V5 inference code.
-    """
+    """Load dashboard-only interactive chart modules."""
     if (
         request.path == "/dashboard"
         and response.mimetype == "text/html"
@@ -55,9 +51,12 @@ def inject_dashboard_market_chart(response):
     ):
         html = response.get_data(as_text=True)
         marker = "</body>"
-        script = '<script src="/static/js/market_history_chart.js"></script>'
-        if marker in html and script not in html:
-            response.set_data(html.replace(marker, script + "\n" + marker, 1))
+        scripts = (
+            '<script src="/static/js/v4_equity_chart.js"></script>\n'
+            '<script src="/static/js/market_history_chart.js"></script>'
+        )
+        if marker in html and "/static/js/v4_equity_chart.js" not in html:
+            response.set_data(html.replace(marker, scripts + "\n" + marker, 1))
     return response
 
 
