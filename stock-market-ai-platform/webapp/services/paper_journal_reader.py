@@ -1,5 +1,4 @@
-"""
-Read and summarize the append-only V4 paper-trading journal.
+"""Read and summarize the append-only V4 paper-trading journal.
 
 Read-only.
 Does not modify portfolio or journal state.
@@ -77,10 +76,19 @@ def summarize_journal():
             "max_drawdown": 0.0,
             "rebalance_cycles": 0,
             "trade_action_count": 0,
+            "equity_history": [],
         }
 
     equities = [
         float(row["equity"])
+        for row in rows
+    ]
+
+    equity_history = [
+        {
+            "timestamp": row.get("timestamp"),
+            "equity": float(row["equity"]),
+        }
         for row in rows
     ]
 
@@ -124,93 +132,36 @@ def summarize_journal():
         benchmark_start_price = float(
             benchmark_rows[0]["benchmark_price"]
         )
-
         benchmark_end_price = float(
             benchmark_rows[-1]["benchmark_price"]
         )
-
         benchmark_return = (
-            benchmark_end_price
-            / benchmark_start_price
-            - 1.0
+            benchmark_end_price / benchmark_start_price - 1.0
         )
     else:
         benchmark_start_price = None
         benchmark_end_price = None
         benchmark_return = 0.0
 
-    excess_return = (
-        forward_return
-        - benchmark_return
-    )
+    excess_return = forward_return - benchmark_return
 
     return {
-        "observation_count":
-            len(rows),
-
-        "start_timestamp":
-            rows[0].get(
-                "timestamp"
-            ),
-
-        "end_timestamp":
-            rows[-1].get(
-                "timestamp"
-            ),
-
-        "starting_equity":
-            starting_equity,
-
-        "ending_equity":
-            ending_equity,
-
-        "forward_return":
-            forward_return,
-
-        "max_drawdown":
-            max_drawdown(
-                equities
-            ),
-
-        "rebalance_cycles":
-            rebalance_cycles,
-
-        "trade_action_count":
-            trade_action_count,
-
-        "latest_top_five":
-            rows[-1].get(
-                "top_five_symbols",
-                [],
-            ),
-
-        "latest_trade_count":
-            rows[-1].get(
-                "trade_count",
-                0,
-            ),
-
-        "benchmark_observation_count":
-            len(benchmark_rows),
-
-        "benchmark_symbol":
-            (
-                benchmark_rows[-1].get(
-                    "benchmark_symbol"
-                )
-                if benchmark_rows
-                else None
-            ),
-
-        "benchmark_start_price":
-            benchmark_start_price,
-
-        "benchmark_end_price":
-            benchmark_end_price,
-
-        "benchmark_return":
-            benchmark_return,
-
-        "excess_return":
-            excess_return,
+        "observation_count": len(rows),
+        "start_timestamp": rows[0].get("timestamp"),
+        "end_timestamp": rows[-1].get("timestamp"),
+        "starting_equity": starting_equity,
+        "ending_equity": ending_equity,
+        "forward_return": forward_return,
+        "max_drawdown": max_drawdown(equities),
+        "rebalance_cycles": rebalance_cycles,
+        "trade_action_count": trade_action_count,
+        "latest_top_five": rows[-1].get("top_five_symbols", []),
+        "latest_trade_count": rows[-1].get("trade_count", 0),
+        "benchmark_observation_count": len(benchmark_rows),
+        "benchmark_symbol": benchmark_rows[-1].get("benchmark_symbol") if benchmark_rows else None,
+        "benchmark_start_price": benchmark_start_price,
+        "benchmark_end_price": benchmark_end_price,
+        "benchmark_return": benchmark_return,
+        "excess_return": excess_return,
+        "equity_history": equity_history,
     }
