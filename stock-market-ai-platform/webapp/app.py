@@ -1,708 +1,224 @@
-"""
-Stock Market AI Platform presentation layer.
+"""Data Shepherd Engineering presentation layer.
 
-Public layer:
-- Data Shepherd Engineering landing page
-- Member authentication
-
-Protected member layer:
-- Stock Market AI dashboard
-- Historical / EOD market analytics
-- Machine-learning inference
-- Live Tiingo IEX quote data
-- Top 10 stock comparison
-- 26-stock future trend forecasting
+The member dashboard presents the frozen V5 cross-sectional ranking model
+natively while keeping the separate frozen V4 paper-trading monitor visible.
 """
 
 import os
 import sys
-
 from datetime import timedelta
 from functools import wraps
 
 from dotenv import load_dotenv
-
-from flask import (
-    Flask,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
-
-from werkzeug.security import (
-    check_password_hash,
-)
-
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash
 
 load_dotenv()
-
 sys.path.append("data-ingestion")
 
-from symbols import SYMBOLS
-
-from webapp.services.forecast_service import (
-    build_market_forecast,
-)
-
-from webapp.services.live_market_service import (
-    get_all_live_quotes,
-    get_live_quote,
-)
-
-from webapp.services.market_service import (
-    get_market_summary,
-    get_recent_prices,
-)
-
-from webapp.services.prediction_service import (
-    get_latest_prediction,
-)
-
-from webapp.services.paper_trading_service import (
-    get_portfolio_summary,
-)
-
-from webapp.services.paper_journal_reader import (
-    summarize_journal,
-)
+from v5_symbols import get_v5_symbols  # noqa: E402
+from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
+from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
+from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
+from webapp.services.paper_trading_service import get_portfolio_summary  # noqa: E402
+from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
 
 
 app = Flask(__name__)
-
-app.secret_key = os.environ.get(
-    "FLASK_SECRET_KEY"
-)
-
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key:
-    raise RuntimeError(
-        "FLASK_SECRET_KEY is not configured"
-    )
-
+    raise RuntimeError("FLASK_SECRET_KEY is not configured")
 
 app.config.update(
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    PERMANENT_SESSION_LIFETIME=timedelta(
-        hours=12
-    ),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
 
-
-TOP_SYMBOLS = [
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "GOOGL",
-    "META",
-    "TSLA",
-    "AVGO",
-    "AMD",
-    "ORCL",
-]
+V5_SYMBOLS = get_v5_symbols()
+DEFAULT_SYMBOL = "AAPL"
 
 
 def login_required(view):
-    """
-    Require an authenticated member session.
-    """
-
     @wraps(view)
     def wrapped(*args, **kwargs):
-
-        if not session.get(
-            "authenticated"
-        ):
-            return redirect(
-                url_for("home")
-            )
-
-        return view(
-            *args,
-            **kwargs
-        )
-
+        if not session.get("authenticated"):
+            return redirect(url_for("home"))
+        return view(*args, **kwargs)
     return wrapped
 
 
-def valid_member_credentials(
-    username,
-    password,
-):
-    """
-    Validate username and password
-    against environment configuration.
-    """
-
-    configured_username = (
-        os.environ.get(
-            "MEMBER_USERNAME",
-            "",
-        )
-    )
-
-    password_hash = (
-        os.environ.get(
-            "MEMBER_PASSWORD_HASH",
-            "",
-        )
-    )
-
-    if (
-        not configured_username
-        or not password_hash
-    ):
+def valid_member_credentials(username, password):
+    configured_username = os.environ.get("MEMBER_USERNAME", "")
+    password_hash = os.environ.get("MEMBER_PASSWORD_HASH", "")
+    if not configured_username or not password_hash:
         return False
-
-    if username != configured_username:
-        return False
-
-    return check_password_hash(
-        password_hash,
-        password,
-    )
+    return username == configured_username and check_password_hash(password_hash, password)
 
 
 def build_stock_dashboard(symbol):
-    """
-    Build combined market, prediction, and live data
-    for one dashboard symbol.
-    """
-
-    market = get_market_summary(
-        symbol
-    )
-
-    prediction = get_latest_prediction(
-        symbol
-    )
-
-    live = get_live_quote(
-        symbol
-    )
-
-    display_price = (
-        live["reference_price"]
-        if live["available"]
-        else market["close"]
-    )
-
-    return {
-        "symbol":
-            symbol,
-
-        "timestamp":
-            market["timestamp"],
-
-        "close":
-            market["close"],
-
-        "display_price":
-            display_price,
-
-        "live_available":
-            live["available"],
-
-        "live_price":
-            live["reference_price"],
-
-        "live_timestamp":
-            live["timestamp"],
-
-        "live_received_at":
-            live["received_at"],
-
-        "price_change":
-            market["price_change"],
-
-        "price_change_pct":
-            market["price_change_pct"],
-
-        "rsi_14":
-            market["rsi_14"],
-
-        "sma_20":
-            market["sma_20"],
-
-        "sma_50":
-            market["sma_50"],
-
-        "sma_200":
-            market["sma_200"],
-
-        "volatility_20d":
-            market["volatility_20d"],
-
-        "volume_ratio":
-            market["volume_ratio"],
-
-        "prediction":
-            prediction["prediction"],
-
-        "probability_up":
-            prediction["probability_up"],
-
-        "probability_down":
-            prediction["probability_down"],
-
-        "output_probability":
-            prediction["confidence"],
-
-        "accuracy":
-            prediction["accuracy"],
-
-        "majority_baseline":
-            prediction[
-                "majority_baseline"
-            ],
-
-        "precision":
-            prediction["precision"],
-
-        "recall":
-            prediction["recall"],
-
-        "f1":
-            prediction["f1"],
-    }
-
-
-def build_selected_stock_dashboard(symbol):
-    """Build all data used by the selected-stock dashboard UI."""
-
     market = get_market_summary(symbol)
     prediction = get_latest_prediction(symbol)
     live = get_live_quote(symbol)
-
+    display_price = live["reference_price"] if live["available"] else market["close"]
     return {
         "symbol": symbol,
-        "market": market,
-        "prediction": prediction,
-        "live": live,
-        "display_price": (
-            live["reference_price"]
-            if live["available"]
-            else market["close"]
-        ),
-        "price_source": (
-            "LIVE IEX"
-            if live["available"]
-            else "LATEST EOD"
-        ),
-        "recent_prices": get_recent_prices(
-            symbol,
-            limit=60,
-        ),
+        "timestamp": market["timestamp"],
+        "close": market["close"],
+        "display_price": display_price,
+        "price_source": "LIVE IEX" if live["available"] else "LATEST EOD",
+        "price_change": market["price_change"],
+        "price_change_pct": market["price_change_pct"],
+        "rsi_14": market["rsi_14"],
+        "sma_20": market["sma_20"],
+        "sma_50": market["sma_50"],
+        "sma_200": market["sma_200"],
+        "volatility_20d": market["volatility_20d"],
+        "volume_ratio": market["volume_ratio"],
+        **prediction,
     }
 
 
 @app.route("/")
 def home():
-    """
-    Public Data Shepherd Engineering landing page.
-    """
-
     return render_template(
         "landing.html",
-        authenticated=session.get(
-            "authenticated",
-            False,
-        ),
+        authenticated=session.get("authenticated", False),
         login_error=None,
     )
 
 
-@app.route(
-    "/login",
-    methods=["GET", "POST"],
-)
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    """
-    Authenticate a member and create
-    a secure Flask session.
-    """
-
     if request.method == "GET":
+        return redirect(url_for("dashboard" if session.get("authenticated") else "home"))
 
-        if session.get(
-            "authenticated"
-        ):
-            return redirect(
-                url_for(
-                    "dashboard"
-                )
-            )
-
-        return redirect(
-            url_for("home")
-        )
-
-    username = (
-        request.form.get(
-            "username",
-            "",
-        )
-        .strip()
-    )
-
-    password = (
-        request.form.get(
-            "password",
-            ""
-        )
-    )
-
-    if valid_member_credentials(
-        username,
-        password,
-    ):
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    if valid_member_credentials(username, password):
         session.clear()
-
         session.permanent = True
-
         session["authenticated"] = True
-
         session["username"] = username
-
-        return redirect(
-            url_for(
-                "dashboard"
-            )
-        )
+        return redirect(url_for("dashboard"))
 
     return render_template(
         "landing.html",
         authenticated=False,
-        login_error=(
-            "Invalid username or password."
-        ),
+        login_error="Invalid username or password.",
     ), 401
 
 
 @app.route("/logout")
 def logout():
-    """
-    End the current member session.
-    """
-
     session.clear()
-
-    return redirect(
-        url_for("home")
-    )
+    return redirect(url_for("home"))
 
 
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    """
-    Render selected-stock detail plus
-    Top 10 analytics.
-    """
+    selected_symbol = request.args.get("symbol", DEFAULT_SYMBOL).upper().strip()
+    if selected_symbol not in V5_SYMBOLS:
+        return redirect(url_for("dashboard", symbol=DEFAULT_SYMBOL))
 
-    selected_symbol = (
-        request.args.get(
-            "symbol",
-            "AAPL",
-        )
-        .upper()
-        .strip()
-    )
+    selected = build_stock_dashboard(selected_symbol)
+    recent_prices = get_recent_prices(selected_symbol, limit=60)
+    rankings_payload = get_v5_rankings()
+    rankings = rankings_payload["rankings"]
+    top5 = rankings[:5]
 
-    if selected_symbol not in TOP_SYMBOLS:
-        return redirect(
-            url_for(
-                "dashboard",
-                symbol="AAPL",
-            )
-        )
-
-    market = get_market_summary(
-        selected_symbol
-    )
-
-    prediction = get_latest_prediction(
-        selected_symbol
-    )
-
-    live = get_live_quote(
-        selected_symbol
-    )
-
-    recent_prices = get_recent_prices(
-        selected_symbol,
-        limit=60,
-    )
-
-    stocks = []
-
-    for symbol in TOP_SYMBOLS:
+    top10_rows = []
+    for row in rankings[:10]:
         try:
-            stocks.append(
-                build_stock_dashboard(
-                    symbol
-                )
+            market = get_market_summary(row["symbol"])
+            live = get_live_quote(row["symbol"])
+            row = dict(row)
+            row["display_price"] = (
+                live["reference_price"] if live["available"] else market["close"]
             )
-
+            row["rsi_14"] = market["rsi_14"]
+            top10_rows.append(row)
         except Exception as exc:
-            print(
-                f"[DASHBOARD ERROR] "
-                f"{symbol}: {exc}"
-            )
-
-    display_price = (
-        live["reference_price"]
-        if live["available"]
-        else market["close"]
-    )
-
-    price_source = (
-        "LIVE IEX"
-        if live["available"]
-        else "LATEST EOD"
-    )
+            print(f"[V5 TOP10 ERROR] {row['symbol']}: {exc}")
 
     return render_template(
         "index.html",
-
-        market=market,
-
-        prediction=prediction,
-
-        live=live,
-
-        display_price=display_price,
-
-        price_source=price_source,
-
+        selected=selected,
         recent_prices=recent_prices,
-
-        stocks=stocks,
-
-        selected_symbol=
-            selected_symbol,
-
-        top_symbols=
-            TOP_SYMBOLS,
-
-        stock_count=
-            len(stocks),
-
-        forecast_symbol_count=
-            len(SYMBOLS),
+        rankings=rankings,
+        top5=top5,
+        top10_rows=top10_rows,
+        v5_symbols=V5_SYMBOLS,
+        v5=rankings_payload,
     )
 
 
-@app.route("/api/stocks")
+@app.route("/api/v5-rankings")
 @login_required
-def api_stocks():
-    """
-    Return Top 10 stock/model/live data.
-    """
-
-    stocks = [
-        build_stock_dashboard(
-            symbol
-        )
-        for symbol in TOP_SYMBOLS
-    ]
-
-    return jsonify(
-        stocks
-    )
+def api_v5_rankings():
+    return jsonify(get_v5_rankings())
 
 
 @app.route("/api/dashboard-stock/<symbol>")
 @login_required
 def api_dashboard_stock(symbol):
-    """Return all selected-stock dashboard data."""
-
     symbol = symbol.upper().strip()
-
-    if symbol not in TOP_SYMBOLS:
-        return jsonify(
-            {"error": "unsupported symbol"}
-        ), 404
-
-    return jsonify(
-        build_selected_stock_dashboard(symbol)
-    )
+    if symbol not in V5_SYMBOLS:
+        return jsonify({"error": "unsupported symbol"}), 404
+    return jsonify({
+        "stock": build_stock_dashboard(symbol),
+        "recent_prices": get_recent_prices(symbol, limit=60),
+    })
 
 
-@app.route(
-    "/api/prices/<symbol>"
-)
+@app.route("/api/prices/<symbol>")
 @login_required
 def api_prices(symbol):
-    """
-    Return recent historical price data.
-    """
-
-    symbol = symbol.upper()
-
-    if symbol not in TOP_SYMBOLS:
-        return jsonify(
-            {
-                "error":
-                    "unsupported symbol"
-            }
-        ), 404
-
-    return jsonify(
-        get_recent_prices(
-            symbol,
-            limit=60,
-        )
-    )
+    symbol = symbol.upper().strip()
+    if symbol not in V5_SYMBOLS:
+        return jsonify({"error": "unsupported symbol"}), 404
+    return jsonify(get_recent_prices(symbol, limit=60))
 
 
-@app.route(
-    "/api/live/<symbol>"
-)
+@app.route("/api/live/<symbol>")
 @login_required
 def api_live_quote(symbol):
-    """
-    Return latest live quote
-    for one symbol.
-    """
-
-    symbol = symbol.upper()
-
-    return jsonify(
-        get_live_quote(
-            symbol
-        )
-    )
+    return jsonify(get_live_quote(symbol.upper().strip()))
 
 
-@app.route(
-    "/api/live"
-)
+@app.route("/api/live")
 @login_required
 def api_live_quotes():
-    """
-    Return all currently cached live quotes.
-    """
-
-    return jsonify(
-        get_all_live_quotes()
-    )
-
-
-@app.route(
-    "/api/forecast"
-)
-@login_required
-def api_forecast():
-    """
-    Return 5-trading-day directional forecasts
-    for the complete 26-stock universe.
-    """
-
-    forecasts = build_market_forecast(
-        SYMBOLS
-    )
-
-    valid_count = len(
-        [
-            forecast
-            for forecast in forecasts
-            if "forecast_score"
-            in forecast
-        ]
-    )
-
-    return jsonify(
-        {
-            "horizon_days":
-                5,
-
-            "symbol_count":
-                len(SYMBOLS),
-
-            "available_count":
-                valid_count,
-
-            "forecasts":
-                forecasts,
-        }
-    )
+    return jsonify(get_all_live_quotes())
 
 
 @app.route("/api/paper-portfolio")
 @login_required
 def api_paper_portfolio():
-    """Return the current simulated paper-trading portfolio."""
-
-    return jsonify(
-        get_portfolio_summary()
-    )
+    return jsonify(get_portfolio_summary())
 
 
 @app.route("/api/v4-forward")
 @login_required
 def api_v4_forward():
-    """
-    Return V4 forward-test metrics and
-    current simulated portfolio state.
-    """
-
-    return jsonify(
-        {
-            "forward":
-                summarize_journal(),
-
-            "portfolio":
-                get_portfolio_summary(),
-        }
-    )
+    return jsonify({"forward": summarize_journal(), "portfolio": get_portfolio_summary()})
 
 
 @app.route("/health")
 def health():
-    """
-    Return public application health state.
-    """
-
-    live_state = (
-        get_all_live_quotes()
-    )
-
-    return jsonify(
-        {
-            "status":
-                "healthy",
-
-            "service":
-                "stock-market-ai-platform",
-
-            "dashboard_symbols":
-                len(TOP_SYMBOLS),
-
-            "forecast_symbols":
-                len(SYMBOLS),
-
-            "live_symbols":
-                live_state[
-                    "symbol_count"
-                ],
-
-            "live_cache_updated_at":
-                live_state[
-                    "updated_at"
-                ],
-        }
-    )
+    live_state = get_all_live_quotes()
+    rankings = get_v5_rankings()
+    return jsonify({
+        "status": "healthy",
+        "service": "stock-market-ai-platform",
+        "v5_candidates": rankings.get("candidate_count", 100),
+        "v5_decision_date_utc": rankings.get("decision_date_utc"),
+        "live_symbols": live_state["symbol_count"],
+        "live_cache_updated_at": live_state["updated_at"],
+    })
 
 
 if __name__ == "__main__":
-
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-    )
+    app.run(host="0.0.0.0", port=5000, debug=False)
