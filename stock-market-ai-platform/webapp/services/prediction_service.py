@@ -1,221 +1,97 @@
-"""
-Prediction service for the Stock Market AI presentation layer.
+"""Frozen V5 ranking service for the Stock Market AI presentation layer.
+
+The legacy dashboard originally loaded per-symbol ``models/*_direction_model.pkl``
+artifacts.  Those models are no longer the production contract.  V5 uses one
+frozen cross-sectional HistGradientBoosting regressor and ranks 100 investable
+stocks by predicted 5-trading-day return relative to SPY.
+
+This service reads the current production ranking artifact.  If the artifact is
+missing, it generates it from the frozen V5 model without fitting or tuning.
+A small set of legacy numeric fields remains in the returned dictionary so the
+existing dashboard template can render during the UI migration; they are
+explicitly rank-display compatibility values, not calibrated probabilities or
+historical classification metrics.
 """
 
+from __future__ import annotations
+
+import json
 from pathlib import Path
-import pickle
-
-import numpy as np
-import pandas as pd
 
 
-def sigmoid(value):
-    value = np.clip(
-        value,
-        -500,
-        500,
-    )
-
-    return 1.0 / (
-        1.0 + np.exp(-value)
-    )
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+RANKINGS_PATH = PROJECT_ROOT / "data/live/v5_latest_rankings.json"
 
 
-def get_model_file(symbol: str) -> Path:
-    return Path(
-        f"models/{symbol.lower()}_direction_model.pkl"
-    )
+def _load_rankings() -> dict:
+    if not RANKINGS_PATH.exists():
+        from ml.run_v5_inference import run_v5_inference
 
+        return run_v5_inference(output_path=RANKINGS_PATH)
 
-def get_feature_file(symbol: str) -> Path:
-    return Path(
-        f"data/features/stocks/{symbol}/{symbol}_features.parquet"
-    )
+    try:
+        payload = json.loads(RANKINGS_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        raise RuntimeError(f"Unable to read V5 rankings: {RANKINGS_PATH}") from exc
 
-
-def load_model(symbol: str) -> dict:
-    """Load model artifact for one symbol."""
-
-    model_file = get_model_file(symbol)
-
-    if not model_file.exists():
-        raise FileNotFoundError(
-            f"Model not found: {model_file}"
-        )
-
-    with model_file.open("rb") as file:
-        return pickle.load(file)
+    rankings = payload.get("rankings")
+    if not isinstance(rankings, list) or not rankings:
+        raise RuntimeError(f"V5 rankings artifact is empty or invalid: {RANKINGS_PATH}")
+    return payload
 
 
 def get_latest_prediction(symbol: str) -> dict:
-    """Generate latest prediction for one symbol."""
+    """Return the latest frozen-V5 cross-sectional inference for one symbol."""
 
-    artifact = load_model(symbol)
+    symbol = symbol.upper().strip()
+    payload = _load_rankings()
 
-    feature_file = get_feature_file(symbol)
-
-    if not feature_file.exists():
-        raise FileNotFoundError(
-            f"Feature file not found: {feature_file}"
-        )
-
-    df = pd.read_parquet(
-        feature_file
+    row = next(
+        (item for item in payload["rankings"] if item.get("symbol") == symbol),
+        None,
     )
+    if row is None:
+        raise KeyError(f"Symbol is not present in current V5 rankings: {symbol}")
 
-    df = df.sort_values(
-        "timestamp"
-    ).reset_index(drop=True)
+    score = float(row["predicted_relative_return_5d"])
+    percentile = float(row["rank_percentile"])
+    rank = int(row["rank"])
+    selected_top5 = bool(row["selected_top5"])
 
-    feature_columns = artifact[
-        "feature_columns"
-    ]
-
-    valid_rows = df.dropna(
-        subset=feature_columns
-    )
-
-    if valid_rows.empty:
-        raise ValueError(
-            f"No valid feature rows for {symbol}"
-        )
-
-    latest = valid_rows.iloc[-1]
-
-    features = latest[
-        feature_columns
-    ].to_numpy(
-        dtype=float
-    )
-
-    mean = np.asarray(
-        artifact["feature_mean"],
-        dtype=float,
-    )
-
-    std = np.asarray(
-        artifact["feature_std"],
-        dtype=float,
-    )
-
-    weights = np.asarray(
-        artifact["weights"],
-        dtype=float,
-    )
-
-    bias = float(
-        artifact["bias"]
-    )
-
-    threshold = float(
-        artifact[
-            "prediction_threshold"
-        ]
-    )
-
-    std = std.copy()
-
-    std[
-        std == 0
-    ] = 1.0
-
-    scaled = (
-        features - mean
-    ) / std
-
-    score = (
-        scaled @ weights
-        + bias
-    )
-
-    probability_up = float(
-        sigmoid(score)
-    )
-
-    probability_down = (
-        1.0 - probability_up
-    )
-
-    prediction = (
-        "UP"
-        if probability_up >= threshold
-        else "DOWN"
-    )
-
-    output_probability = max(
-        probability_up,
-        probability_down,
-    )
-
-    metrics = artifact.get(
-        "metrics",
-        {}
-    )
+    # Existing HTML still expects UP/DOWN and probability-shaped values.  Until
+    # that presentation is fully redesigned for V5, use the sign of the
+    # SPY-relative score for direction and the cross-sectional percentile only
+    # as display strength.  Do not interpret these as calibrated probabilities.
+    prediction = "UP" if score >= 0.0 else "DOWN"
+    display_up = percentile
+    display_down = 1.0 - percentile
+    display_strength = max(display_up, display_down)
 
     return {
-        "symbol":
-            symbol,
+        "symbol": symbol,
+        "prediction": prediction,
+        "predicted_relative_return_5d": score,
+        "rank": rank,
+        "rank_percentile": percentile,
+        "selected_top5": selected_top5,
+        "decision_date_utc": payload.get("decision_date_utc"),
+        "model_type": payload.get("model_id", "hist_gradient_boosting"),
+        "horizon_days": 5,
+        "benchmark_symbol": payload.get("benchmark_symbol", "SPY"),
+        "candidate_count": int(payload.get("candidate_count", 100)),
+        "close": float(row["close"]),
+        "timestamp": payload.get("decision_date_utc"),
 
-        "prediction":
-            prediction,
-
-        "probability_up":
-            probability_up,
-
-        "probability_down":
-            probability_down,
-
-        "confidence":
-            output_probability,
-
-        "threshold":
-            threshold,
-
-        "horizon_days":
-            artifact.get(
-                "target_horizon_days",
-                5,
-            ),
-
-        "model_type":
-            artifact.get(
-                "model_type",
-                "unknown",
-            ),
-
-        "accuracy":
-            metrics.get(
-                "accuracy"
-            ),
-
-        "majority_baseline":
-            artifact.get(
-                "majority_baseline"
-            ),
-
-        "precision":
-            metrics.get(
-                "precision"
-            ),
-
-        "recall":
-            metrics.get(
-                "recall"
-            ),
-
-        "f1":
-            metrics.get(
-                "f1"
-            ),
-
-        "timestamp":
-            str(
-                latest["timestamp_utc"]
-            ),
-
-        "close":
-            float(
-                latest["close"]
-            ),
+        # Legacy dashboard-display compatibility fields.  The probability bars
+        # now visualize rank strength, while quality metrics are intentionally
+        # zero rather than fabricating V5 classification statistics.
+        "probability_up": display_up,
+        "probability_down": display_down,
+        "confidence": display_strength,
+        "threshold": 0.0,
+        "accuracy": 0.0,
+        "majority_baseline": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
     }
-
