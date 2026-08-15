@@ -21,6 +21,14 @@ from v5_symbols import (  # noqa: E402
     get_v5_symbol_options,
     get_v5_symbols,
 )
+from webapp.services.account_service import (  # noqa: E402
+    authenticate_account,
+    begin_signup,
+    change_password,
+    initialize_account_store,
+    send_verification_email,
+    verify_email_token,
+)
 from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
@@ -39,25 +47,29 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
+initialize_account_store()
 
 
 @app.after_request
-def inject_dashboard_market_chart(response):
-    """Load dashboard-only interactive chart and layout modules."""
-    if (
-        request.path == "/dashboard"
-        and response.mimetype == "text/html"
-        and response.status_code == 200
-    ):
+def inject_dashboard_modules(response):
+    """Load small presentation modules without duplicating template markup."""
+    if response.mimetype == "text/html" and response.status_code == 200:
         html = response.get_data(as_text=True)
         marker = "</body>"
-        scripts = (
-            '<script src="/static/js/dashboard_layout.js"></script>\n'
-            '<script src="/static/js/v4_equity_chart.js"></script>\n'
-            '<script src="/static/js/market_history_chart.js"></script>'
-        )
-        if marker in html and "/static/js/v4_equity_chart.js" not in html:
-            response.set_data(html.replace(marker, scripts + "\n" + marker, 1))
+        scripts = []
+        if request.path in {"/", "/dashboard"}:
+            scripts.append('<script src="/static/js/signup_button.js"></script>')
+        if request.path == "/dashboard":
+            scripts.extend([
+                '<script src="/static/js/dashboard_layout.js"></script>',
+                '<script src="/static/js/v4_equity_chart.js"></script>',
+                '<script src="/static/js/market_history_chart.js"></script>',
+            ])
+        if marker in html:
+            for script in scripts:
+                if script not in html:
+                    html = html.replace(marker, script + "\n" + marker, 1)
+            response.set_data(html)
     return response
 
 
@@ -71,11 +83,13 @@ def login_required(view):
     def wrapped(*args, **kwargs):
         if not session.get("authenticated"):
             return redirect(url_for("home"))
+        if session.get("must_change_password"):
+            return redirect(url_for("change_member_password"))
         return view(*args, **kwargs)
     return wrapped
 
 
-def valid_member_credentials(username, password):
+def valid_legacy_member_credentials(username, password):
     configured_username = os.environ.get("MEMBER_USERNAME", "")
     password_hash = os.environ.get("MEMBER_PASSWORD_HASH", "")
     if not configured_username or not password_hash:
@@ -186,6 +200,43 @@ def home():
     )
 
 
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "GET":
+        return render_template("signup.html", error=None, success=None)
+
+    full_name = request.form.get("full_name", "").strip()
+    email = request.form.get("email", "").strip()
+    try:
+        token = begin_signup(full_name, email)
+        verification_url = url_for("verify_email", token=token, _external=True, _scheme="https")
+        send_verification_email(email, full_name, verification_url)
+        return render_template(
+            "signup.html",
+            error=None,
+            success="Verification email sent. Check your inbox and open the link within 30 minutes.",
+            full_name=full_name,
+            email=email,
+        )
+    except (ValueError, RuntimeError) as exc:
+        return render_template(
+            "signup.html",
+            error=str(exc),
+            success=None,
+            full_name=full_name,
+            email=email,
+        ), 400
+
+
+@app.route("/verify-email/<token>")
+def verify_email(token):
+    try:
+        credentials = verify_email_token(token)
+        return render_template("verified_account.html", credentials=credentials, error=None)
+    except ValueError as exc:
+        return render_template("verified_account.html", credentials=None, error=str(exc)), 400
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -193,11 +244,25 @@ def login():
 
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "")
-    if valid_member_credentials(username, password):
+
+    if valid_legacy_member_credentials(username, password):
         session.clear()
         session.permanent = True
         session["authenticated"] = True
         session["username"] = username
+        session["legacy_member"] = True
+        return redirect(url_for("dashboard"))
+
+    account = authenticate_account(username, password)
+    if account:
+        session.clear()
+        session.permanent = True
+        session["authenticated"] = True
+        session["username"] = account["username"]
+        session["account_id"] = account["id"]
+        session["must_change_password"] = bool(account["must_change_password"])
+        if session["must_change_password"]:
+            return redirect(url_for("change_member_password"))
         return redirect(url_for("dashboard"))
 
     return render_template(
@@ -205,6 +270,28 @@ def login():
         authenticated=False,
         login_error="Invalid username or password.",
     ), 401
+
+
+@app.route("/change-password", methods=["GET", "POST"])
+def change_member_password():
+    if not session.get("authenticated") or not session.get("account_id"):
+        return redirect(url_for("home"))
+    if not session.get("must_change_password"):
+        return redirect(url_for("dashboard"))
+    if request.method == "GET":
+        return render_template("change_password.html", error=None)
+
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
+    if new_password != confirm_password:
+        return render_template("change_password.html", error="New passwords do not match."), 400
+    try:
+        change_password(session["account_id"], current_password, new_password)
+        session["must_change_password"] = False
+        return redirect(url_for("dashboard"))
+    except ValueError as exc:
+        return render_template("change_password.html", error=str(exc)), 400
 
 
 @app.route("/logout")
