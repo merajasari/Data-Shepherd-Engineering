@@ -129,7 +129,7 @@ def get_recent_prices(
     symbol: str,
     limit: int = 20,
 ) -> list:
-    """Return recent market history for one symbol."""
+    """Return the most recent market sessions, newest first."""
 
     df = load_gold_data(symbol)
 
@@ -137,7 +137,12 @@ def get_recent_prices(
         "timestamp"
     )
 
-    recent = df.tail(limit)
+    # Select the latest N rows, then reverse them for presentation so callers
+    # that display the first rows see the newest completed trading sessions.
+    recent = df.tail(limit).sort_values(
+        "timestamp",
+        ascending=False,
+    )
 
     records = []
 
