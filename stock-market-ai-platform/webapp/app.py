@@ -43,7 +43,7 @@ app.config.update(
 
 @app.after_request
 def inject_dashboard_market_chart(response):
-    """Load dashboard-only interactive chart modules."""
+    """Load dashboard-only interactive chart and layout modules."""
     if (
         request.path == "/dashboard"
         and response.mimetype == "text/html"
@@ -52,6 +52,7 @@ def inject_dashboard_market_chart(response):
         html = response.get_data(as_text=True)
         marker = "</body>"
         scripts = (
+            '<script src="/static/js/dashboard_layout.js"></script>\n'
             '<script src="/static/js/v4_equity_chart.js"></script>\n'
             '<script src="/static/js/market_history_chart.js"></script>'
         )
