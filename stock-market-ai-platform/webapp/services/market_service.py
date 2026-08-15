@@ -129,7 +129,11 @@ def get_recent_prices(
     symbol: str,
     limit: int = 20,
 ) -> list:
-    """Return the most recent market sessions, newest first."""
+    """Return the most recent market sessions, newest first.
+
+    Moving averages are included so the presentation layer can render the
+    interactive historical price/SMA chart from the same read-only payload.
+    """
 
     df = load_gold_data(symbol)
 
@@ -175,6 +179,21 @@ def get_recent_prices(
                 "daily_change_pct":
                     float(row["daily_change_pct"])
                     if pd.notna(row["daily_change_pct"])
+                    else None,
+
+                "sma_20":
+                    float(row["sma_20"])
+                    if "sma_20" in recent.columns and pd.notna(row["sma_20"])
+                    else None,
+
+                "sma_50":
+                    float(row["sma_50"])
+                    if "sma_50" in recent.columns and pd.notna(row["sma_50"])
+                    else None,
+
+                "sma_200":
+                    float(row["sma_200"])
+                    if "sma_200" in recent.columns and pd.notna(row["sma_200"])
                     else None,
 
                 "volume":
