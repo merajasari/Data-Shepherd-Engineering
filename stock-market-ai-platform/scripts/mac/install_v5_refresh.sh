@@ -12,9 +12,10 @@ UID_VALUE="$(id -u)"
 
 # Invoke frequently, but let Python's persistent rolling quota ledger decide
 # how many Tiingo REST calls are safe right now. After each successful refresh
-# invocation, regenerate the frozen V5 ranking snapshot. While Bronze is still
-# catching up this simply preserves rankings on the latest common EOD date;
-# once all data layers advance, rankings advance automatically too.
+# invocation, regenerate the frozen V5 ranking snapshot and run the isolated
+# V5 forward evaluator. Before the genuine future holdout starts, the evaluator
+# refuses to journal anything. At/after the holdout start, its decision-date
+# deduplication guarantees at most one immutable signal record per snapshot.
 INTERVAL_SECONDS=300
 HOURLY_REQUEST_LIMIT=45
 
@@ -32,7 +33,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; exec '$PYTHON' -u -m ml.run_v5_inference; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; exec '$PYTHON' -u -m ml.run_paper_cycle_v5; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -53,4 +54,6 @@ echo "Overlap guard: $LOCK_DIR"
 echo "Rolling Tiingo scheduler limit: $HOURLY_REQUEST_LIMIT requests / 60 minutes"
 echo "Catch-up policy: use all currently available rolling-hour capacity"
 echo "V5 inference: regenerate rankings after each successful refresh invocation"
+echo "V5 forward evaluator: automatic after inference"
+echo "Holdout safety: no V5 forward journal write before 2026-09-01; one record per decision date afterward"
 echo "Logs: $LOG_DIR/v5_refresh.log"
