@@ -7,7 +7,7 @@ and latest quotes/status are written beneath data/live/crypto_rt.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import math
@@ -119,7 +119,7 @@ class Collector:
         try:
             price = float(msg["price"])
             size = float(msg.get("last_size") or 0.0)
-            ts = pd.Timestamp(msg.get("time"), tz="UTC") if msg.get("time") else pd.Timestamp.now(tz="UTC")
+            ts = pd.to_datetime(msg.get("time"), utc=True) if msg.get("time") else pd.Timestamp.now(tz="UTC")
         except (KeyError, TypeError, ValueError):
             return
         epoch = ts.timestamp()
