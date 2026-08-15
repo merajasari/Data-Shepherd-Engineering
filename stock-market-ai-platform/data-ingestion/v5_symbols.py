@@ -1,7 +1,8 @@
 """Isolated stock-universe configuration for V5 research.
 
-V4 continues to use ``symbols.py``.  Nothing in the frozen V4 workflow
-imports this module.
+V4 continues to use ``symbols.py``. Nothing in the frozen V4 workflow imports
+this module. Company names are presentation metadata only and do not affect the
+frozen V5 model, features, rankings, or portfolio contract.
 """
 
 V5_BENCHMARK_SYMBOL = "SPY"
@@ -50,6 +51,110 @@ V5_SYMBOLS_BY_SECTOR = {
 }
 
 
+V5_COMPANY_NAMES = {
+    "AAPL": "Apple Inc.",
+    "ABBV": "AbbVie Inc.",
+    "ABT": "Abbott Laboratories",
+    "ADBE": "Adobe Inc.",
+    "ADP": "Automatic Data Processing, Inc.",
+    "AEP": "American Electric Power Company, Inc.",
+    "AMAT": "Applied Materials, Inc.",
+    "AMD": "Advanced Micro Devices, Inc.",
+    "AMGN": "Amgen Inc.",
+    "AMT": "American Tower Corporation",
+    "AMZN": "Amazon.com, Inc.",
+    "APD": "Air Products and Chemicals, Inc.",
+    "AVGO": "Broadcom Inc.",
+    "AXP": "American Express Company",
+    "BA": "The Boeing Company",
+    "BAC": "Bank of America Corporation",
+    "BKNG": "Booking Holdings Inc.",
+    "BLK": "BlackRock, Inc.",
+    "C": "Citigroup Inc.",
+    "CAT": "Caterpillar Inc.",
+    "CMCSA": "Comcast Corporation",
+    "CMG": "Chipotle Mexican Grill, Inc.",
+    "COP": "ConocoPhillips",
+    "COST": "Costco Wholesale Corporation",
+    "CRM": "Salesforce, Inc.",
+    "CSCO": "Cisco Systems, Inc.",
+    "CVX": "Chevron Corporation",
+    "DE": "Deere & Company",
+    "DIS": "The Walt Disney Company",
+    "DUK": "Duke Energy Corporation",
+    "EOG": "EOG Resources, Inc.",
+    "EQIX": "Equinix, Inc.",
+    "ETN": "Eaton Corporation plc",
+    "FCX": "Freeport-McMoRan Inc.",
+    "GE": "GE Aerospace",
+    "GILD": "Gilead Sciences, Inc.",
+    "GOOGL": "Alphabet Inc.",
+    "GS": "The Goldman Sachs Group, Inc.",
+    "HD": "The Home Depot, Inc.",
+    "HON": "Honeywell International Inc.",
+    "IBM": "International Business Machines Corporation",
+    "INTU": "Intuit Inc.",
+    "ISRG": "Intuitive Surgical, Inc.",
+    "JNJ": "Johnson & Johnson",
+    "JPM": "JPMorgan Chase & Co.",
+    "KO": "The Coca-Cola Company",
+    "LIN": "Linde plc",
+    "LLY": "Eli Lilly and Company",
+    "LMT": "Lockheed Martin Corporation",
+    "LOW": "Lowe's Companies, Inc.",
+    "MA": "Mastercard Incorporated",
+    "MAR": "Marriott International, Inc.",
+    "MCD": "McDonald's Corporation",
+    "MDLZ": "Mondelez International, Inc.",
+    "MDT": "Medtronic plc",
+    "META": "Meta Platforms, Inc.",
+    "MO": "Altria Group, Inc.",
+    "MPC": "Marathon Petroleum Corporation",
+    "MRK": "Merck & Co., Inc.",
+    "MS": "Morgan Stanley",
+    "MSFT": "Microsoft Corporation",
+    "MU": "Micron Technology, Inc.",
+    "NEE": "NextEra Energy, Inc.",
+    "NFLX": "Netflix, Inc.",
+    "NKE": "NIKE, Inc.",
+    "NOW": "ServiceNow, Inc.",
+    "NVDA": "NVIDIA Corporation",
+    "ORCL": "Oracle Corporation",
+    "ORLY": "O'Reilly Automotive, Inc.",
+    "PANW": "Palo Alto Networks, Inc.",
+    "PEP": "PepsiCo, Inc.",
+    "PG": "The Procter & Gamble Company",
+    "PLD": "Prologis, Inc.",
+    "PLTR": "Palantir Technologies Inc.",
+    "PM": "Philip Morris International Inc.",
+    "PSX": "Phillips 66",
+    "QCOM": "QUALCOMM Incorporated",
+    "RTX": "RTX Corporation",
+    "SBUX": "Starbucks Corporation",
+    "SCHW": "The Charles Schwab Corporation",
+    "SHW": "The Sherwin-Williams Company",
+    "SLB": "SLB",
+    "SO": "The Southern Company",
+    "SPGI": "S&P Global Inc.",
+    "SYK": "Stryker Corporation",
+    "T": "AT&T Inc.",
+    "TJX": "The TJX Companies, Inc.",
+    "TMUS": "T-Mobile US, Inc.",
+    "TMO": "Thermo Fisher Scientific Inc.",
+    "TSLA": "Tesla, Inc.",
+    "TXN": "Texas Instruments Incorporated",
+    "UNH": "UnitedHealth Group Incorporated",
+    "UNP": "Union Pacific Corporation",
+    "UPS": "United Parcel Service, Inc.",
+    "V": "Visa Inc.",
+    "VZ": "Verizon Communications Inc.",
+    "WELL": "Welltower Inc.",
+    "WFC": "Wells Fargo & Company",
+    "WMT": "Walmart Inc.",
+    "XOM": "Exxon Mobil Corporation",
+}
+
+
 V5_SYMBOLS = tuple(
     symbol
     for sector_symbols in V5_SYMBOLS_BY_SECTOR.values()
@@ -75,6 +180,23 @@ def get_v5_sector(symbol):
     raise KeyError(f"Symbol is not in the V5 candidate universe: {symbol}")
 
 
+def get_v5_company_name(symbol):
+    """Return dashboard presentation name for a V5 candidate symbol."""
+    symbol = symbol.upper().strip()
+    try:
+        return V5_COMPANY_NAMES[symbol]
+    except KeyError as exc:
+        raise KeyError(f"Company name is not configured for V5 symbol: {symbol}") from exc
+
+
+def get_v5_symbol_options():
+    """Return ticker/company metadata alphabetically by ticker for selectors."""
+    return [
+        {"symbol": symbol, "company_name": get_v5_company_name(symbol)}
+        for symbol in sorted(V5_SYMBOLS)
+    ]
+
+
 def validate_v5_universe():
     """Fail fast if the research-universe contract is violated."""
     if len(V5_SYMBOLS) != 100:
@@ -83,6 +205,13 @@ def validate_v5_universe():
         raise ValueError("V5 candidate symbols must be unique")
     if V5_BENCHMARK_SYMBOL in V5_SYMBOLS:
         raise ValueError("SPY must remain outside the V5 candidate universe")
+    if set(V5_COMPANY_NAMES) != set(V5_SYMBOLS):
+        missing = sorted(set(V5_SYMBOLS) - set(V5_COMPANY_NAMES))
+        extra = sorted(set(V5_COMPANY_NAMES) - set(V5_SYMBOLS))
+        raise ValueError(
+            "V5 company-name metadata must match the candidate universe; "
+            f"missing={missing}, extra={extra}"
+        )
 
 
 validate_v5_universe()
