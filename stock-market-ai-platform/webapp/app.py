@@ -25,6 +25,8 @@ from webapp.services.account_service import (  # noqa: E402
     authenticate_account,
     begin_signup,
     change_password,
+    complete_account_setup,
+    get_account_setup_context,
     initialize_account_store,
     send_verification_email,
     verify_email_token,
@@ -122,28 +124,19 @@ def build_stock_dashboard(symbol):
 
 
 def build_v4_dashboard_payload():
-    """Return V4 state with stable dashboard-facing compatibility keys."""
     forward = dict(summarize_journal())
     portfolio = dict(get_portfolio_summary())
-
     forward["observations"] = forward.get("observation_count", 0)
     portfolio["open_positions"] = portfolio.get("open_position_count", 0)
     portfolio["top_five"] = forward.get("latest_top_five", [])
-
     starting_cash = float(portfolio.get("starting_cash") or 100000.0)
     equity = float(portfolio.get("equity") or starting_cash)
     portfolio["net_change"] = equity - starting_cash
-    portfolio["net_change_pct"] = (
-        (equity / starting_cash - 1.0) if starting_cash else 0.0
-    )
+    portfolio["net_change_pct"] = (equity / starting_cash - 1.0) if starting_cash else 0.0
     portfolio["top_five_details"] = [
-        {
-            "symbol": symbol,
-            "company_name": get_v5_company_name(symbol),
-        }
+        {"symbol": symbol, "company_name": get_v5_company_name(symbol)}
         for symbol in portfolio["top_five"]
     ]
-
     history = list(forward.get("equity_history", []))
     chart_history = [
         {
@@ -153,11 +146,7 @@ def build_v4_dashboard_payload():
             "synthetic_baseline": True,
         },
         *[
-            {
-                **row,
-                "label": None,
-                "synthetic_baseline": False,
-            }
+            {**row, "label": None, "synthetic_baseline": False}
             for row in history
         ],
     ]
@@ -173,18 +162,12 @@ def build_v4_dashboard_payload():
             }
         )
     elif chart_history:
-        chart_history[-1] = {
-            **chart_history[-1],
-            "label": "Current",
-            "current_mark": True,
-        }
+        chart_history[-1] = {**chart_history[-1], "label": "Current", "current_mark": True}
     forward["chart_history"] = chart_history
-
     return {"forward": forward, "portfolio": portfolio}
 
 
 def enrich_ranking_rows(rows):
-    """Add presentation-only company names without changing V5 ranking data."""
     return [
         {**dict(row), "company_name": get_v5_company_name(row["symbol"])}
         for row in rows
@@ -231,10 +214,55 @@ def signup():
 @app.route("/verify-email/<token>")
 def verify_email(token):
     try:
-        credentials = verify_email_token(token)
-        return render_template("verified_account.html", credentials=credentials, error=None)
+        setup = verify_email_token(token)
+        session["verified_setup_account_id"] = setup["account_id"]
+        return render_template(
+            "verified_account.html",
+            mode="choose_username",
+            setup=setup,
+            credentials=None,
+            error=None,
+        )
     except ValueError as exc:
-        return render_template("verified_account.html", credentials=None, error=str(exc)), 400
+        return render_template(
+            "verified_account.html",
+            mode="error",
+            setup=None,
+            credentials=None,
+            error=str(exc),
+        ), 400
+
+
+@app.route("/complete-account", methods=["POST"])
+def complete_account():
+    account_id = session.get("verified_setup_account_id")
+    if not account_id:
+        return redirect(url_for("signup"))
+
+    requested_username = request.form.get("username", "").strip()
+    try:
+        credentials = complete_account_setup(account_id, requested_username)
+        session.pop("verified_setup_account_id", None)
+        return render_template(
+            "verified_account.html",
+            mode="credentials",
+            setup=None,
+            credentials=credentials,
+            error=None,
+        )
+    except ValueError as exc:
+        try:
+            setup = get_account_setup_context(account_id, requested_username)
+        except ValueError:
+            session.pop("verified_setup_account_id", None)
+            return redirect(url_for("signup"))
+        return render_template(
+            "verified_account.html",
+            mode="choose_username",
+            setup=setup,
+            credentials=None,
+            error=str(exc),
+        ), 400
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -319,9 +347,7 @@ def dashboard():
             market = get_market_summary(row["symbol"])
             live = get_live_quote(row["symbol"])
             row = dict(row)
-            row["display_price"] = (
-                live["reference_price"] if live["available"] else market["close"]
-            )
+            row["display_price"] = live["reference_price"] if live["available"] else market["close"]
             row["eod_change_pct"] = market["price_change_pct"]
             row["rsi_14"] = market["rsi_14"]
             top10_rows.append(row)
@@ -354,10 +380,7 @@ def api_dashboard_stock(symbol):
     symbol = symbol.upper().strip()
     if symbol not in V5_SYMBOLS:
         return jsonify({"error": "unsupported symbol"}), 404
-    return jsonify({
-        "stock": build_stock_dashboard(symbol),
-        "recent_prices": get_recent_prices(symbol, limit=60),
-    })
+    return jsonify({"stock": build_stock_dashboard(symbol), "recent_prices": get_recent_prices(symbol, limit=60)})
 
 
 @app.route("/api/prices/<symbol>")
