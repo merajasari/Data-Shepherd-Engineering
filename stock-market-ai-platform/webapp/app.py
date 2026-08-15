@@ -88,13 +88,48 @@ def build_stock_dashboard(symbol):
 
 def build_v4_dashboard_payload():
     """Return V4 state with stable dashboard-facing compatibility keys."""
-    forward = summarize_journal()
-    portfolio = get_portfolio_summary()
-    forward = dict(forward)
-    portfolio = dict(portfolio)
+    forward = dict(summarize_journal())
+    portfolio = dict(get_portfolio_summary())
+
     forward["observations"] = forward.get("observation_count", 0)
     portfolio["open_positions"] = portfolio.get("open_position_count", 0)
     portfolio["top_five"] = forward.get("latest_top_five", [])
+
+    starting_cash = float(portfolio.get("starting_cash") or 100000.0)
+    equity = float(portfolio.get("equity") or starting_cash)
+    portfolio["net_change"] = equity - starting_cash
+    portfolio["net_change_pct"] = (
+        (equity / starting_cash - 1.0) if starting_cash else 0.0
+    )
+    portfolio["top_five_details"] = [
+        {
+            "symbol": symbol,
+            "company_name": get_v5_company_name(symbol),
+        }
+        for symbol in portfolio["top_five"]
+    ]
+
+    # The journal begins after the simulated portfolio was initialized. Add a
+    # synthetic $100k baseline point for the visualization only so the chart
+    # answers the intuitive question: gain/loss versus starting paper capital.
+    history = list(forward.get("equity_history", []))
+    forward["chart_history"] = [
+        {
+            "timestamp": forward.get("start_timestamp"),
+            "label": "Start",
+            "equity": starting_cash,
+            "synthetic_baseline": True,
+        },
+        *[
+            {
+                **row,
+                "label": None,
+                "synthetic_baseline": False,
+            }
+            for row in history
+        ],
+    ]
+
     return {"forward": forward, "portfolio": portfolio}
 
 
