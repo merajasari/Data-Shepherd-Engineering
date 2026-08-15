@@ -1,7 +1,8 @@
 """Data Shepherd Engineering presentation layer.
 
-The member dashboard presents the frozen V5 cross-sectional ranking model
-natively while keeping the separate frozen V4 paper-trading monitor visible.
+The member dashboard presents the frozen V5 cross-sectional ranking model,
+the separate frozen V4 stock paper-trading monitor, and a read-only Crypto V1
+research simulation view.
 """
 
 import os
@@ -31,6 +32,7 @@ from webapp.services.account_service import (  # noqa: E402
     send_verification_email,
     verify_email_token,
 )
+from webapp.services.crypto_dashboard_service import get_crypto_dashboard_payload  # noqa: E402
 from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
@@ -59,7 +61,7 @@ def inject_dashboard_modules(response):
         html = response.get_data(as_text=True)
         marker = "</body>"
         scripts = []
-        if request.path in {"/", "/dashboard"}:
+        if request.path in {"/", "/dashboard", "/crypto"}:
             scripts.append('<script src="/static/js/signup_button.js"></script>')
         if request.path == "/dashboard":
             scripts.extend([
@@ -365,6 +367,18 @@ def dashboard():
         v5_symbols=V5_SYMBOL_OPTIONS,
         v5=rankings_payload,
     )
+
+
+@app.route("/crypto")
+@login_required
+def crypto_dashboard():
+    return render_template("crypto.html", crypto=get_crypto_dashboard_payload())
+
+
+@app.route("/api/crypto-v1")
+@login_required
+def api_crypto_v1():
+    return jsonify(get_crypto_dashboard_payload())
 
 
 @app.route("/api/v5-rankings")
