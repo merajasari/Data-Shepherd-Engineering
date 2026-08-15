@@ -18,6 +18,8 @@ DB_PATH = Path(os.environ.get("MEMBER_DB_PATH", "data/live/member_accounts.db"))
 TOKEN_TTL_MINUTES = 30
 USERNAME_SUFFIX_DIGITS = 4
 TEMP_PASSWORD_LENGTH = 16
+USERNAME_MIN_LENGTH = 4
+USERNAME_MAX_LENGTH = 24
 
 
 def _now() -> datetime:
@@ -26,15 +28,20 @@ def _now() -> datetime:
 
 def _connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
 def initialize_account_store() -> None:
     with _connect() as conn:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS member_accounts (
@@ -85,6 +92,67 @@ def _safe_username_base(full_name: str, email: str) -> str:
     return base or "member"
 
 
+def normalize_username(username: str) -> str:
+    return (username or "").strip().lower()
+
+
+def validate_username(username: str) -> str:
+    username = normalize_username(username)
+    if not (USERNAME_MIN_LENGTH <= len(username) <= USERNAME_MAX_LENGTH):
+        raise ValueError(
+            f"Username must be {USERNAME_MIN_LENGTH}-{USERNAME_MAX_LENGTH} characters long."
+        )
+    if not re.fullmatch(r"[a-z0-9_]+", username):
+        raise ValueError("Username may contain only letters, numbers, and underscores.")
+    if username[0].isdigit():
+        raise ValueError("Username must begin with a letter.")
+    return username
+
+
+def username_available(username: str, account_id: int | None = None) -> bool:
+    initialize_account_store()
+    username = normalize_username(username)
+    with _connect() as conn:
+        if account_id is None:
+            row = conn.execute(
+                "SELECT id FROM member_accounts WHERE username = ? COLLATE NOCASE",
+                (username,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id FROM member_accounts WHERE username = ? COLLATE NOCASE AND id <> ?",
+                (username, account_id),
+            ).fetchone()
+    return row is None
+
+
+def generate_username_suggestions(
+    full_name: str,
+    email: str,
+    account_id: int | None = None,
+    requested: str | None = None,
+    count: int = 5,
+) -> list[str]:
+    base = _safe_username_base(full_name, email)
+    requested_base = re.sub(r"[^a-z0-9]", "", normalize_username(requested or ""))[:18]
+    bases = [b for b in [requested_base, base, email.split("@", 1)[0].lower()] if b]
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for candidate_base in bases:
+        candidate_base = re.sub(r"[^a-z0-9]", "", candidate_base)[:18] or "member"
+        for _ in range(40):
+            suffix = f"{secrets.randbelow(10000):04d}"
+            candidate = f"{candidate_base}{suffix}"[:USERNAME_MAX_LENGTH]
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            if username_available(candidate, account_id):
+                suggestions.append(candidate)
+                if len(suggestions) >= count:
+                    return suggestions
+    return suggestions
+
+
 def _generate_unique_username(conn: sqlite3.Connection, full_name: str, email: str) -> str:
     base = _safe_username_base(full_name, email)
     for _ in range(100):
@@ -113,7 +181,6 @@ def _generate_temp_password() -> str:
 
 
 def begin_signup(full_name: str, email: str) -> str:
-    """Create/update a pending account and return a one-time verification token."""
     initialize_account_store()
     full_name = (full_name or "").strip()
     email = normalize_email(email)
@@ -146,19 +213,13 @@ def begin_signup(full_name: str, email: str) -> str:
             )
         else:
             cur = conn.execute(
-                """
-                INSERT INTO member_accounts(full_name, email, created_at_utc)
-                VALUES (?, ?, ?)
-                """,
+                "INSERT INTO member_accounts(full_name, email, created_at_utc) VALUES (?, ?, ?)",
                 (full_name, email, now.isoformat()),
             )
             account_id = cur.lastrowid
 
         conn.execute(
-            """
-            INSERT INTO email_verifications(account_id, token_hash, expires_at_utc, created_at_utc)
-            VALUES (?, ?, ?, ?)
-            """,
+            "INSERT INTO email_verifications(account_id, token_hash, expires_at_utc, created_at_utc) VALUES (?, ?, ?, ?)",
             (account_id, _token_hash(token), expires.isoformat(), now.isoformat()),
         )
 
@@ -166,7 +227,7 @@ def begin_signup(full_name: str, email: str) -> str:
 
 
 def verify_email_token(token: str) -> dict:
-    """Consume a verification token and issue credentials once."""
+    """Consume a verification token and prepare a verified account for username selection."""
     initialize_account_store()
     now = _now()
     digest = _token_hash(token or "")
@@ -174,7 +235,7 @@ def verify_email_token(token: str) -> dict:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT v.*, a.full_name, a.email, a.username, a.email_verified
+            SELECT v.*, a.full_name, a.email, a.username, a.email_verified, a.password_hash
             FROM email_verifications v
             JOIN member_accounts a ON a.id = v.account_id
             WHERE v.token_hash = ?
@@ -187,20 +248,17 @@ def verify_email_token(token: str) -> dict:
             raise ValueError("This verification link has already been used.")
         if datetime.fromisoformat(row["expires_at_utc"]) < now:
             raise ValueError("This verification link has expired. Please sign up again.")
+        if row["password_hash"]:
+            raise ValueError("This account has already completed setup.")
 
-        if row["email_verified"] and row["username"]:
-            raise ValueError("This email address is already verified.")
-
-        username = _generate_unique_username(conn, row["full_name"], row["email"])
-        temp_password = _generate_temp_password()
+        username = row["username"] or _generate_unique_username(conn, row["full_name"], row["email"])
         conn.execute(
             """
             UPDATE member_accounts
-            SET username = ?, password_hash = ?, email_verified = 1,
-                must_change_password = 1, verified_at_utc = ?
+            SET username = ?, email_verified = 1, verified_at_utc = ?
             WHERE id = ?
             """,
-            (username, generate_password_hash(temp_password), now.isoformat(), row["account_id"]),
+            (username, now.isoformat(), row["account_id"]),
         )
         conn.execute(
             "UPDATE email_verifications SET consumed_at_utc = ? WHERE id = ?",
@@ -208,10 +266,76 @@ def verify_email_token(token: str) -> dict:
         )
 
     return {
+        "account_id": row["account_id"],
         "full_name": row["full_name"],
         "email": row["email"],
         "username": username,
+        "suggestions": generate_username_suggestions(
+            row["full_name"], row["email"], row["account_id"], username
+        ),
+    }
+
+
+def complete_account_setup(account_id: int, requested_username: str) -> dict:
+    """Finalize a verified account with the member's chosen unique username."""
+    initialize_account_store()
+    requested_username = validate_username(requested_username)
+    legacy_username = normalize_username(os.environ.get("MEMBER_USERNAME", ""))
+    if requested_username == legacy_username and legacy_username:
+        raise ValueError("That username is already in use.")
+
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM member_accounts WHERE id = ? AND email_verified = 1 AND active = 1",
+            (account_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Verified account setup session is no longer available.")
+        if row["password_hash"]:
+            raise ValueError("This account has already completed setup.")
+
+        duplicate = conn.execute(
+            "SELECT id FROM member_accounts WHERE username = ? COLLATE NOCASE AND id <> ?",
+            (requested_username, account_id),
+        ).fetchone()
+        if duplicate:
+            raise ValueError("That username is already in use.")
+
+        temp_password = _generate_temp_password()
+        conn.execute(
+            """
+            UPDATE member_accounts
+            SET username = ?, password_hash = ?, must_change_password = 1
+            WHERE id = ?
+            """,
+            (requested_username, generate_password_hash(temp_password), account_id),
+        )
+
+    return {
+        "full_name": row["full_name"],
+        "email": row["email"],
+        "username": requested_username,
         "temporary_password": temp_password,
+    }
+
+
+def get_account_setup_context(account_id: int, requested: str | None = None) -> dict:
+    initialize_account_store()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, full_name, email, username, email_verified, password_hash FROM member_accounts WHERE id = ?",
+            (account_id,),
+        ).fetchone()
+    if not row or not row["email_verified"] or row["password_hash"]:
+        raise ValueError("Verified account setup session is no longer available.")
+    return {
+        "account_id": row["id"],
+        "full_name": row["full_name"],
+        "email": row["email"],
+        "username": normalize_username(requested) or row["username"],
+        "suggestions": generate_username_suggestions(
+            row["full_name"], row["email"], row["id"], requested or row["username"]
+        ),
     }
 
 
@@ -257,17 +381,12 @@ def change_password(account_id: int, current_password: str, new_password: str) -
         if not row or not check_password_hash(row["password_hash"], current_password or ""):
             raise ValueError("Current password is incorrect.")
         conn.execute(
-            """
-            UPDATE member_accounts
-            SET password_hash = ?, must_change_password = 0
-            WHERE id = ?
-            """,
+            "UPDATE member_accounts SET password_hash = ?, must_change_password = 0 WHERE id = ?",
             (generate_password_hash(new_password), account_id),
         )
 
 
 def send_verification_email(recipient: str, full_name: str, verification_url: str) -> None:
-    """Send the account verification email through the Resend API."""
     api_key = os.environ.get("RESEND_API_KEY", "").strip()
     from_email = os.environ.get(
         "RESEND_FROM_EMAIL",
@@ -280,11 +399,7 @@ def send_verification_email(recipient: str, full_name: str, verification_url: st
         raise RuntimeError("Email delivery is not configured. Set RESEND_FROM_EMAIL.")
 
     resend.api_key = api_key
-    sender = (
-        from_email
-        if "<" in from_email and ">" in from_email
-        else f"Data Shepherd Engineering <{from_email}>"
-    )
+    sender = from_email if "<" in from_email and ">" in from_email else f"Data Shepherd Engineering <{from_email}>"
 
     text_body = (
         f"Hello {full_name},\n\n"
@@ -292,7 +407,7 @@ def send_verification_email(recipient: str, full_name: str, verification_url: st
         "Verify your email address using this secure link:\n"
         f"{verification_url}\n\n"
         f"The link expires in {TOKEN_TTL_MINUTES} minutes.\n\n"
-        "After verification, we will generate your member username and a temporary password. "
+        "After verification, you will choose your unique member username and receive a temporary password. "
         "You will be required to choose a new password on your first login.\n\n"
         "If you did not request this account, you can ignore this email.\n"
     )
@@ -302,14 +417,9 @@ def send_verification_email(recipient: str, full_name: str, verification_url: st
       <h2 style="color:#0c405c">Verify your Data Shepherd Engineering account</h2>
       <p>Hello {full_name},</p>
       <p>Thanks for signing up for Data Shepherd Engineering.</p>
-      <p style="margin:28px 0">
-        <a href="{verification_url}"
-           style="display:inline-block;padding:13px 20px;border-radius:8px;background:#0ca89a;color:white;text-decoration:none;font-weight:700">
-          Verify email address
-        </a>
-      </p>
+      <p style="margin:28px 0"><a href="{verification_url}" style="display:inline-block;padding:13px 20px;border-radius:8px;background:#0ca89a;color:white;text-decoration:none;font-weight:700">Verify email address</a></p>
       <p>This secure link expires in <strong>{TOKEN_TTL_MINUTES} minutes</strong>.</p>
-      <p>After verification, we will generate your member username and a temporary password. You will be required to choose a new password on your first login.</p>
+      <p>After verification, you will choose your unique member username and receive a temporary password. You will be required to choose a new password on your first login.</p>
       <p style="color:#64748b;font-size:13px">If you did not request this account, you can ignore this email.</p>
     </div>
     """
