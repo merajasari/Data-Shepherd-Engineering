@@ -135,6 +135,13 @@ def get_recent_prices(
 
     df = df.sort_values(
         "timestamp"
+    ).reset_index(drop=True)
+
+    # Compute close-to-close daily performance while the rows are still in
+    # chronological order. This keeps the percentage tied to the prior
+    # completed trading session, including across weekends and holidays.
+    df["daily_change_pct"] = (
+        df["close"].pct_change()
     )
 
     # Select the latest N rows, then reverse them for presentation so callers
@@ -164,6 +171,11 @@ def get_recent_prices(
 
                 "close":
                     float(row["close"]),
+
+                "daily_change_pct":
+                    float(row["daily_change_pct"])
+                    if pd.notna(row["daily_change_pct"])
+                    else None,
 
                 "volume":
                     float(row["volume"]),
