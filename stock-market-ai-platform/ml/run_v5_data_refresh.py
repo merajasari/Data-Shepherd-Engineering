@@ -6,7 +6,8 @@ can use the currently available hourly budget immediately and later invocations
 resume only as older requests fall out of the rolling window.
 
 If all 101 V5 data symbols are current, Silver, Gold, and feature datasets are
-rebuilt only when they are behind the completed EOD target.
+rebuilt only when they are behind the completed EOD target.  Once features are
+current, the frozen V5 production inference artifact is refreshed as well.
 
 This module does not fit models, tune parameters, build research targets, place
 orders, or evaluate the future holdout.
@@ -155,6 +156,11 @@ def rebuild_data_layers():
     run_command([python, "-u", "data-ingestion/feature_pipeline.py"])
 
 
+def refresh_v5_rankings():
+    """Refresh the frozen production ranking artifact; never fit or tune."""
+    run_command([sys.executable, "-u", "ml/run_v5_inference.py"])
+
+
 def run_data_refresh(
     hourly_request_limit=DEFAULT_HOURLY_REQUEST_LIMIT,
     max_requests=None,
@@ -212,9 +218,11 @@ def run_data_refresh(
             raise RuntimeError(
                 "Feature refresh did not reach target for: " + ", ".join(stale)
             )
+        refresh_v5_rankings()
         return "rebuilt"
 
     print("Features already match the latest completed EOD session.")
+    refresh_v5_rankings()
     return "current"
 
 
