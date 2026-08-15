@@ -6,13 +6,12 @@ import hashlib
 import os
 import re
 import secrets
-import smtplib
 import sqlite3
 import string
 from datetime import datetime, timedelta, timezone
-from email.message import EmailMessage
 from pathlib import Path
 
+import resend
 from werkzeug.security import check_password_hash, generate_password_hash
 
 DB_PATH = Path(os.environ.get("MEMBER_DB_PATH", "data/live/member_accounts.db"))
@@ -268,22 +267,26 @@ def change_password(account_id: int, current_password: str, new_password: str) -
 
 
 def send_verification_email(recipient: str, full_name: str, verification_url: str) -> None:
-    """Send verification email using standard SMTP environment variables."""
-    host = os.environ.get("SMTP_HOST", "").strip()
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    username = os.environ.get("SMTP_USERNAME", "").strip()
-    password = os.environ.get("SMTP_PASSWORD", "")
-    sender = os.environ.get("SMTP_FROM_EMAIL", username).strip()
-    use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() not in {"0", "false", "no"}
+    """Send the account verification email through the Resend API."""
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    from_email = os.environ.get(
+        "RESEND_FROM_EMAIL",
+        "accounts@datashepherdengineering.com",
+    ).strip()
 
-    if not host or not sender:
-        raise RuntimeError("Email delivery is not configured. Set SMTP_HOST and SMTP_FROM_EMAIL.")
+    if not api_key:
+        raise RuntimeError("Email delivery is not configured. Set RESEND_API_KEY.")
+    if not from_email:
+        raise RuntimeError("Email delivery is not configured. Set RESEND_FROM_EMAIL.")
 
-    message = EmailMessage()
-    message["Subject"] = "Verify your Data Shepherd Engineering account"
-    message["From"] = sender
-    message["To"] = recipient
-    message.set_content(
+    resend.api_key = api_key
+    sender = (
+        from_email
+        if "<" in from_email and ">" in from_email
+        else f"Data Shepherd Engineering <{from_email}>"
+    )
+
+    text_body = (
         f"Hello {full_name},\n\n"
         "Thanks for signing up for Data Shepherd Engineering.\n\n"
         "Verify your email address using this secure link:\n"
@@ -294,9 +297,30 @@ def send_verification_email(recipient: str, full_name: str, verification_url: st
         "If you did not request this account, you can ignore this email.\n"
     )
 
-    with smtplib.SMTP(host, port, timeout=20) as smtp:
-        if use_tls:
-            smtp.starttls()
-        if username:
-            smtp.login(username, password)
-        smtp.send_message(message)
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#172033;line-height:1.6">
+      <h2 style="color:#0c405c">Verify your Data Shepherd Engineering account</h2>
+      <p>Hello {full_name},</p>
+      <p>Thanks for signing up for Data Shepherd Engineering.</p>
+      <p style="margin:28px 0">
+        <a href="{verification_url}"
+           style="display:inline-block;padding:13px 20px;border-radius:8px;background:#0ca89a;color:white;text-decoration:none;font-weight:700">
+          Verify email address
+        </a>
+      </p>
+      <p>This secure link expires in <strong>{TOKEN_TTL_MINUTES} minutes</strong>.</p>
+      <p>After verification, we will generate your member username and a temporary password. You will be required to choose a new password on your first login.</p>
+      <p style="color:#64748b;font-size:13px">If you did not request this account, you can ignore this email.</p>
+    </div>
+    """
+
+    try:
+        resend.Emails.send({
+            "from": sender,
+            "to": [normalize_email(recipient)],
+            "subject": "Verify your Data Shepherd Engineering account",
+            "html": html_body,
+            "text": text_body,
+        })
+    except Exception as exc:
+        raise RuntimeError(f"Unable to send verification email: {exc}") from exc
