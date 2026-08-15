@@ -6,7 +6,7 @@ natively while keeping the separate frozen V4 paper-trading monitor visible.
 
 import os
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from dotenv import load_dotenv
@@ -110,8 +110,8 @@ def build_v4_dashboard_payload():
     ]
 
     # The journal begins after the simulated portfolio was initialized. Add a
-    # synthetic $100k baseline point for the visualization only so the chart
-    # answers the intuitive question: gain/loss versus starting paper capital.
+    # synthetic $100k baseline for context, then append a read-only current
+    # mark-to-market point so the chart always reaches the equity shown above.
     history = list(forward.get("equity_history", []))
     forward["chart_history"] = [
         {
@@ -119,15 +119,24 @@ def build_v4_dashboard_payload():
             "label": "Start",
             "equity": starting_cash,
             "synthetic_baseline": True,
+            "current_snapshot": False,
         },
         *[
             {
                 **row,
                 "label": None,
                 "synthetic_baseline": False,
+                "current_snapshot": False,
             }
             for row in history
         ],
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "label": "Current",
+            "equity": equity,
+            "synthetic_baseline": False,
+            "current_snapshot": True,
+        },
     ]
 
     return {"forward": forward, "portfolio": portfolio}
