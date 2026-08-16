@@ -133,7 +133,6 @@ def reconcile_once(settle_seconds: int = DEFAULT_SETTLE_SECONDS) -> dict:
                 products[product_id] = item
                 errors += 1
 
-        # Latest authoritative candle snapshot for UI/future inference.
         latest = _latest_archived(product_id)
         if latest is not None:
             month_path = RAW_ROOT / product_id / f"{latest.strftime('%Y-%m')}.parquet"
@@ -179,9 +178,8 @@ def reconcile_once(settle_seconds: int = DEFAULT_SETTLE_SECONDS) -> dict:
 def _acquire_lock() -> None:
     LIVE_ROOT.mkdir(parents=True, exist_ok=True)
     try:
-        fd = LOCK_PATH.open("x")
-        fd.write_text(str(__import__("os").getpid()))
-        fd.close()
+        with LOCK_PATH.open("x", encoding="utf-8") as fd:
+            fd.write(str(__import__("os").getpid()))
     except FileExistsError:
         raise SystemExit("[SKIP] crypto 15m reconciliation already running")
 
