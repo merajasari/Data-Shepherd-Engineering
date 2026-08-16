@@ -9,6 +9,12 @@ paper-evaluation records only for genuinely new hourly decisions at/after the
 Before the holdout boundary the service runs in shadow mode and writes only a
 separate shadow snapshot. It never backfills missed holdout decisions and never
 places brokerage orders.
+
+The frozen Phase 1/V2 dataset was built with a minimum-alt-universe rule rather
+than requiring every ALT to have every timestamp. Forward inference therefore
+requires BTC plus at least the same frozen minimum number of ALT assets at the
+decision timestamp; an ALT with a genuine missing Coinbase candle is excluded
+from that hour rather than synthesized or allowed to stop inference.
 """
 from __future__ import annotations
 
@@ -41,6 +47,7 @@ LOCK_PATH = PHASE5_ROOT / "forward_service.lock"
 BTC = "BTC-USD"
 XRP = "XRP-USD"
 CORE_PRODUCTS = tuple(p for p in PRODUCTS if p != XRP)
+ALT_PRODUCTS = tuple(p for p in CORE_PRODUCTS if p != BTC)
 LABELS = ("BTC", "ALT", "CASH")
 HOLDOUT = pd.Timestamp("2026-09-01T00:00:00Z")
 COST_BPS = 5.0
@@ -116,46 +123,77 @@ def _read_recent(product_id: str, end: pd.Timestamp) -> pd.DataFrame:
 
 
 def _latest_hourly_decision_timestamp() -> pd.Timestamp:
-    latest = []
-    for product_id in CORE_PRODUCTS:
-        ts = _latest_available_timestamp(product_id)
-        if ts is None:
-            raise RuntimeError(f"No authoritative archive for {product_id}")
-        latest.append(ts)
-    common_ceiling = min(latest)
-    # Frozen Phase 1 cadence uses xx:00 candle timestamps. Only use an xx:00
-    # candle that is already present in every core product archive.
-    candidate = common_ceiling.floor("h")
-    return candidate
+    btc_latest = _latest_available_timestamp(BTC)
+    if btc_latest is None:
+        raise RuntimeError("No authoritative archive for BTC-USD")
+    return btc_latest.floor("h")
 
 
 def _build_hourly_feature_row(decision_ts: pd.Timestamp, frozen_features: list[str]) -> tuple[pd.DataFrame, dict]:
-    raw = {p: _read_recent(p, decision_ts) for p in CORE_PRODUCTS}
-    if any(decision_ts not in set(df["timestamp_utc"]) for df in raw.values()):
-        missing = [p for p, df in raw.items() if decision_ts not in set(df["timestamp_utc"])]
-        raise RuntimeError(f"Decision candle {decision_ts} missing for core products: {', '.join(missing)}")
+    btc_raw = _read_recent(BTC, decision_ts)
+    if decision_ts not in set(btc_raw["timestamp_utc"]):
+        raise RuntimeError(f"Decision candle {decision_ts} missing for BTC-USD")
 
-    btc_base = _build_base_features(raw[BTC])
+    alt_raw: dict[str, pd.DataFrame] = {}
+    missing_alts: list[str] = []
+    for product_id in ALT_PRODUCTS:
+        try:
+            df = _read_recent(product_id, decision_ts)
+        except RuntimeError:
+            missing_alts.append(product_id)
+            continue
+        if decision_ts not in set(df["timestamp_utc"]):
+            missing_alts.append(product_id)
+            continue
+        alt_raw[product_id] = df
+
+    if len(alt_raw) < MIN_ALT_ASSETS:
+        raise RuntimeError(
+            f"Only {len(alt_raw)} ALT assets have authoritative decision candle {decision_ts}; "
+            f"minimum required is {MIN_ALT_ASSETS}. Missing: {', '.join(missing_alts)}"
+        )
+
+    btc_base = _build_base_features(btc_raw)
     btc_context = _btc_context(btc_base)
 
     product_rows = []
-    for product_id in CORE_PRODUCTS:
-        base = btc_base.copy() if product_id == BTC else _build_base_features(raw[product_id])
+    btc_row = btc_base[btc_base["timestamp_utc"] == decision_ts].copy()
+    if btc_row.empty:
+        raise RuntimeError(f"No feature row at {decision_ts} for BTC-USD")
+    btc_row = btc_row.merge(btc_context, on="timestamp_utc", how="left", validate="one_to_one")
+    for bars in (1, 4, 16, 96):
+        btc_row[f"btc_relative_return_{bars}bar"] = btc_row[f"return_{bars}bar"] - btc_row[f"btc_return_{bars}bar"]
+    product_rows.append(btc_row)
+
+    feature_ready_alts: list[str] = []
+    feature_failed_alts: list[str] = []
+    for product_id, raw_df in alt_raw.items():
+        base = _build_base_features(raw_df)
         row = base[base["timestamp_utc"] == decision_ts].copy()
         if row.empty:
-            raise RuntimeError(f"No feature row at {decision_ts} for {product_id}")
+            feature_failed_alts.append(product_id)
+            continue
         row = row.merge(btc_context, on="timestamp_utc", how="left", validate="one_to_one")
         for bars in (1, 4, 16, 96):
             row[f"btc_relative_return_{bars}bar"] = row[f"return_{bars}bar"] - row[f"btc_return_{bars}bar"]
+        required_alt = list(ALT_STATE_COLUMNS) + ["return_1bar", "return_4bar", "return_16bar", "btc_relative_return_4bar", "btc_relative_return_16bar"]
+        if row[required_alt].replace([np.inf, -np.inf], np.nan).isna().any(axis=None):
+            feature_failed_alts.append(product_id)
+            continue
         product_rows.append(row)
+        feature_ready_alts.append(product_id)
+
+    if len(feature_ready_alts) < MIN_ALT_ASSETS:
+        raise RuntimeError(
+            f"Only {len(feature_ready_alts)} ALT assets have complete frozen features at {decision_ts}; "
+            f"minimum required is {MIN_ALT_ASSETS}. Feature-ineligible: {', '.join(feature_failed_alts)}"
+        )
 
     panel = pd.concat(product_rows, ignore_index=True)
     btc = panel[panel["product_id"] == BTC].copy()
     alts = panel[panel["product_id"] != BTC].copy()
     if len(btc) != 1:
         raise RuntimeError("Expected exactly one BTC feature row")
-    if alts["product_id"].nunique() < MIN_ALT_ASSETS:
-        raise RuntimeError("Insufficient ALT assets for frozen feature contract")
 
     record = {"timestamp_utc": decision_ts}
     for c in BTC_FEATURES:
@@ -181,7 +219,12 @@ def _build_hourly_feature_row(decision_ts: pd.Timestamp, frozen_features: list[s
     bad = [c for c in frozen_features if pd.isna(frame.iloc[0][c])]
     if bad:
         raise RuntimeError("Live feature row has null frozen features: " + ", ".join(bad))
-    return frame[frozen_features], {"alt_asset_count": int(record["alt_asset_count"])}
+    diagnostics = {
+        "alt_asset_count": int(record["alt_asset_count"]),
+        "missing_decision_candle_alts": sorted(missing_alts),
+        "feature_ineligible_alts": sorted(feature_failed_alts),
+    }
+    return frame[frozen_features], diagnostics
 
 
 def _predict(model, features: pd.DataFrame) -> tuple[str, dict]:
@@ -198,13 +241,11 @@ def _apply_confirm2(state: dict, raw_label: str) -> tuple[str, str, dict]:
         state["pending_candidate_label"] = None
         state["pending_candidate_count"] = 0
         return before, before, state
-
     if state.get("pending_candidate_label") == raw_label:
         state["pending_candidate_count"] = int(state.get("pending_candidate_count", 0)) + 1
     else:
         state["pending_candidate_label"] = raw_label
         state["pending_candidate_count"] = 1
-
     after = before
     if state["pending_candidate_count"] >= CONFIRM_REQUIRED:
         after = raw_label
@@ -232,12 +273,12 @@ def _hourly_realized(decision_ts: pd.Timestamp) -> tuple[float, float] | None:
     if btc0.empty or btc1.empty:
         return None
     btc_r = float(btc1.iloc[-1] / btc0.iloc[-1] - 1.0)
-
     returns = []
-    for product_id in CORE_PRODUCTS:
-        if product_id == BTC:
+    for product_id in ALT_PRODUCTS:
+        try:
+            df = _read_recent(product_id, end_ts)
+        except RuntimeError:
             continue
-        df = _read_recent(product_id, end_ts)
         p0 = df.loc[df["timestamp_utc"] == decision_ts, "close"]
         p1 = df.loc[df["timestamp_utc"] == end_ts, "close"]
         if not p0.empty and not p1.empty:
@@ -253,11 +294,9 @@ def _finalize_pending_rows(state: dict) -> int:
         return 0
     changed = 0
     equity = float(state.get("current_equity", 1.0))
-    # Reconstruct from already-realized rows if state was restored manually.
     realized_rows = journal[journal["status"] == "REALIZED"]
     if len(realized_rows):
         equity = float(pd.to_numeric(realized_rows["equity"], errors="coerce").dropna().iloc[-1])
-
     for idx, row in journal[journal["status"] == "PENDING_REALIZATION"].sort_values("decision_timestamp_utc").iterrows():
         ts = pd.Timestamp(row["decision_timestamp_utc"])
         realized = _hourly_realized(ts)
@@ -290,29 +329,19 @@ def _append_forward_decision(decision_ts: pd.Timestamp, raw_label: str, probs: d
     journal = _read_journal()
     if len(journal) and decision_ts <= journal["decision_timestamp_utc"].max():
         return state
-
     before, after, state = _apply_confirm2(state, raw_label)
     switched = int(after != before)
     row = {
-        "decision_timestamp_utc": decision_ts.isoformat(),
-        "raw_predicted_label": raw_label,
-        "executed_label_before": before,
-        "executed_label_after": after,
+        "decision_timestamp_utc": decision_ts.isoformat(), "raw_predicted_label": raw_label,
+        "executed_label_before": before, "executed_label_after": after,
         "pending_candidate_label": state.get("pending_candidate_label"),
         "pending_candidate_count": int(state.get("pending_candidate_count", 0)),
-        "prob_btc": probs["BTC"],
-        "prob_alt": probs["ALT"],
-        "prob_cash": probs["CASH"],
-        "btc_realized_return_1h": np.nan,
-        "alt_realized_return_1h": np.nan,
-        "gross_selected_return_1h": np.nan,
-        "sleeve_switch": switched,
-        "cost_bps_assumption": COST_BPS,
-        "transaction_cost": np.nan,
-        "net_selected_return_1h": np.nan,
-        "equity": np.nan,
-        "realized_through_utc": None,
-        "status": "PENDING_REALIZATION",
+        "prob_btc": probs["BTC"], "prob_alt": probs["ALT"], "prob_cash": probs["CASH"],
+        "btc_realized_return_1h": np.nan, "alt_realized_return_1h": np.nan,
+        "gross_selected_return_1h": np.nan, "sleeve_switch": switched,
+        "cost_bps_assumption": COST_BPS, "transaction_cost": np.nan,
+        "net_selected_return_1h": np.nan, "equity": np.nan,
+        "realized_through_utc": None, "status": "PENDING_REALIZATION",
     }
     pd.DataFrame([row]).to_csv(JOURNAL_PATH, mode="a", header=False, index=False)
     state["last_forward_decision_timestamp_utc"] = decision_ts.isoformat()
@@ -328,71 +357,57 @@ def run_once() -> dict:
     X, diagnostics = _build_hourly_feature_row(decision_ts, frozen_features)
     raw_label, probs = _predict(model, X)
     now = pd.Timestamp.now(tz="UTC")
-
-    mode = "SHADOW" if decision_ts < HOLDOUT else "FORWARD"
-    action = "shadow_snapshot"
-    if mode == "SHADOW":
-        _atomic_json(SHADOW_PATH, {
-            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "decision_timestamp_utc": decision_ts.isoformat(),
-            "raw_predicted_label": raw_label,
-            "probabilities": probs,
-            "current_frozen_sleeve": state["current_executed_label"],
-            "alt_asset_count": diagnostics["alt_asset_count"],
-            "mode": "SHADOW_PRE_HOLDOUT",
-            "note": "No forward journal row or performance result is written before 2026-09-01 UTC.",
-        })
-    else:
-        last = state.get("last_forward_decision_timestamp_utc")
-        if last and decision_ts <= pd.Timestamp(last):
-            action = "already_processed"
-        else:
-            # Never replay/backfill missed holdout hours: process only the latest
-            # currently available hourly decision.
-            if last and decision_ts > pd.Timestamp(last) + pd.Timedelta(hours=1):
-                state["last_forward_gap_detected"] = {
-                    "previous_decision_utc": last,
-                    "next_live_decision_utc": decision_ts.isoformat(),
-                    "policy": "missed decisions are not backfilled",
-                }
-            state = _append_forward_decision(decision_ts, raw_label, probs, state)
-            action = "journal_appended"
-
-    _atomic_json(STATE_PATH, state)
-    status = {
+    mode = "FORWARD" if decision_ts >= HOLDOUT else "SHADOW"
+    result = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": mode,
-        "action": action,
         "decision_timestamp_utc": decision_ts.isoformat(),
         "raw_predicted_label": raw_label,
         "probabilities": probs,
-        "executed_label": state["current_executed_label"],
-        "pending_candidate_label": state.get("pending_candidate_label"),
-        "pending_candidate_count": int(state.get("pending_candidate_count", 0)),
-        "journal_rows_finalized_this_cycle": finalized,
-        "current_equity": float(state.get("current_equity", 1.0)),
-        "frozen_model_sha256": manifest["model"]["artifact_sha256"],
-        "holdout_start_utc": HOLDOUT.isoformat(),
-        "wall_clock_utc": now.isoformat(),
+        "current_executed_label": state["current_executed_label"],
+        "alt_asset_count": diagnostics["alt_asset_count"],
+        "missing_decision_candle_alts": diagnostics["missing_decision_candle_alts"],
+        "feature_ineligible_alts": diagnostics["feature_ineligible_alts"],
+        "pending_rows_finalized": finalized,
         "brokerage_orders": False,
     }
-    _atomic_json(SERVICE_STATUS_PATH, status)
-    return status
+    if mode == "SHADOW":
+        result["action"] = "shadow_snapshot"
+        result["note"] = "Pre-holdout shadow inference only; execution state and forward journal are unchanged."
+        _atomic_json(SHADOW_PATH, result)
+    else:
+        journal = _read_journal()
+        last = journal["decision_timestamp_utc"].max() if len(journal) else None
+        if last is not None and decision_ts <= last:
+            result["action"] = "already_processed"
+        else:
+            if last is not None and decision_ts > last + pd.Timedelta(hours=1):
+                result["action"] = "gap_detected_no_backfill"
+                result["note"] = "A forward decision hour was missed. Frozen policy forbids historical backfill into the forward journal."
+            else:
+                state = _append_forward_decision(decision_ts, raw_label, probs, state)
+                result["action"] = "forward_decision_appended"
+                result["current_executed_label"] = state["current_executed_label"]
+                result["pending_candidate_label"] = state.get("pending_candidate_label")
+                result["pending_candidate_count"] = state.get("pending_candidate_count", 0)
+    state["service_last_checked_utc"] = now.isoformat()
+    STATE_PATH.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    _atomic_json(SERVICE_STATUS_PATH, result)
+    return result
 
 
 def _acquire_lock() -> None:
     PHASE5_ROOT.mkdir(parents=True, exist_ok=True)
     try:
-        LOCK_PATH.write_text(str(__import__("os").getpid()), encoding="utf-8", errors="strict") if not LOCK_PATH.exists() else (_ for _ in ()).throw(FileExistsError())
+        with LOCK_PATH.open("x", encoding="utf-8") as f:
+            f.write(str(__import__("os").getpid()))
     except FileExistsError:
         raise SystemExit("[SKIP] Crypto V2 forward service already running")
 
 
 def _release_lock() -> None:
-    try:
-        LOCK_PATH.unlink()
-    except FileNotFoundError:
-        pass
+    try: LOCK_PATH.unlink()
+    except FileNotFoundError: pass
 
 
 def main(argv=None):
@@ -400,47 +415,25 @@ def main(argv=None):
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--poll-seconds", type=int, default=DEFAULT_POLL_SECONDS)
     args = ap.parse_args(argv)
-    if args.poll_seconds < 30:
-        raise SystemExit("poll-seconds must be at least 30")
-
     stop = False
     def request_stop(*_args):
-        nonlocal stop
-        stop = True
-    signal.signal(signal.SIGINT, request_stop)
-    signal.signal(signal.SIGTERM, request_stop)
-
+        nonlocal stop; stop = True
+    signal.signal(signal.SIGINT, request_stop); signal.signal(signal.SIGTERM, request_stop)
     _acquire_lock()
     try:
         while True:
             try:
                 result = run_once()
-                print(
-                    f"[FORWARD] {result['generated_at_utc']} mode={result['mode']} "
-                    f"decision={result['decision_timestamp_utc']} raw={result['raw_predicted_label']} "
-                    f"executed={result['executed_label']} action={result['action']} "
-                    f"equity={result['current_equity']:.6f}",
-                    flush=True,
-                )
+                print(f"[FORWARD] {result['generated_at_utc']} mode={result['mode']} decision={result['decision_timestamp_utc']} raw={result['raw_predicted_label']} executed={result['current_executed_label']} alts={result['alt_asset_count']} action={result['action']}", flush=True)
             except Exception as exc:
-                _atomic_json(SERVICE_STATUS_PATH, {
-                    "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-                    "status": "error",
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "brokerage_orders": False,
-                })
-                print(f"[FORWARD ERROR] {type(exc).__name__}: {exc}", flush=True)
-            if args.once or stop:
-                break
-            for _ in range(args.poll_seconds):
-                if stop:
-                    break
+                payload={"generated_at_utc":datetime.now(timezone.utc).isoformat(),"status":"error","error":f"{type(exc).__name__}: {exc}","brokerage_orders":False}
+                _atomic_json(SERVICE_STATUS_PATH,payload); print(f"[FORWARD ERROR] {payload['error']}",flush=True)
+            if args.once or stop: break
+            for _ in range(max(15,args.poll_seconds)):
+                if stop: break
                 time.sleep(1)
-            if stop:
-                break
+            if stop: break
     finally:
         _release_lock()
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
