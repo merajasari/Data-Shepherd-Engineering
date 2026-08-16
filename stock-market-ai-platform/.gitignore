@@ -47,3 +47,4 @@ data/paper_trading/
 # Local source backups
 *.backup-before-login
 *_backup.py
+data/research/
