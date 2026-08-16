@@ -21,7 +21,9 @@ The project now contains two primary research/application tracks:
    - Crypto 15m V1 cross-sectional research.
    - Crypto 15m V2 BTC / ALT / CASH regime research.
    - Frozen Crypto 15m V2 forward candidate with an hourly decision cadence and `confirm_2` execution policy.
-   - Shadow forward inference before 2026-09-01 UTC; automatic forward paper evaluation begins at/after the frozen holdout boundary.
+   - Dedicated XRP V1 research through exploratory Phase 5.
+   - XRP V1 exploratory forward candidate using Ridge plus XRP/BTC/CASH hysteresis and a 24-hour minimum hold.
+   - Shadow forward inference before 2026-09-01 UTC; automatic future paper evaluation begins only at/after frozen holdout boundaries.
 
 ## Crypto 15m V2 frozen candidate
 
@@ -101,6 +103,62 @@ Phase 2 found only a small positive cross-sectional signal in Ridge at the 4-hou
 
 Phase 3 showed that the always-risky Top-N portfolio design failed economically because extremely high turnover overwhelmed the weak signal.
 
+### XRP V1 — dedicated research track
+
+XRP remains separate from the shared Crypto 15m V2 model because of its major historical continuity gap.
+
+The model-ready XRP panel contains:
+
+- 170,315 rows
+- 20 contiguous segments
+- 44 features
+- 15m / 1h / 4h / 24h targets
+- a 907.11-day model-ready discontinuity between January 2021 and July 2023
+
+XRP V1 research progression:
+
+- **Phase 1:** separated 63,333 legacy rows from 106,982 post-gap primary rows.
+- **Phase 2:** compared Ridge, HistGradientBoosting, and a momentum baseline on the post-gap era only; Ridge was the most stable OOS research model.
+- **Phase 3:** analyzed OOS confidence and sign asymmetry; confidence-only threshold promotion was rejected.
+- **Phase 4:** tested exploratory XRP / BTC / CASH economic threshold policies; high turnover proved too cost-sensitive.
+- **Phase 5:** tested hysteresis and minimum holding periods to reduce turnover.
+
+Current exploratory forward hypothesis:
+
+```text
+policy: hyst_10_05_hold24
+model: Ridge
+target: btc_relative_forward_return_4h
+decision cadence: 4h
+
+XRP entry:  score >= +0.0010
+CASH entry: score <= -0.0010
+XRP exit:   score <= +0.0005
+CASH exit:  score >= -0.0005
+neutral:    BTC
+minimum hold: 24h
+```
+
+Phase 5 development evidence for this hypothesis:
+
+- decisions: 3,987
+- switches: 524
+- switch rate: 13.14%
+- ending equity at 0 bps: 1.7463x
+- ending equity at 5 bps: 1.3437x
+- ending equity at 10 bps: 1.0338x
+- ending equity at 20 bps: 0.6117x
+- always-BTC development reference: approximately 1.0162x
+
+The fold results remain mixed. Therefore this is an **exploratory forward candidate only**:
+
+- not historically validated
+- not promoted for real trading
+- no further threshold/hold-period tuning on the same development folds
+- XRP remains separate from frozen Crypto 15m V2
+- untouched future boundary remains 2026-09-01 00:00 UTC
+- brokerage execution remains disabled
+
 ### Crypto 15m V2
 
 V2 changed the research question from constant risky cross-sectional allocation to a BTC / ALT / CASH regime decision.
@@ -115,7 +173,7 @@ The Phase 5 freeze must not be modified in place. Any change to features, model 
 
 ## Forward crypto service
 
-The frozen forward inference service:
+The frozen shared V2 forward inference service:
 
 ```text
 ml/crypto_15m_v2/forward_service.py
@@ -143,6 +201,8 @@ data/model/crypto_15m_v2/phase5/forward_journal.csv
 data/model/crypto_15m_v2/phase5/forward_service_status.json
 data/model/crypto_15m_v2/phase5/shadow_latest.json
 ```
+
+The next XRP engineering step is separate: create a reproducible XRP frozen-candidate artifact/manifest and a shadow-only XRP forward inference service using the exact Phase 5 exploratory rule without further historical tuning.
 
 ## macOS background services
 
@@ -203,6 +263,7 @@ The crypto page now surfaces:
 - forward-journal counts
 - Crypto 15m V2 exploratory development evidence
 - explicit no-real-orders status
+- automatic in-place live-state refresh
 
 ## Email
 
@@ -230,7 +291,8 @@ The following rules are intentional and should be preserved:
 - development and future-forward evidence clearly labeled
 - generated research artifacts kept separate from source
 - XRP kept separate from the shared Crypto 15m V2 model
-- no leverage, shorting, derivatives, or real brokerage execution in the frozen candidate
+- no further XRP historical threshold/hold-period tuning on the same development folds
+- no leverage, shorting, derivatives, or real brokerage execution in the frozen candidates
 
 ## Repository workflow
 
@@ -251,13 +313,10 @@ Generated model/data artifacts should not be committed unless explicitly intende
 
 ## Immediate next work
 
-1. Auto-refresh the live Crypto V2 dashboard status without a full page reload.
-2. Build the separate XRP intraday research/model track.
-3. Preserve the Crypto 15m V2 Phase 5 freeze until future evaluation begins.
-4. Add forward-performance visualizations only after genuine Sep. 1+ observations exist.
-5. Model ALT constituent-level turnover/costs before making stronger economic claims.
-6. Continue improving service health/alerting and operational observability.
-
-## Safety
-
-This repository is an experimental research and simulation platform. Nothing in the current system should be interpreted as a promise of investment performance or as automated real-money trading.
+1. Freeze the XRP V1 exploratory forward candidate reproducibly with an artifact/manifest.
+2. Build shadow-only XRP forward inference using the exact frozen `hyst_10_05_hold24` rule.
+3. Preserve both Sep. 1 future boundaries and do not tune from future observations.
+4. Add service staleness/health alerting.
+5. Add forward-performance visualizations only after genuine Sep. 1+ observations exist.
+6. Research ALT constituent-level turnover/costs in a new research version without changing the V2 Phase 5 freeze.
+7. Continue stock-model work without changing frozen benchmarks.
