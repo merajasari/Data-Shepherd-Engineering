@@ -95,11 +95,138 @@ V1 established the 15-minute feature/target contract and kept XRP isolated.
 
 The first cross-sectional Top-N portfolio architecture was rejected because turnover overwhelmed the available predictive signal.
 
-## XRP
+## XRP V1 dedicated research lineage
 
-XRP remains separate due to a major historical discontinuity.
+Research version:
 
-Do not combine XRP into the shared V2 model without creating a new research version and explicitly revisiting continuity, validation, and cost assumptions.
+```text
+crypto_xrp_v1
+```
+
+XRP remains separate from Crypto 15m V2 because of its major historical continuity break.
+
+### Phase 1 — discontinuity-aware dataset
+
+- 170,315 model-ready rows
+- 20 contiguous segments
+- largest model-ready discontinuity: 907.11 days
+- legacy era: 63,333 rows / 13 segments
+- primary post-gap era: 106,982 rows / 7 segments
+- primary era begins: 2023-07-14 20:45 UTC
+- features: 44
+- horizons: 15m / 1h / 4h / 24h
+- no feature or target crosses a gap
+- no Sep. 1+ future data
+
+### Phase 2 — walk-forward regression
+
+Primary target:
+
+```text
+btc_relative_forward_return_4h
+```
+
+Candidates:
+
+- 4-hour BTC-relative momentum baseline
+- Ridge
+- HistGradientBoosting
+
+Ridge produced the most stable OOS development signal and was carried forward for diagnostics.
+
+Observed aggregate Ridge development metrics included approximately:
+
+- Spearman: 0.0257
+- directional accuracy: 52.1%
+- positive Spearman in all eight walk-forward folds
+
+No model was promoted or frozen in Phase 2.
+
+### Phase 3 — OOS confidence diagnostics
+
+Used only Phase 2 OOS Ridge predictions.
+
+Confidence magnitude showed some aggregate discrimination, but fold stability was insufficient for threshold promotion. The highest absolute-confidence decile was approximately 53.1% directionally correct, while negative Ridge predictions were directionally more reliable than positive predictions.
+
+No fitting or threshold promotion occurred.
+
+### Phase 4 — exploratory economic state policies
+
+State space:
+
+```text
+XRP / BTC / CASH
+```
+
+Fixed score policies were evaluated on non-overlapping four-hour observations under 0 / 5 / 10 / 20 bps state-switch costs.
+
+Result:
+
+- high turnover dominated economics
+- modest switching costs destroyed most apparent threshold-policy gains
+- Phase 4 policies were not promoted
+
+Phase 4 is exploratory development evidence, not untouched validation.
+
+### Phase 5 — exploratory turnover control
+
+Tested:
+
+- hysteresis
+- 8h / 12h / 24h minimum holding periods
+- two fixed entry/exit threshold families
+
+Strongest development hypothesis:
+
+```text
+policy: hyst_10_05_hold24
+model: ridge
+target: btc_relative_forward_return_4h
+decision cadence: 4 hours
+
+enter XRP:   score >= +0.0010
+enter CASH:  score <= -0.0010
+leave XRP:   score <= +0.0005
+leave CASH:  score >= -0.0005
+neutral:     BTC
+minimum hold: 24 hours
+```
+
+Aggregate exploratory evidence:
+
+- decisions: 3,987
+- switches: 524
+- switch rate: 13.14%
+- ending equity at 0 bps: 1.7463x
+- ending equity at 5 bps: 1.3437x
+- ending equity at 10 bps: 1.0338x
+- ending equity at 20 bps: 0.6117x
+- always-BTC development reference: approximately 1.0162x
+
+Fold results remain mixed, so this policy is **not promoted**.
+
+### XRP V1 forward-candidate status
+
+`hyst_10_05_hold24` is frozen conceptually as an:
+
+```text
+EXPLORATORY FORWARD CANDIDATE
+```
+
+It is not a production or brokerage candidate.
+
+Rules:
+
+- no further historical threshold/hold-period tuning on the same folds
+- preserve future evaluation start at 2026-09-01T00:00:00Z
+- forward monitoring must be shadow/research only initially
+- no real brokerage orders
+- no leverage
+- no shorting
+- no derivatives
+- do not combine XRP into Crypto 15m V2
+
+The next XRP research-engineering step is a reproducible frozen-candidate artifact/manifest plus shadow-only forward inference.
 
 ## Artifact rules
 
