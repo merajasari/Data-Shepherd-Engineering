@@ -1,317 +1,506 @@
-# Stock Market AI Platform — Project Handoff
+# Data Shepherd Engineering — Project Handoff
 
-## Purpose
-Continuity handoff for a new ChatGPT session. Read this file, inspect the repository, treat the repository as authoritative if anything here is stale, and continue from **Next Task**.
+**Last updated:** 2026-08-16  
+**Active branch:** `feature/paper-trading`  
+**Current focus:** Crypto 15m V2 frozen forward monitoring + dashboard integration
 
-## Repository
-Project: `stock-market-ai-platform`
-Current branch: `feature/paper-trading`
+---
 
-Recent commits:
-- `0b76d66` — Build V4 cross-sectional strategy and paper trading workflow
-- `e39769b` — Ignore local source backup files
-- `82aaac2` — Add daily V4 data refresh and paper trading pipeline
+## 1. Read this first
 
-The working tree was clean after `82aaac2`.
+A new engineering session should read, in order:
 
-## Architecture
-Tiingo → Bronze → Silver → Gold → Feature layer → V4 ranking → Portfolio decision → paper-trading state.
+1. `PROJECT_HANDOFF.md` — this file
+2. `README.md` — current platform architecture and safety boundary
+3. `models/README.md` — model/research lineage and artifact rules
+4. `ml/crypto_15m_v2/phase5.py` — frozen candidate contract
+5. `ml/crypto_15m_v2/forward_service.py` — live frozen inference
+6. `ml/crypto_rt/reconcile_15m.py` — authoritative closed-bar reconciliation
+7. `webapp/services/crypto_dashboard_service.py`
+8. `webapp/templates/crypto.html`
 
-The V4 ML universe contains 26 stocks. SPY is deliberately outside the V4 universe and is maintained separately as the portfolio core.
+Do **not** start by retraining the frozen V2 model. Do **not** change the `confirm_2` policy in place. Do **not** backfill future-journal rows.
 
-## Frozen Strategy
-Strategy name: `spy_core_v4_overlay`
+---
 
-Allocation:
-- SPY core: 60%
-- V4 overlay: 40%
-- Five V4 positions at 8% each
+## 2. Current state
 
-SPY remains the permanent core. The V4 sleeve rotates according to the latest top-five ranking.
+Data Shepherd Engineering now has a working authenticated web platform, stock research/paper-monitoring components, continuous crypto data ingestion, a multi-year 15-minute Coinbase research archive, Crypto 15m V1 research, Crypto 15m V2 BTC/ALT/CASH regime research, a frozen forward candidate, unattended macOS runtime services, and a live Crypto dashboard that surfaces the frozen model state.
 
-The V4 model is FROZEN during forward paper testing. The daily pipeline must not automatically retrain V4 or rebuild its training dataset.
+The shared Crypto 15m V2 candidate is frozen before the untouched future evaluation beginning **2026-09-01 00:00 UTC**.
 
-## V4 Universe
-Configured in `data-ingestion/symbols.py`:
+---
 
-AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AVGO, AMD, ORCL, CRM, JPM, BAC, V, MA, WMT, COST, HD, JNJ, UNH, LLY, XOM, CVX, CAT, NFLX, DIS.
+## 3. Most recent completed milestone
 
-SPY is not in this list.
+### Crypto 15m V2 Phase 5 freeze
 
-## V4 Model / Dataset
-Dataset builder: `ml/build_v4_dataset.py`
-Generated dataset: `data/model/v4_cross_section.parquet`
-Training script: `ml/train_model_v4.py`
-Model artifact: `models/cross_section_model_v4.pkl`
+Frozen candidate:
+
+- model: `hist_gradient_boosting`
+- model artifact: `data/model/crypto_15m_v2/phase5/frozen_hgb.joblib`
+- model SHA-256:
+  `9f2760f05fca4d3b6cc1e02fc700c4cdf7eeedc5e5d67208c62b534f3a458a6b`
+- training rows: 49,209
+- training through: 2026-08-14 20:00 UTC
+- features: 44
+- decision cadence: 1 hour
+- economic horizon: 4 hours
+- execution policy: `confirm_2`
+- initial sleeve: ALT
+- future evaluation start: 2026-09-01 00:00 UTC
+- XRP: separate
+- real orders: disabled
+
+Phase 5 files:
+
+```text
+data/model/crypto_15m_v2/phase5/
+├── frozen_hgb.joblib
+├── freeze_manifest.json
+├── forward_state.json
+├── forward_journal.csv
+├── forward_service_status.json
+└── shadow_latest.json
+```
+
+---
+
+## 4. Why `confirm_2` was frozen
+
+Crypto 15m V2 Phase 3 showed a strong gross regime signal but unacceptable raw hourly switching.
+
+Raw HGB hourly simulation:
+
+- switches: 6,084
+- ending equity at 0 bps: 3.722965x
+- ending equity at 5 bps: 0.177597x
+
+Phase 4 explored fixed turnover-control policies. `confirm_2` was the only tested policy that remained above starting equity at the 5 bps sleeve-switch assumption.
+
+`confirm_2` exploratory evidence:
+
+- executed switches: 2,505
+- switch reduction: 58.8%
+- ending equity at 0 bps: 4.246942x
+- ending equity at 5 bps: 1.213351x
+- max drawdown at 0 bps: -54.99%
+- max drawdown at 5 bps: -66.43%
+
+**Research-status warning:** Phase 4 is exploratory. The Phase 3 OOS results had already been inspected before Phase 4 policies were defined. Therefore these Phase 4 figures are not untouched validation.
+
+---
+
+## 5. Crypto 15m V2 research lineage
+
+### Phase 1 — hourly BTC / ALT / CASH allocation dataset
+
+Output:
+
+```text
+data/model/crypto_15m_v2/phase1/market_allocation_1h.parquet
+```
 
 Observed dataset:
-- 2,455 trading dates
-- 63,830 rows
-- 12,275 positive targets
-- 19.23% positive rate
-- 31 columns
-- 26 model features
-
-Walk-forward validation:
-- Fold 1 Precision@5 31.43%, selected 5-day return 1.08%
-- Fold 2 Precision@5 27.84%, selected 5-day return 0.76%
-- Fold 3 Precision@5 28.90%, selected 5-day return 0.87%
-- Fold 4 Precision@5 28.19%, selected 5-day return 0.44%
-- Mean Precision@5 29.09%
-- Random baseline 19.23%
-- Mean selected 5-day return 0.79%
-
-## V4 Portfolio Backtest
-Backtester: `ml/backtest_portfolio_v4.py`
-
-Observed results:
-- Starting capital: $100,000
-- Final equity: $248,040.19
-- Total return: 148.04%
-- CAGR: 9.74%
-- Maximum drawdown: -35.79%
-- Completed trades: 960
-- Win rate: 53.33%
-- Average trade return: 0.58%
-- Average positions: 1.96
-- Capital utilization: 39.10%
-- Period: 2016-10-25 through 2026-08-03
-
-## 60% SPY + 40% V4 Backtest
-Observed:
-- Total return: 247.32%
-- CAGR: 13.59%
-- Max drawdown: -24.13%
-- Calmar: 0.563
-- Period: 2016-10-25 through 2026-08-03
-
-Reference:
-- SPY CAGR 15.64%, drawdown -33.70%
-- V4 CAGR 9.74%, drawdown -35.79%
-
-The blend materially reduced historical drawdown.
-
-## Ranking Service
-`webapp/services/ranking_service_v4.py`
-Main function: `rank_latest_universe()`
-
-Earlier top five:
-AMD, ORCL, CRM, MSFT, LLY.
-
-After the latest full daily refresh:
-AMD, ORCL, CRM, MSFT, AMZN.
-
-This caused LLY to exit and AMZN to enter.
-
-## Paper Trading Service
-`webapp/services/paper_trading_service.py`
-
-Major functions at last checkpoint:
-- `utc_now`
-- `default_state`
-- `save_state`
-- `load_state`
-- `get_execution_price`
-- `get_portfolio_summary`
-- `evaluate_trade_candidates`
-- `build_target_portfolio_plan`
-- `initialize_strategy_positions`
-- `build_rebalance_plan`
-- `execute_rebalance`
-
-A temporary duplicate `build_rebalance_plan()` was removed and the module compiled successfully.
-
-Runtime state: `data/paper_trading/portfolio.json` (ignored by Git).
-
-Initial portfolio:
-SPY 60%; AMD, ORCL, CRM, MSFT, LLY at 8% each.
-
-Initial simulated execution produced approximately $99,900.10 equity, six open positions, six trade records, and $0 cash.
-
-## First Forward Rebalance
-The first forward membership change was LLY → AMZN.
-
-The system correctly generated:
-- SELL LLY
-- BUY AMZN
-
-After execution:
-- Open positions: 6
-- Trade records: 8
-- Cash: $0
-- Equity: approximately $99,884.13
-- Realized P&L: approximately -$15.98
-- Unrealized P&L: approximately -$99.88
-- Total return: approximately -0.1159%
-
-Positions: SPY, AMD, AMZN, CRM, MSFT, ORCL.
-
-This validated ranking → rebalance decision → simulated execution end-to-end.
-
-## Paper Cycle Runner
-`ml/run_paper_cycle_v4.py`
-
-Workflow:
-1. Load latest V4 ranking.
-2. Build rebalance plan.
-3. Identify BUY/SELL actions.
-4. Execute simulated rebalance when required.
-5. Print portfolio state.
 
-Repeated runs with unchanged rankings correctly create no duplicate trades.
+- rows: 49,209
+- date range: 2020-12-16 17:00 UTC through 2026-08-14 20:00 UTC
+- features: 44
+- target distribution:
+  - BTC: 10,099 (20.52%)
+  - ALT: 19,845 (40.33%)
+  - CASH: 19,265 (39.15%)
 
-## SPY Core Ingestion
-`data-ingestion/tiingo_core_ingest.py`
+### Phase 2 — walk-forward classification
 
-SPY refreshes separately, then flows through generic Silver, Gold, and Feature pipelines. Those pipelines therefore process 27 datasets: 26 V4 stocks plus SPY. SPY remains outside the V4 candidate universe.
+Models:
 
-## Daily Pipeline
-`ml/run_daily_v4_pipeline.py`
+- majority-class baseline
+- multinomial logistic regression
+- HistGradientBoosting
 
-Stages:
-1. 26-stock Tiingo ingestion
-2. SPY core ingestion
-3. Silver pipeline
-4. Gold pipeline
-5. Feature pipeline
-6. V4 paper cycle
+HGB summary:
 
-The complete pipeline ran successfully in approximately 51.8 seconds and detected/executed the LLY → AMZN rotation.
+- weighted accuracy: 0.422269
+- weighted balanced accuracy: 0.356516
+- weighted log loss: 1.064313
+- mean selected 4h forward return: 0.000220
+- mean excess vs BTC: 0.000043773
+- mean excess vs ALT: 0.000108
+- prediction fractions:
+  - BTC: 1.13%
+  - ALT: 54.28%
+  - CASH: 44.59%
 
-## Git / Runtime Policy
-Generated/runtime data should not be committed. `.gitignore` covers generated data layers, model/runtime data, paper-trading state, logs, PID state, model pickle artifacts, and local source backups.
+### Phase 3 — hourly portfolio simulation
 
-Legacy V3/research scripts remain. Do not delete them without inspecting their purpose.
+Gross signal was strong, but frequent sleeve switching destroyed results under costs.
 
-## Trading Boundary
-PAPER TRADING ONLY. The current system does not place real brokerage orders. Do not add live brokerage execution without explicit authorization and a separate design/safety review.
+### Phase 4 — exploratory turnover control
 
-## Engineering Principles
-1. Freeze V4 during forward testing.
-2. Keep SPY outside the V4 ML universe.
-3. Separate mutable portfolio state from historical observations.
-4. Avoid duplicate trades when rankings do not change.
-5. Treat repository code as authoritative over this handoff.
+Selected `confirm_2` as the candidate execution rule.
 
-# HISTORICAL NEXT TASK — Append-only Forward Journal (completed)
-Create an append-only paper-trading journal.
+### Phase 5 — frozen future candidate
 
-Proposed service:
-`webapp/services/paper_journal_service.py`
+No further tuning is permitted without creating a new research version.
 
-Proposed runtime file:
-`data/paper_trading/journal.jsonl`
+---
 
-The journal remains ignored by Git and does NOT replace `portfolio.json`.
+## 6. Crypto 15m V1 lineage
 
-Each successful paper cycle should append exactly one observation containing at least:
-- timestamp
-- portfolio equity
-- cash
-- market value
-- realized P&L
-- unrealized P&L
-- total return
-- open-position count
-- cumulative trade count
-- latest V4 top-five symbols
-- BUY/SELL actions generated during that cycle
+Crypto 15m V1 used a shared cross-sectional model universe with XRP isolated.
 
-Recommended sequence:
-1. Inspect active branch, Git status/history, and current repository code.
-2. Read `ml/run_paper_cycle_v4.py`.
-3. Read `webapp/services/paper_trading_service.py`.
-4. Create `webapp/services/paper_journal_service.py`.
-5. Implement append-only JSONL writing.
-6. Wire it into `ml/run_paper_cycle_v4.py`.
-7. Record both rebalance and no-rebalance cycles.
-8. Compile affected files.
-9. Run the paper cycle and inspect the final journal line.
-10. Run again with unchanged ranking.
-11. Confirm no duplicate trades but a second journal observation.
-12. Run the full daily wrapper.
-13. Commit source-code changes only.
+Phase 1:
 
-## Longer-term Forward Test
-Accumulate genuine out-of-sample observations while V4 stays frozen. Eventually evaluate forward CAGR, drawdown, volatility, Sharpe, Calmar, turnover, transaction-cost drag, Precision@5, selected-stock returns, SPY-relative performance, blend performance, and ranking stability.
+- 24 shared assets
+- XRP separate
+- shared panel rows: 4,713,634
+- dedicated XRP rows: 170,315
+- 44 features
+- horizons: 15m / 1h / 4h / 24h
+- no synthesized candles
+- no feature/target crossing a missing-data gap
 
-## Instructions for a New Session
-Read this handoff completely, connect to GitHub, inspect the active branch/history/status, and read the actual current versions of:
-- `data-ingestion/symbols.py`
-- `webapp/services/ranking_service_v4.py`
-- `webapp/services/paper_trading_service.py`
-- `ml/run_paper_cycle_v4.py`
-- `ml/run_daily_v4_pipeline.py`
+Phase 2:
 
-Verify the handoff against the repository. Repository code wins if there are discrepancies. Then continue with the append-only journal using small, testable changes. Compile/test before committing and preserve the frozen V4 strategy unless the research objective is explicitly changed.
+- Ridge had a small positive 4-hour BTC-relative cross-sectional ranking signal.
+- HistGradientBoosting was approximately flat for ranking.
+- momentum was negative.
 
-# Progress Since the Previous Handoff
+Phase 3:
 
-This section supersedes the stale historical next task above and records completed work through Crypto V1 Phase 3. Future work is explicitly separated under **Recommended Next Steps**.
+- Top-3 / Top-5 overlapping 4-hour designs were rejected.
+- Turnover was extreme.
+- even zero-cost portfolios lost money.
+- transaction costs made the designs unusable.
 
-## Repository and Stock Research State
+This failure motivated V2's BTC / ALT / CASH regime architecture.
 
-As inspected on 2026-08-11 (America/Los_Angeles), the active branch is `feature/paper-trading`, tracking `origin/feature/paper-trading`. Local `HEAD` and the remote-tracking ref both point to pushed checkpoint `0e16022` (`0e160221f33528ced4d0f289e0725e60c1e22f72`), with no ahead/behind indicator. The tree was clean before this handoff-only edit. `origin/main` remains at `3f0d86f`; this work is not merged to main.
+---
 
-Stock V4 remains the frozen production/paper control. The journal, every-cycle recording, forward report, SPY benchmark, and dashboard work were completed in `e742522`, `dade8ef`, `87b13c8`, `96ccd20`, and `c6252a9`. Do not retrain or overwrite its model, dataset, 26-stock universe, ranking logic, paper state, journal, report, or monitoring during forward testing. Stock V5 and Crypto V1 have separate modules, ingestion entry points, contracts, and model roots; neither is called by the V4 daily runner. Crypto writes only under crypto-specific data paths and has no order methods. V4 remains paper-only.
+## 7. XRP policy
 
-Stock V5 Phase 1 is complete and pushed at `effecc1`. It added an isolated 100-stock universe, separate Tiingo Bronze ingestion, config/experiment contracts, 5/10/20-trading-day stock-minus-SPY targets, multi-horizon panel preparation, chronological purge/embargo rules, untouched-test policy, and contract tests. Its intended portfolio is 60% SPY plus a 40% equal-weight Top 5 sleeve, without sharing V4 runtime state. Full population, modeling, evaluation, and promotion remain future work; partial panels are smoke-test-only.
+XRP is intentionally excluded from the shared intraday model.
 
-## Crypto V1 Phase 1 — Coinbase Foundation
+Reason:
 
-Phase 1 is complete and pushed at `916135c`. It established a provider-neutral `MarketDataProvider`/`Candle` boundary, public research-only Coinbase Exchange adapter, versioned contracts, BTC benchmark, ranking-consumer boundary, isolated storage, and daily/hourly CLI ingestion with inclusive start/exclusive end.
+- XRP historical 15-minute coverage contains a very large discontinuity.
+- the gap is fundamentally different from ordinary isolated missing candles.
+- the shared model should not absorb this history as if it were continuous.
 
-The exact 25-pair universe is: `BTC-USD, ETH-USD, SOL-USD, XRP-USD, DOGE-USD, ADA-USD, AVAX-USD, LINK-USD, LTC-USD, BCH-USD, DOT-USD, UNI-USD, AAVE-USD, ATOM-USD, NEAR-USD, ICP-USD, FIL-USD, ETC-USD, XLM-USD, HBAR-USD, SHIB-USD, SUI-USD, OP-USD, ARB-USD, INJ-USD`.
+Phase 1 already created:
 
-Coinbase caps responses at 300 candles. The adapter chunks at 299 buckets, traverses the half-open interval, filters boundary rows back to `[start,end)`, deduplicates timestamps, sorts ascending, pauses, and retries retryable failures. Daily Bronze is `data/bronze/crypto/coinbase_exchange/daily/<PAIR>/candles.csv` plus `metadata.json`; hourly uses the parallel `hourly/<PAIR>/` root.
+```text
+data/model/crypto_15m_v1/phase1/xrp_panel.parquet
+```
 
-## Crypto V1 Phase 2 — Research Data Architecture and Results
+A dedicated XRP model remains future work.
 
-Phase 2 is complete and pushed in `8107296` and `c12d958`. Strict Bronze validation checks metadata, UTC/alignment, bounds, order, uniqueness, numeric/OHLC integrity, and gaps. Missing rows are reported, never synthesized or forward-filled. Silver stores canonical sorted unique float64 OHLCV Parquet per pair. Gold preserves one observed candle per asset/date and differing listing histories at `data/gold/crypto/coinbase_exchange/daily/research_panel.parquet`.
+---
 
-Point-in-time eligibility requires 60 days since first observation, complete trailing windows, and trailing 30-day median dollar volume >= $1,000,000. The 22 model features cover exact 1/3/7/14/30-day returns, 7/14/30-day volatility, dollar-volume level/ratio, SMA distances, drawdown, BTC-relative strength, and 14/30-day BTC correlation. Targets are exact 1/3/7-day asset and BTC forward returns, asset-minus-BTC returns, percentile ranks, and Top-3/Top-5 labels; targets are excluded from features. Convention: completed UTC close at t to exact observed UTC close at t+h.
+## 8. Data layer
 
-The `c12d958` horizon-specific correction was necessary because requiring all 1/3/7-day targets first wrongly discarded valid short-horizon rows near the dataset end and XRP discontinuity, and could define rank/Top-N labels over a different cross-section. Each authoritative horizon file now filters on its own target and recomputes ranks and Top-3/Top-5 over that exact eligible date/horizon universe. The combined `research_panel.parquet` is audit/compatibility-only.
+### Historical
 
-The Phase 2 manifest now records generation time, source Git hash, universe, eligibility configuration, features/columns, paths, counts/ranges, complete and aggregate Bronze reports, authoritative horizon inputs, and SHA-256 dataset hashes.
+Authoritative archive:
 
-Full Coinbase daily ingestion covers inclusive 2020-01-01 through 2026-08-10 (exclusive end 2026-08-11). Manifest results: 25 Bronze files and 48,430 rows; 24 have no gaps. XRP alone has one gap, exactly 904 missing daily intervals after 2021-01-19 and before 2023-07-13, preserved as a Coinbase-source gap; XRP has 1,510 rows. Gold has 48,430 rows from 2020-01-01 through 2026-08-10 UTC. Authoritative research inputs are: 1d 44,323 rows, 2020-02-29–2026-08-09; 3d 44,283 rows, 2020-02-29–2026-08-07; 7d 44,203 rows, 2020-02-29–2026-08-03. The combined all-target reference has 44,203 rows.
+```text
+data/research/crypto_intraday/raw_15m/
+```
 
-The stable Ubuntu environment remains `/opt/venvs/crypto-v1`: Python 3.14.4, pandas 3.0.5, NumPy 2.5.2, PyArrow 25.0.1, scikit-learn 1.9.0, joblib 1.5.3. Fresh verification ran `tests.test_crypto_v1_contract`, `tests.test_crypto_v1_dataset`, and `tests.test_crypto_v1_phase3`: all 24 tests passed in 1.125 seconds. Coverage includes pagination/end exclusivity, strict validation, gap preservation, point-in-time eligibility, exact targets/ranks, future-mutation leakage traps, horizon-specific XRP ranking, chronological purge/holdout rules, train-only preprocessing, metrics, and prediction uniqueness.
+Rules:
 
-## Crypto V1 Phase 3 — Implementation and Evaluation
+- actual Coinbase listing history only
+- no synthetic pre-listing candles
+- no synthetic missing candles
+- feature/target calculations must respect continuity boundaries
 
-Phase 3 is complete and pushed at `0e16022`. It predicts cross-sectional BTC-relative forward returns at 1/3/7 days with the frozen 22 features. Learned models are Ridge (alpha 10), Elastic Net (alpha .001, l1_ratio .25), and HistGradientBoosting (150 iterations, learning rate .05, 15 leaves, minimum leaf 20, L2 1). Linear pipelines use training-fold median imputation and scaling; HGB uses training-fold median imputation. Baselines are momentum, deterministic seeded random, and equal score; seed 1729.
+### Continuous low-latency feed
 
-Validation uses chronological expanding windows: ten development folds per horizon (half-years from 2021-01-01 through 2025-06-30, then July 2025), followed by an untouched holdout starting 2025-08-01. No holdout result was used for selection/tuning. Each boundary purges h decision days and verifies all training target endpoints precede validation. Holdout ends are 2026-08-09 (1d), 2026-08-07 (3d), and 2026-08-03 (7d). There are 11 folds/horizon, 99 learned model artifacts plus 99 metadata files, 750,378 prediction rows across models/baselines, and 468 summary rows.
+Service/module:
 
-Exact key overall metrics (mean rank IC / IC hit rate / top-bottom spread / Top-3 / Top-5 mean realized return) are:
+```text
+ml/crypto_rt/coinbase_stream.py
+```
 
-- 1d HGB development: -0.009225 / 0.475194 / 0.001452 / 0.001817 / 0.001217; holdout: -0.004683 / 0.516043 / 0.002096 / 0.001041 / 0.000522.
-- 3d HGB development: 0.008436 / 0.503885 / 0.003117 / 0.003259 / 0.003390; holdout: 0.000291 / 0.516129 / -0.001477 / -0.005319 / -0.003105.
-- 7d HGB development: 0.002458 / 0.496712 / -0.001082 / 0.004122 / 0.004299; holdout: -0.006032 / 0.516304 / -0.004463 / -0.008099 / -0.008395.
-- 7d momentum holdout: 0.041057 / 0.557065 / 0.008863 / -0.002584 / -0.001349.
+The public Coinbase WebSocket provides live ticker data.
 
-Ridge/Elastic Net holdout mean IC is negative at every horizon: -0.013915/-0.020601 (1d), -0.021161/-0.031595 (3d), and -0.025460/-0.038181 (7d).
+### Authoritative closed-bar reconciliation
 
-### Phase 3 conclusion
+Module:
 
-There is **insufficient evidence to proceed to Phase 4 or paper trading**. No learned model has stable positive IC across development and holdout. HGB weakness/non-persistence and negative 3d/7d holdout Top-N returns fail promotion. The notable 7d holdout IC belongs to momentum, yet its Top-3/Top-5 returns are negative. Phase 3 is a completed negative research checkpoint, not a deployable strategy.
+```text
+ml/crypto_rt/reconcile_15m.py
+```
 
-## Limitations and Risks
+LaunchAgent:
 
-The current-day candidate universe retains survivorship/selection bias despite point-in-time first-observation/liquidity rules. Coinbase listing/suspension history and missing no-trade candles matter; XRP is material. Spot OHLCV omits other venues, funding, open interest, basis, order books, token events, and execution capacity. Leakage controls are explicit and tested, but metrics are close-to-close research diagnostics, not a next-bar portfolio backtest with overlapping-horizon accounting, fees, slippage, turnover, capacity, or latency. The holdout has now been observed, so tuning inspired by it requires new governance and genuinely future untouched data. Changing cross-sectional breadth, correlated regimes, multiple comparisons, and a single venue increase false-discovery risk. Generated artifacts are Git-ignored and need external retention despite manifest hashes.
+```text
+com.datashepherd.cryptoreconcile
+```
 
-## Important Commits and Push State
+Current expected behavior:
 
-Important pushed checkpoints: `0b76d66` V4 strategy/paper workflow; `82aaac2` daily V4 pipeline; `e742522`/`dade8ef` journal; `87b13c8`/`96ccd20` report/SPY benchmark; `effecc1` V5 Phase 1; `916135c` Crypto Phase 1; `8107296` Phase 2; `c12d958` horizon/ranking/manifest correction; `0e16022` Phase 3. All are ancestors of pushed `origin/feature/paper-trading`. This handoff edit is not committed or pushed.
+- poll continuously
+- after the settle delay, fetch authoritative closed Coinbase REST candles
+- merge/deduplicate into the research archive
+- write status
+- never fit models
+- never create targets
+- never place orders
 
-## Recommended Next Steps (future, not completed)
+Status files:
 
-1. Do not promote the current Crypto V1 models to Phase 4. Preserve Phase 3 artifacts/hashes as the frozen negative checkpoint.
-2. Diagnose existing predictions without retuning the holdout: fold/year/regime stability, breadth, implied turnover, asset contribution, XRP-gap sensitivity, and uncertainty intervals.
-3. If continuing, pre-register a materially different Phase 3B hypothesis and governance plan; select only on development data and reserve genuinely new future data.
-4. Before any promotion, build execution-timed portfolio evaluation for Top 3/Top 5 with explicit overlap handling, fees, slippage, turnover, capacity, BTC comparison, and the full scorecard. Require stable fold/regime results.
-5. Improve point-in-time universe/delisting coverage and consider a provider-neutral second venue; investigate rather than fill source gaps.
-6. Continue frozen Stock V4 forward observation. Keep Stock V5 full ingestion/modeling isolated.
-7. With approval, commit only this handoff; never commit generated datasets, models, or runtime state.
+```text
+data/live/crypto_rt/reconcile_status.json
+data/live/crypto_rt/latest_authoritative_15m.json
+```
+
+A reconciliation lock bug was fixed on 2026-08-16. The corrected lock code writes the process ID with `fd.write(...)`.
+
+---
+
+## 9. Frozen forward inference service
+
+Module:
+
+```text
+ml/crypto_15m_v2/forward_service.py
+```
+
+LaunchAgent:
+
+```text
+com.datashepherd.cryptov2forward
+```
+
+Behavior:
+
+1. verify frozen model hash
+2. identify latest safe hourly decision timestamp
+3. reconstruct the frozen 44-feature row from reconciled 15-minute data
+4. require BTC
+5. permit missing/ineligible ALT assets as long as the frozen minimum ALT breadth requirement is satisfied
+6. predict BTC / ALT / CASH probabilities
+7. apply frozen `confirm_2`
+8. before 2026-09-01: update shadow snapshot only
+9. at/after 2026-09-01: append genuinely new forward decisions
+10. never replay/backfill missed holdout decisions
+11. never place brokerage orders
+
+The strict “every ALT must have the exact decision candle” behavior was corrected on 2026-08-16 because it did not match the V2 frozen feature contract.
+
+Latest successful shadow example:
+
+- mode: SHADOW
+- decision: 2026-08-16 20:00 UTC
+- raw prediction: ALT
+- executed sleeve: ALT
+- eligible ALTs: 19
+- probabilities:
+  - ALT: 44.45%
+  - CASH: 33.66%
+  - BTC: 21.89%
+- missing exact-hour ALT: ETC-USD
+- feature-ineligible: INJ-USD, OP-USD, SHIB-USD
+- journal rows before holdout: 0
+
+---
+
+## 10. Runtime services on Mac
+
+Installed and running:
+
+```text
+com.datashepherd.web
+com.datashepherd.cryptoreconcile
+com.datashepherd.cryptov2forward
+```
+
+Status:
+
+```bash
+launchctl print gui/$(id -u)/com.datashepherd.web   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.cryptoreconcile   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.cryptov2forward   | grep -E 'state =|runs =|pid =|last exit code'
+```
+
+All three were verified running on 2026-08-16.
+
+---
+
+## 11. Web application
+
+Public domain:
+
+```text
+datashepherdengineering.com
+```
+
+Member-account flow now supports:
+
+- signup
+- Resend email verification
+- unique user-selected username
+- temporary generated password
+- forced password change at first login
+- authenticated dashboard access
+
+Resend sending domain:
+
+```text
+datashepherdengineering.com
+```
+
+DKIM/SPF verification succeeded.
+
+Do not commit `.env`, Resend API keys, Flask secrets, user passwords, or other credentials.
+
+### Crypto dashboard
+
+The Crypto tab now displays the frozen Crypto 15m V2 live/shadow state:
+
+- mode
+- executed sleeve
+- raw prediction
+- BTC / ALT / CASH probabilities
+- eligible ALT count
+- decision time
+- reconciled-through time
+- missing/ineligible ALT assets
+- forward journal counts
+- explicit `REAL ORDERS: NO`
+
+The old unavailable Crypto V1 block was replaced with Crypto 15m V2 research evidence.
+
+The research-evidence section displays:
+
+- `confirm_2`
+- 6,084 raw switches
+- 2,505 executed switches
+- 58.8% turnover reduction
+- 4.2469x at 0 bps
+- 1.2134x at 5 bps
+- historical development drawdowns
+- explicit exploratory/not-future-validation language
+- ALT constituent-cost limitation
+
+---
+
+## 12. Important research boundaries
+
+Do not violate these:
+
+- no future leakage
+- no future-holdout tuning
+- no synthetic missing candles
+- no synthetic pre-listing candles
+- no retrospective universe membership
+- no crossing data gaps in features/targets
+- preserve chronological validation
+- preserve horizon purge rules
+- keep historical exploration separate from future validation
+- do not overwrite the Phase 5 freeze
+- do not backfill the Sep. 1+ forward journal
+- keep XRP separate from shared V2
+- no leverage
+- no shorting
+- no derivatives
+- no real brokerage orders in the current frozen system
+
+---
+
+## 13. Current known limitations
+
+1. ALT constituent-level rebalance costs are not modeled in the V2 historical sleeve simulation.
+2. Phase 4 `confirm_2` results are exploratory, not untouched validation.
+3. There are no Sep. 1+ forward results yet.
+4. Some ALT assets may be temporarily missing or feature-ineligible at a specific hourly decision.
+5. XRP still needs its dedicated intraday model.
+6. The live Crypto dashboard currently renders server-side snapshots; automatic in-place refresh is still pending.
+7. The project still needs stronger operational alerting around service failure/staleness.
+
+---
+
+## 14. Next recommended work
+
+### Highest priority
+
+**Add auto-refresh to the Crypto V2 live monitor.**
+
+The page should refresh only the live state, not reload the entire page. Use the authenticated crypto API and update:
+
+- mode
+- executed sleeve
+- raw prediction
+- probabilities
+- eligible ALT count
+- decision timestamp
+- reconciliation timestamp
+- missing/ineligible ALT lists
+- forward journal counts
+
+### After that
+
+1. Build dedicated XRP research.
+2. Add alerting/staleness health checks.
+3. Add forward equity/performance charts after genuine Sep. 1+ rows exist.
+4. Research ALT constituent-level transaction costs in a new research version; do not mutate the Phase 5 freeze.
+5. Continue stock-model work without changing frozen benchmarks.
+
+---
+
+## 15. Resume checklist
+
+A new session should begin with:
+
+```bash
+cd ~/Data-Shepherd-Engineering/stock-market-ai-platform
+source .venv/bin/activate
+
+git pull --ff-only origin feature/paper-trading
+git status --short
+git log -8 --oneline --decorate
+
+launchctl print gui/$(id -u)/com.datashepherd.web   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.cryptoreconcile   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.cryptov2forward   | grep -E 'state =|runs =|pid =|last exit code'
+
+cat data/live/crypto_rt/reconcile_status.json
+cat data/model/crypto_15m_v2/phase5/forward_service_status.json
+wc -l data/model/crypto_15m_v2/phase5/forward_journal.csv
+```
+
+Before Sep. 1 the journal should remain header-only.
+
+---
+
+## 16. Bootstrap prompt for the next engineering session
+
+```text
+Continue Data Shepherd Engineering from PROJECT_HANDOFF.md.
+
+Read, in order:
+1. PROJECT_HANDOFF.md
+2. README.md
+3. models/README.md
+4. ml/crypto_15m_v2/phase5.py
+5. ml/crypto_15m_v2/forward_service.py
+6. ml/crypto_rt/reconcile_15m.py
+7. webapp/services/crypto_dashboard_service.py
+8. webapp/templates/crypto.html
+
+Then inspect git status, the latest commits, and all three LaunchAgents.
+
+Do not retrain or modify the frozen Crypto 15m V2 Phase 5 candidate.
+Do not tune confirm_2.
+Do not backfill future-journal rows.
+Do not add XRP to the shared V2 model.
+Do not place real brokerage orders.
+
+Current next task: add in-place auto-refresh to the live Crypto V2 dashboard monitor while preserving the research/future-evaluation boundary.
+```

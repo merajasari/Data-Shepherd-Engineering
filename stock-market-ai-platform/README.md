@@ -1,307 +1,263 @@
-# Stock Market AI Platform
+# Data Shepherd Engineering
 
-An end-to-end **data engineering, machine learning, automation, live market intelligence, forecasting, and public web platform** built by Data Shepherd Engineering.
+Data Shepherd Engineering is an experimental research platform for systematic stock and crypto research, model evaluation, paper simulation, and forward paper monitoring.
 
-Production site: **https://datashepherdengineering.com**
+> **Research and simulation only. Not financial advice. No real brokerage orders are placed by the current platform.**
 
-The platform combines Tiingo EOD history, Tiingo IEX live data, a Bronze/Silver/Gold/Features pipeline, 26 per-symbol ML models, five-day trend scoring, Flask APIs, Gunicorn, Cloudflare Tunnel, scheduled refreshes, runit supervision, and Android/Termux boot persistence.
+## Current platform state — 2026-08-16
 
-> **Research platform:** predictions, probabilities, and forecast scores are experimental outputs, not financial advice or guarantees of future performance.
+The project now contains two primary research/application tracks:
 
-## Architecture
+1. **Stocks**
+   - Cross-sectional stock ranking research and dashboarding.
+   - Frozen stock research versions remain available as historical benchmarks.
+   - Forward/paper-trading infrastructure is separate from research artifacts.
+   - The web dashboard supports stock selection, rankings, recent market information, and paper-monitoring views.
 
-```text
-Tiingo EOD API ------------------------------+
-                                             |
-Tiingo IEX WebSocket --> live quote cache ---+--> Flask services --> Gunicorn
-                                             |                         |
-EOD --> Bronze --> Silver --> Gold --> Features --> ML --> inference   |
-                                             |                         |
-                                             +--> 26-stock forecast ---+
-                                                                       |
-                                                                       v
-                                                             Cloudflare Tunnel
-                                                                       |
-                                                                       v
-                                                     datashepherdengineering.com
-```
+2. **Crypto**
+   - Historical Coinbase 15-minute archive for 25 USD crypto products.
+   - Continuous Coinbase real-time ticker ingestion.
+   - Authoritative closed 15-minute REST reconciliation.
+   - Crypto 15m V1 cross-sectional research.
+   - Crypto 15m V2 BTC / ALT / CASH regime research.
+   - Frozen Crypto 15m V2 forward candidate with an hourly decision cadence and `confirm_2` execution policy.
+   - Shadow forward inference before 2026-09-01 UTC; automatic forward paper evaluation begins at/after the frozen holdout boundary.
 
-## Stock Universe
+## Crypto 15m V2 frozen candidate
 
-The data, training, and forecast pipeline supports 26 equities:
+The currently frozen shared crypto candidate is:
 
-`AAPL`, `MSFT`, `NVDA`, `AMZN`, `GOOGL`, `META`, `TSLA`, `AVGO`, `AMD`, `ORCL`, `CRM`, `JPM`, `BAC`, `V`, `MA`, `WMT`, `COST`, `HD`, `JNJ`, `UNH`, `LLY`, `XOM`, `CVX`, `CAT`, `NFLX`, `DIS`.
+- **Model:** HistGradientBoosting classifier
+- **Decision cadence:** 1 hour
+- **Economic horizon:** 4 hours
+- **Execution policy:** `confirm_2`
+- **Confirmation rule:** a new BTC / ALT / CASH sleeve must be predicted for two consecutive hourly decisions before switching
+- **Training rows:** 49,209
+- **Training through:** 2026-08-14 20:00 UTC
+- **Features:** 44
+- **Future evaluation begins:** 2026-09-01 00:00 UTC
+- **XRP:** excluded from the shared model and reserved for a separate research track
+- **Brokerage execution:** disabled
 
-The detailed dashboard view still emphasizes a Top 10 subset, while the new market-wide forecast view covers all 26 symbols.
+### Phase 4 exploratory development evidence
 
-## Historical Data Pipeline
+The selected `confirm_2` execution rule was chosen during an explicitly exploratory turnover-control phase. These figures are **development evidence, not untouched future validation**:
 
-```text
-Tiingo EOD
-  -> Bronze CSV
-  -> Silver Parquet
-  -> Gold Parquet
-  -> Feature Parquet
-  -> model training
-```
+- Raw hourly switches: 6,084
+- Executed switches with `confirm_2`: 2,505
+- Switch reduction: 58.8%
+- Ending equity at 0 bps sleeve-switch cost: 4.2469x
+- Ending equity at 5 bps sleeve-switch cost: 1.2134x
+- Max drawdown at 0 bps: -54.99%
+- Max drawdown at 5 bps: -66.43%
 
-Generated files live under:
+Important limitation: the historical cost model charges sleeve-level BTC / ALT / CASH switching but does not yet model constituent-level turnover inside the equal-weight ALT sleeve. Historical cost results are therefore optimistic.
 
-```text
-data/bronze/
-data/silver/
-data/gold/
-data/features/
-```
+## Crypto data
 
-## Live Market Data
+### Historical archive
 
-`data-ingestion/iex_stream.py` connects to the Tiingo IEX WebSocket for all 26 configured symbols and writes runtime state to:
-
-```text
-data/live/latest_quotes.json
-```
-
-The dashboard uses live prices when available and falls back to latest EOD values outside active market periods.
-
-## Five-Day Future Trend Forecast
-
-`webapp/services/forecast_service.py` converts each model's existing five-trading-day UP/DOWN probabilities into a normalized trend score:
+The authoritative research archive is stored under:
 
 ```text
-forecast_score = (probability_up - probability_down) * 100
+data/research/crypto_intraday/raw_15m/
 ```
 
-Interpretation:
+The archive contains multiple years of 15-minute Coinbase history, with BTC history extending back approximately ten years. Assets begin at their actual Coinbase listing history rather than being synthetically backfilled.
+
+No missing historical candles are synthesized.
+
+### Live and reconciled data
+
+The platform has two complementary live layers:
+
+- **Coinbase public WebSocket** — low-latency live ticker stream.
+- **Coinbase Exchange REST reconciliation** — authoritative closed 15-minute candle layer.
+
+The reconciler continuously updates:
 
 ```text
-+100  strongly bullish
-   0  neutral
--100  strongly bearish
+data/research/crypto_intraday/raw_15m/
+data/live/crypto_rt/reconcile_status.json
+data/live/crypto_rt/latest_authoritative_15m.json
 ```
 
-This is a **directional model score, not a future price target**.
+## Crypto 15m research history
 
-The dashboard displays all 26 symbols ranked from most bullish to most bearish, including model probability, holdout accuracy, and majority baseline. The forecast view appears near the top of the public dashboard before the individual-stock drill-down.
+### Crypto 15m V1
 
-API:
+V1 built a 24-asset shared panel with XRP isolated because XRP has a large historical gap.
+
+Phase 1 produced:
+
+- 4,713,634 shared-core rows
+- 170,315 dedicated XRP rows
+- 44 features
+- prediction horizons: 15m, 1h, 4h, 24h
+- no feature or target crossing a missing-data gap
+- no synthesized candles
+
+Phase 2 found only a small positive cross-sectional signal in Ridge at the 4-hour BTC-relative target.
+
+Phase 3 showed that the always-risky Top-N portfolio design failed economically because extremely high turnover overwhelmed the weak signal.
+
+### Crypto 15m V2
+
+V2 changed the research question from constant risky cross-sectional allocation to a BTC / ALT / CASH regime decision.
+
+- Phase 1: hourly market-allocation dataset
+- Phase 2: walk-forward classification research
+- Phase 3: hourly regime portfolio simulation
+- Phase 4: exploratory turnover-control policies
+- Phase 5: frozen HGB + `confirm_2` candidate for future paper evaluation
+
+The Phase 5 freeze must not be modified in place. Any change to features, model hyperparameters, class definitions, execution policy, cost reference, XRP policy, or holdout rules requires a new research version.
+
+## Forward crypto service
+
+The frozen forward inference service:
 
 ```text
-GET /api/forecast
+ml/crypto_15m_v2/forward_service.py
 ```
 
-## Machine Learning
+It:
 
-Each symbol has an independent NumPy logistic-regression model predicting whether the stock will be higher five trading days later.
+- verifies the frozen model SHA-256 before inference
+- reconstructs the exact frozen 44-feature contract
+- reads authoritative reconciled 15-minute data
+- produces BTC / ALT / CASH probabilities
+- applies the frozen `confirm_2` policy
+- records a shadow snapshot before the holdout boundary
+- writes only genuinely new forward decisions at/after 2026-09-01 UTC
+- never backfills missed holdout decisions
+- never places brokerage orders
 
-Evaluation includes:
-
-- accuracy
-- precision
-- recall
-- F1
-- majority-class baseline
-
-The UI intentionally exposes weak models rather than hiding them behind high confidence values. Several current models remain below their majority baseline, making model diagnostics and better validation the next major research phase.
-
-See [`docs/MACHINE_LEARNING.md`](docs/MACHINE_LEARNING.md).
-
-## Application APIs
+Current Phase 5 state files:
 
 ```text
-GET /
-GET /api/stocks
-GET /api/prices/<symbol>
-GET /api/live
-GET /api/live/<symbol>
-GET /api/forecast
-GET /health
+data/model/crypto_15m_v2/phase5/frozen_hgb.joblib
+data/model/crypto_15m_v2/phase5/freeze_manifest.json
+data/model/crypto_15m_v2/phase5/forward_state.json
+data/model/crypto_15m_v2/phase5/forward_journal.csv
+data/model/crypto_15m_v2/phase5/forward_service_status.json
+data/model/crypto_15m_v2/phase5/shadow_latest.json
 ```
 
-## Browser Refresh
+## macOS background services
 
-The dashboard polls live/forecast APIs every 10 seconds while visible. It updates live prices and the 26-stock trend view without a full page reload.
+The Mac runtime uses LaunchAgents.
 
-## Automated Historical Refresh
-
-`refresh_pipeline.sh` uses a sentinel freshness check before rebuilding downstream layers.
+Crypto reconciliation:
 
 ```text
-hourly cron
-  -> flock overlap protection
-  -> EOD sentinel check
-      -> unchanged: stop
-      -> new bar:
-           refresh all 26
-           -> Silver
-           -> Gold
-           -> Features
-           -> retrain all 26 models
+com.datashepherd.cryptoreconcile
 ```
 
-This reduces unnecessary Tiingo calls and avoids repeated retraining when EOD data has not advanced.
-
-## Production Web Deployment
-
-The public request path is:
+Frozen Crypto V2 forward inference:
 
 ```text
-https://datashepherdengineering.com
-          |
-          v
-Cloudflare DNS + Universal HTTPS
-          |
-          v
-Cloudflare Tunnel
-          |
-          v
-127.0.0.1:5000
-          |
-          v
-Gunicorn
-          |
-          v
-Flask application
+com.datashepherd.cryptov2forward
 ```
 
-The same tunnel also routes:
+Web application:
 
 ```text
-https://www.datashepherdengineering.com
+com.datashepherd.web
 ```
 
-The origin port is not directly exposed to the public Internet; Cloudflare Tunnel establishes outbound connections from the Termux device.
-
-## Service Supervision
-
-The Termux/runit production stack now uses four independent services:
-
-```text
-crond
-stock-market-ai
-iex-stream
-cloudflared
-```
-
-Responsibilities:
-
-- **crond** — scheduled EOD freshness checks and conditional rebuilds
-- **stock-market-ai** — Gunicorn serving `webapp.app:app` on `127.0.0.1:5000`
-- **iex-stream** — Tiingo IEX WebSocket process
-- **cloudflared** — named Cloudflare Tunnel `data-shepherd`
-
-Separating the IEX stream from the web service allows runit to restart either component independently.
-
-All four services are enabled with Termux Services and participate in the existing Android boot-persistence workflow.
-
-## Production Verification
-
-Local Gunicorn check:
+Typical status check:
 
 ```bash
-curl -I http://127.0.0.1:5000
+launchctl print gui/$(id -u)/com.datashepherd.cryptoreconcile   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.cryptov2forward   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.web   | grep -E 'state =|runs =|pid =|last exit code'
 ```
 
-Expected header:
+## Web application
+
+The member web application includes:
+
+- account signup
+- email verification through Resend
+- unique username selection
+- temporary-password onboarding
+- forced password change on first login
+- stock dashboard
+- crypto dashboard
+- authenticated API endpoints
+- paper/research-only monitoring
+
+The crypto page now surfaces:
+
+- SHADOW / FORWARD mode
+- current executed sleeve
+- raw model prediction
+- BTC / ALT / CASH probabilities
+- eligible ALT count
+- hourly decision timestamp
+- reconciliation freshness
+- missing/ineligible ALT assets
+- forward-journal counts
+- Crypto 15m V2 exploratory development evidence
+- explicit no-real-orders status
+
+## Email
+
+Domain sending is configured through Resend for:
 
 ```text
-Server: gunicorn
+datashepherdengineering.com
 ```
 
-Public check:
+The domain has verified DKIM/SPF records. Production signup email uses the configured Resend API key from the local `.env`.
+
+Never commit API keys, passwords, tokens, or `.env` contents.
+
+## Research guardrails
+
+The following rules are intentional and should be preserved:
+
+- no future leakage
+- no synthetic missing candles
+- no retrospective universe membership
+- chronological walk-forward evaluation
+- horizon-aware purging
+- frozen holdout boundaries
+- no tuning on future holdout results
+- development and future-forward evidence clearly labeled
+- generated research artifacts kept separate from source
+- XRP kept separate from the shared Crypto 15m V2 model
+- no leverage, shorting, derivatives, or real brokerage execution in the frozen candidate
+
+## Repository workflow
+
+Primary active branch:
+
+```text
+feature/paper-trading
+```
+
+Typical update flow:
 
 ```bash
-curl -I https://datashepherdengineering.com
-curl -s https://datashepherdengineering.com/health
+git pull --ff-only origin feature/paper-trading
+python -m py_compile <changed-python-files>
 ```
 
-A healthy public response uses HTTP/2 through Cloudflare and reports `"status":"healthy"`.
+Generated model/data artifacts should not be committed unless explicitly intended. Source, tests, scripts, templates, and documentation should be reviewed separately from generated runtime state.
 
-## Dependencies
+## Immediate next work
 
-The current Python dependency file includes:
+1. Auto-refresh the live Crypto V2 dashboard status without a full page reload.
+2. Build the separate XRP intraday research/model track.
+3. Preserve the Crypto 15m V2 Phase 5 freeze until future evaluation begins.
+4. Add forward-performance visualizations only after genuine Sep. 1+ observations exist.
+5. Model ALT constituent-level turnover/costs before making stronger economic claims.
+6. Continue improving service health/alerting and operational observability.
 
-```text
-flask
-gunicorn
-numpy
-pandas
-pyarrow
-python-dotenv
-requests
-websocket-client
-```
+## Safety
 
-## Project Structure
-
-```text
-stock-market-ai-platform/
-├── data-ingestion/
-│   ├── symbols.py
-│   ├── tiingo_client.py
-│   ├── tiingo_multi_ingest.py
-│   ├── iex_stream.py
-│   ├── silver_pipeline.py
-│   ├── gold_pipeline.py
-│   └── feature_pipeline.py
-├── ml/
-│   ├── train_model.py
-│   ├── train_all.py
-│   └── predict.py
-├── webapp/
-│   ├── app.py
-│   ├── services/
-│   │   ├── market_service.py
-│   │   ├── prediction_service.py
-│   │   ├── live_market_service.py
-│   │   └── forecast_service.py
-│   ├── static/js/dashboard.js
-│   └── templates/index.html
-├── docs/
-├── refresh_pipeline.sh
-├── run_platform.sh
-└── README.md
-```
-
-## Runtime / Secret Boundaries
-
-Do not commit:
-
-```text
-.env
-data/bronze/
-data/silver/
-data/gold/
-data/features/
-data/live/
-models/*.pkl
-logs/
-run/
-*.lock
-~/.cloudflared/cert.pem
-~/.cloudflared/*.json
-```
-
-Cloudflare tunnel credentials are secrets and remain outside the repository.
-
-## Technology Stack
-
-Python, Flask, Gunicorn, Jinja2, Pandas, NumPy, Parquet, Tiingo EOD API, Tiingo IEX WebSocket, websocket-client, JavaScript, Bash, cron/cronie, flock, runit, Termux Services, Cloudflare DNS, Cloudflare Tunnel, HTTPS, Git, and GitHub.
-
-## Roadmap
-
-Primary next steps:
-
-- walk-forward / rolling-window model validation
-- probability calibration
-- stronger baseline and model-family comparisons
-- historical prediction logging
-- realistic backtesting with costs/slippage
-- incremental EOD ingestion
-- structured observability and alerts
-- model/version tracking
-- eventual migration from Android/Termux to a conventional cloud/container deployment if scale requires it
-
-## Disclaimer
-
-This repository is for software engineering, data engineering, and machine-learning research. Market predictions are uncertain. Model output probability and forecast score are not equivalent to validated predictive accuracy or expected investment returns. Nothing in this project constitutes financial advice.
+This repository is an experimental research and simulation platform. Nothing in the current system should be interpreted as a promise of investment performance or as automated real-money trading.
