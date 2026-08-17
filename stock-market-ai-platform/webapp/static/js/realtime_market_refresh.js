@@ -8,6 +8,26 @@
     return Number.isFinite(n) ? `$${n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:8})}` : '—';
   };
 
+  function renderStockHealth(h) {
+    const status = document.getElementById('stock-stream-health-status');
+    if (!status) return;
+    status.textContent = h.status || 'UNKNOWN';
+    status.style.color = h.status === 'LIVE' ? 'var(--green)' : (h.status === 'ERROR' || h.status === 'STALE' ? 'var(--red)' : 'var(--gold)');
+    const set = (id, value) => { const el=document.getElementById(id); if (el) el.textContent=value; };
+    set('stock-stream-agent', h.launchagent_running ? 'RUNNING' : 'NOT RUNNING');
+    set('stock-stream-live-count', String(h.live_symbol_count ?? 0));
+    set('stock-stream-configured-count', String(h.configured_symbol_count ?? 0));
+    set('stock-stream-cache-age', h.cache_age_seconds == null ? '—' : `${Math.max(0,h.cache_age_seconds).toFixed(1)}s`);
+    set('stock-stream-session', h.regular_session_expected_open ? 'REGULAR OPEN' : 'CLOSED');
+    set('stock-stream-health-detail', h.detail || '');
+  }
+
+  async function refreshStockHealth() {
+    if (location.pathname !== '/dashboard') return;
+    const health = await fetch(`/api/stock-stream-health?t=${Date.now()}`, {cache:'no-store'}).then(r => r.json());
+    renderStockHealth(health);
+  }
+
   async function refreshStocks() {
     if (location.pathname !== '/dashboard') return;
     const all = await fetch(`/api/live?t=${Date.now()}`, {cache:'no-store'}).then(r => r.json());
@@ -55,7 +75,7 @@
   async function tick() {
     if (inFlight || document.visibilityState !== 'visible') return;
     inFlight = true;
-    try { await Promise.allSettled([refreshStocks(), refreshCrypto()]); }
+    try { await Promise.allSettled([refreshStocks(), refreshStockHealth(), refreshCrypto()]); }
     finally { inFlight = false; }
   }
 

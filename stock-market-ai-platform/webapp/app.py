@@ -34,6 +34,8 @@ from webapp.services.account_service import (  # noqa: E402
 )
 from webapp.services.crypto_dashboard_service import get_crypto_dashboard_payload  # noqa: E402
 from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
+from webapp.services.stock_stream_health_service import get_stock_stream_health  # noqa: E402
+from webapp.services.crypto_live_market_service import get_all_crypto_live_tickers  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
 from webapp.services.paper_trading_service import get_portfolio_summary  # noqa: E402
@@ -63,6 +65,8 @@ def inject_dashboard_modules(response):
         scripts = []
         if request.path in {"/", "/dashboard", "/crypto"}:
             scripts.append('<script src="/static/js/signup_button.js"></script>')
+        if request.path in {"/dashboard", "/crypto"}:
+            scripts.append('<script src="/static/js/realtime_market_refresh.js"></script>')
         if request.path == "/dashboard":
             scripts.extend([
                 '<script src="/static/js/dashboard_layout.js"></script>',
@@ -417,6 +421,18 @@ def api_live_quote(symbol):
 @login_required
 def api_live_quotes():
     return jsonify(get_all_live_quotes())
+
+
+@app.route("/api/stock-stream-health")
+@login_required
+def api_stock_stream_health():
+    return jsonify(get_stock_stream_health())
+
+
+@app.route("/api/crypto-live")
+@login_required
+def api_crypto_live_quotes():
+    return jsonify(get_all_crypto_live_tickers())
 
 
 @app.route("/api/paper-portfolio")
