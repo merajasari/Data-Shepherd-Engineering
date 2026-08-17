@@ -43,6 +43,7 @@ from webapp.services.prediction_service import get_latest_prediction, get_v5_ran
 from webapp.services.paper_trading_service import get_pnl_attribution, get_portfolio_summary  # noqa: E402
 from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
 from webapp.services.v5_shadow_portfolio_service import get_v5_shadow_comparison  # noqa: E402
+from webapp.services.v5_shadow_history_service import get_v5_shadow_history  # noqa: E402
 
 
 app = Flask(__name__)
@@ -76,6 +77,7 @@ def inject_dashboard_modules(response):
                 '<script src="/static/js/v4_equity_chart.js" defer></script>',
                 '<script src="/static/js/v4_pnl_attribution.js" defer></script>',
                 '<script src="/static/js/v5_shadow_comparison.js" defer></script>',
+                '<script src="/static/js/v5_shadow_history_chart.js" defer></script>',
                 '<script src="/static/js/market_history_chart.js" defer></script>',
                 '<script src="/static/js/primary_stock_spotlight.js" defer></script>',
             ])
@@ -487,6 +489,12 @@ def api_v4_forward():
 @login_required
 def api_v5_shadow_comparison():
     return jsonify(get_v5_shadow_comparison())
+
+
+@app.route("/api/v5-shadow-history")
+@login_required
+def api_v5_shadow_history():
+    return jsonify(get_v5_shadow_history())
 
 
 @app.route("/health")
