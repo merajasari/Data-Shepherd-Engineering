@@ -5,9 +5,13 @@ XRP V1 shadow/forward service state. Presentation only: never fits models or
 places orders.
 """
 from __future__ import annotations
+
+from datetime import datetime, timezone
 import json
 from pathlib import Path
+
 import pandas as pd
+
 from ml.crypto_v1.config import CRYPTO_UNIVERSE, MODEL_ROOT
 
 PHASE3_ROOT = MODEL_ROOT / "phase3"
@@ -25,68 +29,434 @@ XRP_SHADOW_PATH = XRP_PHASE6_ROOT / "shadow_latest.json"
 SHARED_V3_MANIFEST_PATH = Path("data/model/crypto_15m_v3/phase4/manifest.json")
 XRP_V2_MANIFEST_PATH = Path("data/model/crypto_xrp_v2/phase5/manifest.json")
 XRP_V3_MANIFEST_PATH = Path("data/model/crypto_xrp_v3/phase4/manifest.json")
-PRIMARY_HORIZON_DAYS=7; PRIMARY_MODEL_ID="momentum"; PRIMARY_VARIANT="top_5_equal_weight"; PRIMARY_TOP_N=5; PRIMARY_COST_BPS=25.0; DISPLAY_STARTING_EQUITY=100000.0
+
+PRIMARY_HORIZON_DAYS = 7
+PRIMARY_MODEL_ID = "momentum"
+PRIMARY_VARIANT = "top_5_equal_weight"
+PRIMARY_TOP_N = 5
+PRIMARY_COST_BPS = 25.0
+DISPLAY_STARTING_EQUITY = 100000.0
+
 
 def _read_csv(path):
     return pd.read_csv(path) if path.exists() else pd.DataFrame()
+
+
 def _read_json(path):
-    try: return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except Exception: return {}
-def _read_predictions():
-    path=PHASE3_ROOT/"predictions.parquet"
-    if not path.exists(): return pd.DataFrame()
-    f=pd.read_parquet(path); f["timestamp_utc"]=pd.to_datetime(f["timestamp_utc"],utc=True); return f
-def _primary_daily():
-    d=_read_csv(PHASE4_ROOT/"portfolio_daily.csv")
-    if d.empty:return d
-    d["timestamp_utc"]=pd.to_datetime(d["timestamp_utc"],utc=True)
-    m=d["split"].eq("holdout")&d["model_id"].eq(PRIMARY_MODEL_ID)&d["variant"].eq(PRIMARY_VARIANT)&pd.to_numeric(d["top_n"],errors="coerce").eq(PRIMARY_TOP_N)&pd.to_numeric(d["cost_bps_round_trip"],errors="coerce").eq(PRIMARY_COST_BPS)
-    return d.loc[m].sort_values("timestamp_utc").reset_index(drop=True)
-def _btc_daily():
-    d=_read_csv(PHASE4_ROOT/"portfolio_daily.csv")
-    if d.empty:return d
-    d["timestamp_utc"]=pd.to_datetime(d["timestamp_utc"],utc=True)
-    m=d["split"].eq("holdout")&d["model_id"].eq(PRIMARY_MODEL_ID)&d["variant"].eq("btc_benchmark")&pd.to_numeric(d["cost_bps_round_trip"],errors="coerce").eq(PRIMARY_COST_BPS)
-    return d.loc[m].sort_values("timestamp_utc").reset_index(drop=True)
-def _latest_rankings():
-    p=_read_predictions()
-    if p.empty:return None,[]
-    f=p[(p["split"]=="holdout")&(p["model_id"]==PRIMARY_MODEL_ID)&(p["horizon_days"]==PRIMARY_HORIZON_DAYS)].copy()
-    if f.empty:return None,[]
-    latest=f["timestamp_utc"].max(); day=f[f["timestamp_utc"]==latest].sort_values(["predicted_score","product_id"],ascending=[False,True]); rows=[]; count=len(day)
-    for rank,row in enumerate(day.itertuples(index=False),1):
-        score=float(row.predicted_score); rows.append({"rank":rank,"product_id":row.product_id,"score":score,"score_pct":score*100,"rank_percentile":(1-(rank-1)/max(1,count-1))*100,"top5":rank<=PRIMARY_TOP_N})
-    return latest.isoformat(),rows
-def _equity_history(primary,btc):
-    if primary.empty:return []
-    bm=dict(zip(btc["timestamp_utc"],pd.to_numeric(btc["equity"],errors="coerce"))) if not btc.empty else {}
-    return [{"timestamp":r.timestamp_utc.isoformat(),"equity":DISPLAY_STARTING_EQUITY*float(r.equity),"btc_equity":DISPLAY_STARTING_EQUITY*float(bm[r.timestamp_utc]) if r.timestamp_utc in bm and pd.notna(bm[r.timestamp_utc]) else None,"is_rebalance":bool(r.is_rebalance)} for r in primary.itertuples(index=False)]
-def _v2_live():
-    s=_read_json(V2_STATUS_PATH); r=_read_json(RECONCILE_STATUS_PATH)
-    if not s:return {"available":False,"message":"Frozen Crypto 15m V2 forward service status is not available yet."}
-    probs=s.get("probabilities",{}); journal=_read_csv(V2_JOURNAL_PATH); realized=journal[journal.get("status",pd.Series(dtype=str)).eq("REALIZED")] if not journal.empty and "status" in journal else pd.DataFrame()
-    equity=float(pd.to_numeric(realized.get("equity",pd.Series(dtype=float)),errors="coerce").dropna().iloc[-1]) if not realized.empty and pd.to_numeric(realized.get("equity",pd.Series(dtype=float)),errors="coerce").notna().any() else 1.0
-    return {"available":True,"mode":s.get("mode","UNKNOWN"),"action":s.get("action"),"decision_timestamp_utc":s.get("decision_timestamp_utc"),"generated_at_utc":s.get("generated_at_utc"),"raw_predicted_label":s.get("raw_predicted_label"),"current_executed_label":s.get("current_executed_label"),"prob_btc":float(probs.get("BTC",0)),"prob_alt":float(probs.get("ALT",0)),"prob_cash":float(probs.get("CASH",0)),"alt_asset_count":int(s.get("alt_asset_count",0)),"missing_alts":s.get("missing_decision_candle_alts",[]),"ineligible_alts":s.get("feature_ineligible_alts",[]),"brokerage_orders":bool(s.get("brokerage_orders",False)),"reconcile_boundary":r.get("latest_expected_bar_start_utc"),"reconcile_product_count":r.get("product_count"),"journal_rows":max(0,len(journal)),"realized_rows":len(realized),"paper_equity_multiple":equity}
-def _xrp_live():
-    s=_read_json(XRP_STATUS_PATH); shadow=_read_json(XRP_SHADOW_PATH)
-    if not s:return {"available":False,"message":"XRP V1 Phase 6 shadow forward service status is not available yet."}
-    return {"available":True,"mode":s.get("mode","UNKNOWN"),"action":s.get("action"),"decision_timestamp_utc":s.get("decision_timestamp_utc"),"current_shadow_state":s.get("current_shadow_state"),"score":s.get("predicted_btc_relative_return_4h"),"model_sha256_verified":bool(s.get("model_sha256_verified",False)),"policy_verified":bool(s.get("policy_verified",False)),"brokerage_orders":bool(s.get("brokerage_orders",False)),"shadow_only":bool(s.get("shadow_only",True)),"xrp_latest_bar_utc":shadow.get("xrp_latest_bar_utc"),"btc_latest_bar_utc":shadow.get("btc_latest_bar_utc"),"common_latest_bar_utc":shadow.get("common_latest_bar_utc"),"state_before":shadow.get("state_before"),"state_after":shadow.get("state_after"),"proposed_state":shadow.get("proposed_state"),"state_switch":bool(shadow.get("state_switch",False)),"state_reset":bool(shadow.get("state_reset",False)),"minimum_hold_blocked":bool(shadow.get("minimum_hold_blocked",False)),"hours_since_state_change":shadow.get("hours_since_state_change"),"minimum_hold_hours":shadow.get("minimum_hold_hours",24),"policy_id":shadow.get("policy_id","hyst_10_05_hold24"),"model_id":shadow.get("model_id","ridge"),"model_sha256":shadow.get("model_sha256"),"feature_count":shadow.get("feature_count",44),"future_holdout_start_utc":shadow.get("future_holdout_start_utc","2026-09-01T00:00:00+00:00"),"forward_evaluation_journal":bool(shadow.get("forward_evaluation_journal",False))}
-def _v2_research_evidence():
-    summary=_read_csv(V2_POLICY_SUMMARY_PATH); manifest=_read_json(V2_PHASE4_MANIFEST_PATH)
-    if summary.empty or "policy" not in summary:return {"available":False}
-    row=summary[summary["policy"]=="confirm_2"]
-    if row.empty:return {"available":False}
-    r=row.iloc[0]
-    return {"available":True,"policy":"confirm_2","confirmation_hours":2,"ending_equity_0bps":float(r["ending_equity_0bps"]),"ending_equity_5bps":float(r["ending_equity_5bps"]),"executed_switches":int(r["executed_switches"]),"switch_reduction_fraction":float(r["switch_reduction_fraction"]),"max_drawdown_0bps":float(r["max_drawdown_0bps"]),"max_drawdown_5bps":float(r["max_drawdown_5bps"]),"raw_switches":6084,"research_status":manifest.get("research_status","EXPLORATORY ONLY. Phase 3 OOS results were already inspected before policy selection."),"future_validation_rule":manifest.get("future_validation_rule"),"cost_limitation":manifest.get("cost_limitation"),"holdout_start":"2026-09-01T00:00:00+00:00"}
-def _development_research_tracks():
-    shared=_read_json(SHARED_V3_MANIFEST_PATH); x2=_read_json(XRP_V2_MANIFEST_PATH); x3=_read_json(XRP_V3_MANIFEST_PATH)
-    return [
-        {"name":"Shared Crypto V3","status":shared.get("status","REJECT_CURRENT_POLICY_FAMILY"),"summary":"15m decisions / 1h horizon. Current turnover-control policy family failed realistic transaction-cost robustness and is preserved as rejected development evidence.","detail":"No freeze. Frozen Shared V2 remains unchanged."},
-        {"name":"XRP V2","status":x2.get("status","OVERLAY_DIAGNOSTICS_ONLY_NO_FREEZE"),"summary":"15m decisions / 1h BTC-relative research. Aggregate overlay evidence exists, but temporal stability and drawdown gates were insufficient.","detail":"Diagnostics only. No freeze and no further tuning of the same V2 policy family."},
-        {"name":"XRP V3","status":x3.get("status","NO_PROMOTION_CANDIDATE"),"summary":"BTC-default selective XRP overlay. Aggregate 5 bps results were promising, but the pre-registered 75% positive-fold gate failed.","detail":"No promotion candidate. Frozen XRP V1 Phase 6 remains unchanged."},
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except Exception:
+        return {}
+
+
+def _parse_utc(value):
+    if not value:
+        return None
+    try:
+        ts = pd.Timestamp(value)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        else:
+            ts = ts.tz_convert("UTC")
+        return ts.to_pydatetime()
+    except Exception:
+        return None
+
+
+def _heartbeat_time(path, payload):
+    for key in ("generated_at_utc", "last_updated_utc", "updated_at_utc"):
+        ts = _parse_utc(payload.get(key))
+        if ts is not None:
+            return ts
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc) if path.exists() else None
+    except OSError:
+        return None
+
+
+def _service_health(name, path, payload, stale_after_minutes, extra_error=None):
+    if not path.exists() or not payload:
+        return {
+            "name": name,
+            "status": "UNAVAILABLE",
+            "heartbeat_at_utc": None,
+            "age_minutes": None,
+            "stale_after_minutes": stale_after_minutes,
+            "detail": "Runtime status file is missing or unreadable.",
+        }
+
+    raw_status = str(payload.get("status", "ok")).strip().lower()
+    if raw_status not in {"ok", "success", "running", "healthy"}:
+        return {
+            "name": name,
+            "status": "ERROR",
+            "heartbeat_at_utc": payload.get("generated_at_utc") or payload.get("last_updated_utc"),
+            "age_minutes": None,
+            "stale_after_minutes": stale_after_minutes,
+            "detail": f"Runtime status reported {raw_status!r}.",
+        }
+
+    if extra_error:
+        return {
+            "name": name,
+            "status": "ERROR",
+            "heartbeat_at_utc": payload.get("generated_at_utc") or payload.get("last_updated_utc"),
+            "age_minutes": None,
+            "stale_after_minutes": stale_after_minutes,
+            "detail": extra_error,
+        }
+
+    heartbeat = _heartbeat_time(path, payload)
+    if heartbeat is None:
+        return {
+            "name": name,
+            "status": "UNAVAILABLE",
+            "heartbeat_at_utc": None,
+            "age_minutes": None,
+            "stale_after_minutes": stale_after_minutes,
+            "detail": "No usable heartbeat timestamp is available.",
+        }
+
+    age_minutes = max(0.0, (datetime.now(timezone.utc) - heartbeat).total_seconds() / 60.0)
+    status = "STALE" if age_minutes > stale_after_minutes else "HEALTHY"
+    detail = (
+        f"Heartbeat is {age_minutes:.1f} minutes old; stale threshold is {stale_after_minutes} minutes."
+    )
+    return {
+        "name": name,
+        "status": status,
+        "heartbeat_at_utc": heartbeat.isoformat(),
+        "age_minutes": round(age_minutes, 1),
+        "stale_after_minutes": stale_after_minutes,
+        "detail": detail,
+    }
+
+
+def _operational_health():
+    reconcile = _read_json(RECONCILE_STATUS_PATH)
+    v2 = _read_json(V2_STATUS_PATH)
+    xrp = _read_json(XRP_STATUS_PATH)
+
+    v2_error = None
+    if v2 and v2.get("model_sha256_verified") is False:
+        v2_error = "Frozen Shared V2 model hash verification failed."
+
+    xrp_error = None
+    if xrp and xrp.get("model_sha256_verified") is False:
+        xrp_error = "Frozen XRP V1 model hash verification failed."
+    elif xrp and xrp.get("policy_verified") is False:
+        xrp_error = "Frozen XRP V1 policy verification failed."
+
+    services = [
+        _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
+        _service_health("Shared V2 Forward", V2_STATUS_PATH, v2, 90, v2_error),
+        _service_health("XRP V1 Forward", XRP_STATUS_PATH, xrp, 90, xrp_error),
+        {
+            "name": "Web Dashboard",
+            "status": "HEALTHY",
+            "heartbeat_at_utc": datetime.now(timezone.utc).isoformat(),
+            "age_minutes": 0.0,
+            "stale_after_minutes": 5,
+            "detail": "This dashboard request rendered successfully.",
+        },
     ]
+    rank = {"HEALTHY": 0, "STALE": 1, "UNAVAILABLE": 2, "ERROR": 3}
+    overall = max(services, key=lambda item: rank[item["status"]])["status"]
+    return {
+        "overall_status": overall,
+        "services": services,
+        "note": "Web Dashboard health is request-path liveness; LaunchAgent process state is checked separately with launchctl.",
+    }
+
+
+def _read_predictions():
+    path = PHASE3_ROOT / "predictions.parquet"
+    if not path.exists():
+        return pd.DataFrame()
+    frame = pd.read_parquet(path)
+    frame["timestamp_utc"] = pd.to_datetime(frame["timestamp_utc"], utc=True)
+    return frame
+
+
+def _primary_daily():
+    data = _read_csv(PHASE4_ROOT / "portfolio_daily.csv")
+    if data.empty:
+        return data
+    data["timestamp_utc"] = pd.to_datetime(data["timestamp_utc"], utc=True)
+    mask = (
+        data["split"].eq("holdout")
+        & data["model_id"].eq(PRIMARY_MODEL_ID)
+        & data["variant"].eq(PRIMARY_VARIANT)
+        & pd.to_numeric(data["top_n"], errors="coerce").eq(PRIMARY_TOP_N)
+        & pd.to_numeric(data["cost_bps_round_trip"], errors="coerce").eq(PRIMARY_COST_BPS)
+    )
+    return data.loc[mask].sort_values("timestamp_utc").reset_index(drop=True)
+
+
+def _btc_daily():
+    data = _read_csv(PHASE4_ROOT / "portfolio_daily.csv")
+    if data.empty:
+        return data
+    data["timestamp_utc"] = pd.to_datetime(data["timestamp_utc"], utc=True)
+    mask = (
+        data["split"].eq("holdout")
+        & data["model_id"].eq(PRIMARY_MODEL_ID)
+        & data["variant"].eq("btc_benchmark")
+        & pd.to_numeric(data["cost_bps_round_trip"], errors="coerce").eq(PRIMARY_COST_BPS)
+    )
+    return data.loc[mask].sort_values("timestamp_utc").reset_index(drop=True)
+
+
+def _latest_rankings():
+    predictions = _read_predictions()
+    if predictions.empty:
+        return None, []
+    frame = predictions[
+        (predictions["split"] == "holdout")
+        & (predictions["model_id"] == PRIMARY_MODEL_ID)
+        & (predictions["horizon_days"] == PRIMARY_HORIZON_DAYS)
+    ].copy()
+    if frame.empty:
+        return None, []
+    latest = frame["timestamp_utc"].max()
+    day = frame[frame["timestamp_utc"] == latest].sort_values(
+        ["predicted_score", "product_id"], ascending=[False, True]
+    )
+    rows = []
+    count = len(day)
+    for rank, row in enumerate(day.itertuples(index=False), 1):
+        score = float(row.predicted_score)
+        rows.append(
+            {
+                "rank": rank,
+                "product_id": row.product_id,
+                "score": score,
+                "score_pct": score * 100,
+                "rank_percentile": (1 - (rank - 1) / max(1, count - 1)) * 100,
+                "top5": rank <= PRIMARY_TOP_N,
+            }
+        )
+    return latest.isoformat(), rows
+
+
+def _equity_history(primary, btc):
+    if primary.empty:
+        return []
+    benchmark = (
+        dict(zip(btc["timestamp_utc"], pd.to_numeric(btc["equity"], errors="coerce")))
+        if not btc.empty
+        else {}
+    )
+    return [
+        {
+            "timestamp": row.timestamp_utc.isoformat(),
+            "equity": DISPLAY_STARTING_EQUITY * float(row.equity),
+            "btc_equity": (
+                DISPLAY_STARTING_EQUITY * float(benchmark[row.timestamp_utc])
+                if row.timestamp_utc in benchmark and pd.notna(benchmark[row.timestamp_utc])
+                else None
+            ),
+            "is_rebalance": bool(row.is_rebalance),
+        }
+        for row in primary.itertuples(index=False)
+    ]
+
+
+def _v2_live():
+    status = _read_json(V2_STATUS_PATH)
+    reconcile = _read_json(RECONCILE_STATUS_PATH)
+    if not status:
+        return {"available": False, "message": "Frozen Crypto 15m V2 forward service status is not available yet."}
+    probs = status.get("probabilities", {})
+    journal = _read_csv(V2_JOURNAL_PATH)
+    realized = (
+        journal[journal.get("status", pd.Series(dtype=str)).eq("REALIZED")]
+        if not journal.empty and "status" in journal
+        else pd.DataFrame()
+    )
+    equity = (
+        float(pd.to_numeric(realized.get("equity", pd.Series(dtype=float)), errors="coerce").dropna().iloc[-1])
+        if not realized.empty
+        and pd.to_numeric(realized.get("equity", pd.Series(dtype=float)), errors="coerce").notna().any()
+        else 1.0
+    )
+    return {
+        "available": True,
+        "mode": status.get("mode", "UNKNOWN"),
+        "action": status.get("action"),
+        "decision_timestamp_utc": status.get("decision_timestamp_utc"),
+        "generated_at_utc": status.get("generated_at_utc"),
+        "raw_predicted_label": status.get("raw_predicted_label"),
+        "current_executed_label": status.get("current_executed_label"),
+        "prob_btc": float(probs.get("BTC", 0)),
+        "prob_alt": float(probs.get("ALT", 0)),
+        "prob_cash": float(probs.get("CASH", 0)),
+        "alt_asset_count": int(status.get("alt_asset_count", 0)),
+        "missing_alts": status.get("missing_decision_candle_alts", []),
+        "ineligible_alts": status.get("feature_ineligible_alts", []),
+        "brokerage_orders": bool(status.get("brokerage_orders", False)),
+        "reconcile_boundary": reconcile.get("latest_expected_bar_start_utc"),
+        "reconcile_product_count": reconcile.get("product_count"),
+        "journal_rows": max(0, len(journal)),
+        "realized_rows": len(realized),
+        "paper_equity_multiple": equity,
+    }
+
+
+def _xrp_live():
+    status = _read_json(XRP_STATUS_PATH)
+    shadow = _read_json(XRP_SHADOW_PATH)
+    if not status:
+        return {"available": False, "message": "XRP V1 Phase 6 shadow forward service status is not available yet."}
+    return {
+        "available": True,
+        "mode": status.get("mode", "UNKNOWN"),
+        "action": status.get("action"),
+        "decision_timestamp_utc": status.get("decision_timestamp_utc"),
+        "current_shadow_state": status.get("current_shadow_state"),
+        "score": status.get("predicted_btc_relative_return_4h"),
+        "model_sha256_verified": bool(status.get("model_sha256_verified", False)),
+        "policy_verified": bool(status.get("policy_verified", False)),
+        "brokerage_orders": bool(status.get("brokerage_orders", False)),
+        "shadow_only": bool(status.get("shadow_only", True)),
+        "xrp_latest_bar_utc": shadow.get("xrp_latest_bar_utc"),
+        "btc_latest_bar_utc": shadow.get("btc_latest_bar_utc"),
+        "common_latest_bar_utc": shadow.get("common_latest_bar_utc"),
+        "state_before": shadow.get("state_before"),
+        "state_after": shadow.get("state_after"),
+        "proposed_state": shadow.get("proposed_state"),
+        "state_switch": bool(shadow.get("state_switch", False)),
+        "state_reset": bool(shadow.get("state_reset", False)),
+        "minimum_hold_blocked": bool(shadow.get("minimum_hold_blocked", False)),
+        "hours_since_state_change": shadow.get("hours_since_state_change"),
+        "minimum_hold_hours": shadow.get("minimum_hold_hours", 24),
+        "policy_id": shadow.get("policy_id", "hyst_10_05_hold24"),
+        "model_id": shadow.get("model_id", "ridge"),
+        "model_sha256": shadow.get("model_sha256"),
+        "feature_count": shadow.get("feature_count", 44),
+        "future_holdout_start_utc": shadow.get("future_holdout_start_utc", "2026-09-01T00:00:00+00:00"),
+        "forward_evaluation_journal": bool(shadow.get("forward_evaluation_journal", False)),
+    }
+
+
+def _v2_research_evidence():
+    summary = _read_csv(V2_POLICY_SUMMARY_PATH)
+    manifest = _read_json(V2_PHASE4_MANIFEST_PATH)
+    if summary.empty or "policy" not in summary:
+        return {"available": False}
+    row = summary[summary["policy"] == "confirm_2"]
+    if row.empty:
+        return {"available": False}
+    record = row.iloc[0]
+    return {
+        "available": True,
+        "policy": "confirm_2",
+        "confirmation_hours": 2,
+        "ending_equity_0bps": float(record["ending_equity_0bps"]),
+        "ending_equity_5bps": float(record["ending_equity_5bps"]),
+        "executed_switches": int(record["executed_switches"]),
+        "switch_reduction_fraction": float(record["switch_reduction_fraction"]),
+        "max_drawdown_0bps": float(record["max_drawdown_0bps"]),
+        "max_drawdown_5bps": float(record["max_drawdown_5bps"]),
+        "raw_switches": 6084,
+        "research_status": manifest.get(
+            "research_status",
+            "EXPLORATORY ONLY. Phase 3 OOS results were already inspected before policy selection.",
+        ),
+        "future_validation_rule": manifest.get("future_validation_rule"),
+        "cost_limitation": manifest.get("cost_limitation"),
+        "holdout_start": "2026-09-01T00:00:00+00:00",
+    }
+
+
+def _development_research_tracks():
+    shared = _read_json(SHARED_V3_MANIFEST_PATH)
+    xrp_v2 = _read_json(XRP_V2_MANIFEST_PATH)
+    xrp_v3 = _read_json(XRP_V3_MANIFEST_PATH)
+    return [
+        {
+            "name": "Shared Crypto V3",
+            "status": shared.get("status", "REJECT_CURRENT_POLICY_FAMILY"),
+            "summary": "15m decisions / 1h horizon. Current turnover-control policy family failed realistic transaction-cost robustness and is preserved as rejected development evidence.",
+            "detail": "No freeze. Frozen Shared V2 remains unchanged.",
+        },
+        {
+            "name": "XRP V2",
+            "status": xrp_v2.get("status", "OVERLAY_DIAGNOSTICS_ONLY_NO_FREEZE"),
+            "summary": "15m decisions / 1h BTC-relative research. Aggregate overlay evidence exists, but temporal stability and drawdown gates were insufficient.",
+            "detail": "Diagnostics only. No freeze and no further tuning of the same V2 policy family.",
+        },
+        {
+            "name": "XRP V3",
+            "status": xrp_v3.get("status", "NO_PROMOTION_CANDIDATE"),
+            "summary": "BTC-default selective XRP overlay. Aggregate 5 bps results were promising, but the pre-registered 75% positive-fold gate failed.",
+            "detail": "No promotion candidate. Frozen XRP V1 Phase 6 remains unchanged.",
+        },
+    ]
+
+
 def get_crypto_dashboard_payload():
-    primary=_primary_daily(); btc=_btc_daily(); ranking_timestamp,rankings=_latest_rankings(); live=_v2_live(); evidence=_v2_research_evidence(); xrp_live=_xrp_live(); research_tracks=_development_research_tracks()
-    if primary.empty:return {"available":False,"message":"Crypto V1 Phase 4 artifacts are not available on this machine.","universe":list(CRYPTO_UNIVERSE),"rankings":rankings,"ranking_timestamp":ranking_timestamp,"live_v2":live,"v2_research":evidence,"xrp_live":xrp_live,"development_research_tracks":research_tracks}
-    current_multiple=float(primary["equity"].iloc[-1]); current_equity=DISPLAY_STARTING_EQUITY*current_multiple; cumulative_return=current_multiple-1; peak=pd.to_numeric(primary["equity"],errors="coerce").cummax(); drawdown=pd.to_numeric(primary["equity"],errors="coerce")/peak-1; btc_multiple=float(btc["equity"].iloc[-1]) if not btc.empty else None; btc_return=btc_multiple-1 if btc_multiple is not None else None; excess=cumulative_return-btc_return if btc_return is not None else None; lr=primary[primary["is_rebalance"].astype(str).str.lower().isin(["true","1"])]
-    return {"available":True,"mode":"frozen_research_simulation","starting_equity":DISPLAY_STARTING_EQUITY,"current_equity":current_equity,"net_change":current_equity-DISPLAY_STARTING_EQUITY,"cumulative_return":cumulative_return,"btc_return":btc_return,"excess_return_vs_btc":excess,"max_drawdown":float(drawdown.min()) if len(drawdown) else 0,"observation_count":max(0,len(primary)-1),"rebalance_count":int(primary["is_rebalance"].astype(str).str.lower().isin(["true","1"]).sum()),"latest_rebalance_timestamp":lr["timestamp_utc"].max().isoformat() if not lr.empty else None,"ranking_timestamp":ranking_timestamp,"top_five":rankings[:5],"rankings":rankings,"equity_history":_equity_history(primary,btc),"universe":list(CRYPTO_UNIVERSE),"live_v2":live,"v2_research":evidence,"xrp_live":xrp_live,"development_research_tracks":research_tracks,"contract":{"research_version":"crypto_v1","model_id":PRIMARY_MODEL_ID,"horizon_days":PRIMARY_HORIZON_DAYS,"variant":PRIMARY_VARIANT,"top_n":PRIMARY_TOP_N,"round_trip_cost_bps":PRIMARY_COST_BPS,"benchmark":"BTC-USD","leverage":False,"real_orders":False}}
+    primary = _primary_daily()
+    btc = _btc_daily()
+    ranking_timestamp, rankings = _latest_rankings()
+    live = _v2_live()
+    evidence = _v2_research_evidence()
+    xrp_live = _xrp_live()
+    research_tracks = _development_research_tracks()
+    operational_health = _operational_health()
+
+    common = {
+        "universe": list(CRYPTO_UNIVERSE),
+        "rankings": rankings,
+        "ranking_timestamp": ranking_timestamp,
+        "live_v2": live,
+        "v2_research": evidence,
+        "xrp_live": xrp_live,
+        "development_research_tracks": research_tracks,
+        "operational_health": operational_health,
+    }
+    if primary.empty:
+        return {
+            "available": False,
+            "message": "Crypto V1 Phase 4 artifacts are not available on this machine.",
+            **common,
+        }
+
+    current_multiple = float(primary["equity"].iloc[-1])
+    current_equity = DISPLAY_STARTING_EQUITY * current_multiple
+    cumulative_return = current_multiple - 1
+    peak = pd.to_numeric(primary["equity"], errors="coerce").cummax()
+    drawdown = pd.to_numeric(primary["equity"], errors="coerce") / peak - 1
+    btc_multiple = float(btc["equity"].iloc[-1]) if not btc.empty else None
+    btc_return = btc_multiple - 1 if btc_multiple is not None else None
+    excess = cumulative_return - btc_return if btc_return is not None else None
+    rebalances = primary[primary["is_rebalance"].astype(str).str.lower().isin(["true", "1"])]
+
+    return {
+        "available": True,
+        "mode": "frozen_research_simulation",
+        "starting_equity": DISPLAY_STARTING_EQUITY,
+        "current_equity": current_equity,
+        "net_change": current_equity - DISPLAY_STARTING_EQUITY,
+        "cumulative_return": cumulative_return,
+        "btc_return": btc_return,
+        "excess_return_vs_btc": excess,
+        "max_drawdown": float(drawdown.min()) if len(drawdown) else 0,
+        "observation_count": max(0, len(primary) - 1),
+        "rebalance_count": int(primary["is_rebalance"].astype(str).str.lower().isin(["true", "1"]).sum()),
+        "latest_rebalance_timestamp": rebalances["timestamp_utc"].max().isoformat() if not rebalances.empty else None,
+        "top_five": rankings[:5],
+        "equity_history": _equity_history(primary, btc),
+        **common,
+        "contract": {
+            "research_version": "crypto_v1",
+            "model_id": PRIMARY_MODEL_ID,
+            "horizon_days": PRIMARY_HORIZON_DAYS,
+            "variant": PRIMARY_VARIANT,
+            "top_n": PRIMARY_TOP_N,
+            "round_trip_cost_bps": PRIMARY_COST_BPS,
+            "benchmark": "BTC-USD",
+            "leverage": False,
+            "real_orders": False,
+        },
+    }
