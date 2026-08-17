@@ -28,24 +28,34 @@ BENCHMARK_PATH = OUTPUT_ROOT / "benchmark_diagnostics.csv"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
 
 
+def _economic_reference(detail: pd.DataFrame) -> pd.DataFrame:
+    """Return one policy/cost path containing the true hourly realizations.
+
+    Corrected Phase 3 writes one row per 15-minute decision but only rows on the
+    non-overlapping hourly economic grid have a non-null net_return_1h. Use a
+    single policy/cost slice before selecting those rows; otherwise deduplicating
+    across all policy/cost paths can accidentally reintroduce every 15-minute
+    timestamp when different paths realize on different rows.
+    """
+    ref = detail[
+        detail["policy_id"].eq("xrp_hold_c2_1h")
+        & pd.to_numeric(detail["cost_bps"], errors="coerce").eq(5.0)
+    ].copy()
+    ref = ref[pd.to_numeric(ref["net_return_1h"], errors="coerce").notna()].copy()
+    ref = ref.sort_values("timestamp_utc").reset_index(drop=True)
+    if ref.empty:
+        raise RuntimeError("No reference Phase 3 hourly economic realization rows")
+    if ref["timestamp_utc"].duplicated().any():
+        raise RuntimeError("Reference Phase 3 economic realization timestamps are duplicated")
+    return ref
+
+
 def _hourly_benchmarks(detail: pd.DataFrame) -> pd.DataFrame:
     df = pd.read_parquet(PHASE1_DATASET)
     df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"], utc=True)
 
-    # Use exactly the economic realization timestamps represented in corrected
-    # Phase 3 OOS output. Policy/cost variants share the same realization grid,
-    # so deduplicating timestamps yields one common benchmark sample.
-    econ_ts = (
-        detail.loc[
-            pd.to_numeric(detail["net_return_1h"], errors="coerce").notna(),
-            ["timestamp_utc"],
-        ]
-        .drop_duplicates()
-        .sort_values("timestamp_utc")
-        .reset_index(drop=True)
-    )
-    if econ_ts.empty:
-        raise RuntimeError("No Phase 3 OOS economic realization timestamps")
+    ref = _economic_reference(detail)
+    econ_ts = ref[["timestamp_utc"]].copy()
 
     h = econ_ts.merge(
         df[["timestamp_utc", "forward_return_1h", "btc_forward_return_1h"]],
@@ -137,26 +147,10 @@ def main():
             {
                 "policy_id": policy,
                 "cost_points": int(len(g)),
-                "ending_equity_0bps": float(
-                    g.loc[g["cost_bps"].eq(0), "ending_equity"].iloc[0]
-                )
-                if g["cost_bps"].eq(0).any()
-                else np.nan,
-                "ending_equity_5bps": float(
-                    g.loc[g["cost_bps"].eq(5), "ending_equity"].iloc[0]
-                )
-                if g["cost_bps"].eq(5).any()
-                else np.nan,
-                "ending_equity_10bps": float(
-                    g.loc[g["cost_bps"].eq(10), "ending_equity"].iloc[0]
-                )
-                if g["cost_bps"].eq(10).any()
-                else np.nan,
-                "ending_equity_25bps": float(
-                    g.loc[g["cost_bps"].eq(25), "ending_equity"].iloc[0]
-                )
-                if g["cost_bps"].eq(25).any()
-                else np.nan,
+                "ending_equity_0bps": float(g.loc[g["cost_bps"].eq(0), "ending_equity"].iloc[0]) if g["cost_bps"].eq(0).any() else np.nan,
+                "ending_equity_5bps": float(g.loc[g["cost_bps"].eq(5), "ending_equity"].iloc[0]) if g["cost_bps"].eq(5).any() else np.nan,
+                "ending_equity_10bps": float(g.loc[g["cost_bps"].eq(10), "ending_equity"].iloc[0]) if g["cost_bps"].eq(10).any() else np.nan,
+                "ending_equity_25bps": float(g.loc[g["cost_bps"].eq(25), "ending_equity"].iloc[0]) if g["cost_bps"].eq(25).any() else np.nan,
                 "equity_monotonic_nonincreasing_with_cost": monotonic,
                 "cost_hurdle_changes_state_path": not monotonic,
                 "min_equity": float(equities.min()),
@@ -233,7 +227,8 @@ def main():
                 "stage": "robustness_and_path_sensitivity_diagnostics",
                 "generated_at_utc": datetime.now(timezone.utc).isoformat(),
                 "input_phase3_accounting": "corrected non-overlapping hourly economic realization with 15-minute decisions",
-                "benchmark_alignment": "always-XRP/BTC/CASH benchmarks use exactly the same OOS hourly realization timestamps as corrected Phase 3",
+                "benchmark_alignment": "always-XRP/BTC/CASH benchmarks use the exact non-null economic realization timestamps from the xrp_hold_c2_1h 5bps Phase 3 OOS path",
+                "benchmark_realized_hour_count": int(benchmarks["realized_hour_count"].iloc[0]),
                 "best_5bps_policy_by_aggregate_equity": candidate,
                 "best_5bps_policy_ending_equity": candidate_5bps_equity,
                 "aligned_always_btc_ending_equity": aligned_btc_equity,
