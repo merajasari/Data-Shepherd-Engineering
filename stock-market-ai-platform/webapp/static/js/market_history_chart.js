@@ -249,5 +249,7 @@
 
   slider.addEventListener('input', () => updateSelection(slider.value, null, null, true));
   slider.addEventListener('change', () => { setTimeout(() => tooltip.style.display='none', 900); });
-  load();
+  const startHistoryLoad=()=>load();
+  if ('requestIdleCallback' in window) requestIdleCallback(startHistoryLoad,{timeout:1000});
+  else setTimeout(startHistoryLoad,140);
 })();

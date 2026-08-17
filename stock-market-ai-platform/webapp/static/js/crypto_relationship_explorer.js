@@ -177,9 +177,7 @@
   async function init() {
     const root=document.getElementById('crypto-relationship-explorer'); if(!root) return;
     try {
-      const res=await fetch('/api/crypto-history',{cache:'no-store'});
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      payload=await res.json();
+      payload=await window.DataShepherdCryptoHistory.load('90D');
       const available=Object.keys(payload?.series||{}).filter(s=>payload.series[s]?.available);
       selected=new Set(defaultSymbols.filter(s=>available.includes(s)));
       bind(); renderAll();

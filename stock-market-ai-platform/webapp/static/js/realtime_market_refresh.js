@@ -81,5 +81,5 @@
 
   function start() { if (timer) clearInterval(timer); tick(); timer=setInterval(tick, REFRESH_MS); }
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' ? start() : clearInterval(timer));
-  document.addEventListener('DOMContentLoaded', start);
+  document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(() => requestAnimationFrame(start)));
 })();

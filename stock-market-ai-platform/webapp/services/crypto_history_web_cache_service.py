@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-CACHE_ROOT = Path("data/live/crypto_rt/history_web")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CACHE_ROOT = PROJECT_ROOT / "data/live/crypto_rt/history_web"
 ALLOWED_RANGES = {"30D", "90D", "1Y", "3Y", "5Y", "ALL"}
 
 

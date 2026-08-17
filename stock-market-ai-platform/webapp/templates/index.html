@@ -26,6 +26,11 @@ header{gap:30px;padding:45px 0 30px}
   .actions{width:100%}
 }
 </style>
+<style id="ds-sitewide-fast-load">
+/* Site-wide progressive rendering: off-screen dashboard cards are skipped until near the viewport. */
+main > .card, .container > .card, body > .card{content-visibility:auto;contain-intrinsic-size:auto 520px}
+@media(max-width:760px){main > .card, .container > .card, body > .card{contain-intrinsic-size:auto 620px}}
+</style>
 </head>
 <body>
 <div class="shell">

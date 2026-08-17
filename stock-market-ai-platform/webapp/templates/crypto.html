@@ -16,7 +16,12 @@ header{gap:30px;padding:45px 0 30px}
   .brand img{width:185px;height:105px}
   .actions{width:100%}
 }
-</style></head><body><div class="shell">
+</style><style id="ds-sitewide-fast-load">
+/* Site-wide progressive rendering: off-screen dashboard cards are skipped until near the viewport. */
+main > .card, .container > .card, body > .card{content-visibility:auto;contain-intrinsic-size:auto 520px}
+@media(max-width:760px){main > .card, .container > .card, body > .card{contain-intrinsic-size:auto 620px}}
+</style>
+</head><body><div class="shell">
 <header><div class="brand"><a href="{{ url_for('dashboard') }}"><img src="{{ url_for('static',filename='images/data-shepherd-logo.png') }}" alt="Data Shepherd Engineering"></a><div><div class="eyebrow">DATA SHEPHERD ENGINEERING</div><h1>Crypto Intelligence + Simulation</h1><div class="muted">Frozen research plus live forward-model monitoring</div></div></div><div class="actions"><div class="pill">PLATFORM ONLINE</div><a class="logout" href="{{ url_for('logout') }}">LOGOUT</a></div></header>
 <nav class="tabs"><a class="tab" href="{{ url_for('dashboard') }}">STOCKS</a><a class="tab active" href="{{ url_for('crypto_dashboard') }}">CRYPTO</a><a class="tab" href="{{ url_for('crypto_visual_dashboard') }}">CRYPTO VISUAL</a></nav>
 <section class="card live" style="margin-bottom:22px"><div class="label">COINBASE REAL-TIME MARKET</div><h2>Live Crypto Price Movement</h2><p class="muted">Public Coinbase ticker stream for immediate price visibility. Display-only: frozen 15-minute research candles and model decisions remain unchanged.</p><div id="crypto-live-ticker-stamp" class="mode">WAITING FOR LIVE TICKS</div><div id="crypto-live-ticker-grid" class="grid metrics" style="margin-top:18px"><div class="warning">Waiting for Coinbase real-time ticker data…</div></div></section>

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
 
 load_dotenv()
@@ -37,6 +37,7 @@ from webapp.services.live_market_service import get_all_live_quotes, get_live_qu
 from webapp.services.stock_stream_health_service import get_stock_stream_health  # noqa: E402
 from webapp.services.crypto_live_market_service import get_all_crypto_live_tickers  # noqa: E402
 from webapp.services.crypto_history_service import get_crypto_history_payload  # noqa: E402
+from webapp.services.crypto_history_web_cache_service import get_crypto_history_cache_path, normalize_history_range  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
 from webapp.services.paper_trading_service import get_portfolio_summary  # noqa: E402
@@ -65,15 +66,15 @@ def inject_dashboard_modules(response):
         marker = "</body>"
         scripts = []
         if request.path in {"/", "/dashboard", "/crypto"}:
-            scripts.append('<script src="/static/js/signup_button.js"></script>')
+            scripts.append('<script src="/static/js/signup_button.js" defer></script>')
         if request.path in {"/dashboard", "/crypto"}:
-            scripts.append('<script src="/static/js/realtime_market_refresh.js"></script>')
+            scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
         if request.path == "/dashboard":
             scripts.extend([
-                '<script src="/static/js/dashboard_layout.js"></script>',
-                '<script src="/static/js/v4_equity_chart.js"></script>',
-                '<script src="/static/js/market_history_chart.js"></script>',
-                '<script src="/static/js/primary_stock_spotlight.js"></script>',
+                '<script src="/static/js/dashboard_layout.js" defer></script>',
+                '<script src="/static/js/v4_equity_chart.js" defer></script>',
+                '<script src="/static/js/market_history_chart.js" defer></script>',
+                '<script src="/static/js/primary_stock_spotlight.js" defer></script>',
             ])
         if marker in html:
             for script in scripts:
@@ -445,8 +446,26 @@ def api_crypto_live_quotes():
 @app.route("/api/crypto-history")
 @login_required
 def api_crypto_history():
-    return jsonify(get_crypto_history_payload())
+    range_name = normalize_history_range(request.args.get("range"))
+    cache_path = get_crypto_history_cache_path(range_name)
+    if cache_path.exists():
+        response = send_file(
+            cache_path,
+            mimetype="application/json",
+            conditional=True,
+            max_age=30,
+        )
+        response.headers["Cache-Control"] = "private, max-age=30"
+        response.headers["X-Data-Shepherd-History-Source"] = "persistent-web-cache"
+        return response
 
+    # Safe fallback for first install or a missing cache file. This preserves the
+    # current read-only service contract, but normal page loads should never need it.
+    try:
+        payload = get_crypto_history_payload(range_name=range_name)
+    except TypeError:
+        payload = get_crypto_history_payload()
+    return jsonify(payload)
 
 @app.route("/api/paper-portfolio")
 @login_required

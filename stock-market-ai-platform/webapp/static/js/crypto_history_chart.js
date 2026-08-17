@@ -7,7 +7,7 @@
   let historical = null;
   let liveQuotes = {};
   let mode = 'normalized';
-  let range = '1Y';
+  let range = '90D';
   let showAll = true;
   let selected = new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);
   let zoomLevel = 1;
@@ -280,7 +280,13 @@
 
   async function loadHistory(){
     const status=document.getElementById('history-load-status');
-    try{const r=await fetch('/api/crypto-history',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);historical=await r.json();if(status)status.textContent='HISTORY LOADED';renderAll();}
+    try{
+      if(status)status.textContent='LOADING 90D';
+      historical=await window.DataShepherdCryptoHistory.load('90D');
+      range='90D';
+      if(status){status.textContent='HISTORY LOADED';status.className='mode';}
+      renderAll();
+    }
     catch(err){if(status){status.textContent='HISTORY ERROR';status.className='negative';}console.warn('[CRYPTO HISTORY]',err);}
   }
   async function refreshLive(){
@@ -288,13 +294,48 @@
     catch(_err){}
   }
 
-  document.querySelectorAll('[data-history-range]').forEach(b=>b.addEventListener('click',()=>{range=b.dataset.historyRange;zoomLevel=1;panOffset=0;renderAll();}));
+  document.querySelectorAll('[data-history-range]').forEach(b=>b.addEventListener('click',async()=>{
+    const nextRange=b.dataset.historyRange;
+    if(!nextRange||nextRange===range)return;
+    const status=document.getElementById('history-load-status');
+    try{
+      if(status)status.textContent=`LOADING ${nextRange}`;
+      const nextPayload=await window.DataShepherdCryptoHistory.load(nextRange);
+      historical=nextPayload;
+      range=nextRange;
+      zoomLevel=1;
+      panOffset=0;
+      if(status){status.textContent='HISTORY LOADED';status.className='mode';}
+      renderAll();
+    }catch(err){
+      if(status){status.textContent='HISTORY ERROR';status.className='negative';}
+      console.warn('[CRYPTO HISTORY RANGE]',nextRange,err);
+    }
+  }));
   document.querySelectorAll('[data-history-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.historyMode;renderAll();}));
   document.getElementById('history-zoom-in')?.addEventListener('click',()=>{zoomLevel=Math.min(16,zoomLevel*1.6);panOffset=Math.min(1,panOffset+.18);renderAll();});
   document.getElementById('history-zoom-out')?.addEventListener('click',()=>{zoomLevel=Math.max(1,zoomLevel/1.6);if(zoomLevel===1)panOffset=0;renderAll();});
   document.getElementById('history-pan-left')?.addEventListener('click',()=>{if(zoomLevel>1){panOffset=Math.max(0,panOffset-.18);renderAll();}});
   document.getElementById('history-pan-right')?.addEventListener('click',()=>{if(zoomLevel>1){panOffset=Math.min(1,panOffset+.18);renderAll();}});
-  document.getElementById('history-reset-view')?.addEventListener('click',()=>{range='ALL';mode='normalized';showAll=true;selected=new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);zoomLevel=1;panOffset=0;hoverSymbol=null;renderAll();});
+  document.getElementById('history-reset-view')?.addEventListener('click',async()=>{
+    const status=document.getElementById('history-load-status');
+    try{
+      if(status)status.textContent='LOADING 90D';
+      historical=await window.DataShepherdCryptoHistory.load('90D');
+      range='90D';
+      mode='normalized';
+      showAll=true;
+      selected=new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);
+      zoomLevel=1;
+      panOffset=0;
+      hoverSymbol=null;
+      if(status){status.textContent='HISTORY LOADED';status.className='mode';}
+      renderAll();
+    }catch(err){
+      if(status){status.textContent='HISTORY ERROR';status.className='negative';}
+      console.warn('[CRYPTO HISTORY RESET]',err);
+    }
+  });
   document.getElementById('history-show-all')?.addEventListener('click',selectAllAssets);
   document.getElementById('history-select-all')?.addEventListener('click',selectAllAssets);
   document.getElementById('history-clear-selection')?.addEventListener('click',clearSelection);

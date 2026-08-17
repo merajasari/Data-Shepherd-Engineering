@@ -79,19 +79,50 @@ def _daily_product(product_id: str) -> pd.DataFrame:
     return daily
 
 
-def get_crypto_history_payload(products: Iterable[str] | None = None) -> dict:
+HISTORY_RANGE_DAYS = {
+    "30D": 30,
+    "90D": 90,
+    "1Y": 365,
+    "3Y": 3 * 365,
+    "5Y": 5 * 365,
+    "ALL": None,
+}
+
+
+def _normalize_range_key(range_key: str | None) -> str:
+    key = str(range_key or "1Y").upper().strip()
+    return key if key in HISTORY_RANGE_DAYS else "1Y"
+
+
+def _slice_daily_for_range(daily: pd.DataFrame, range_key: str) -> pd.DataFrame:
+    days = HISTORY_RANGE_DAYS[range_key]
+    if daily.empty or days is None:
+        return daily
+    end = daily["timestamp_utc"].max()
+    cutoff = end - pd.Timedelta(days=days)
+    return daily[daily["timestamp_utc"] >= cutoff].copy()
+
+
+def get_crypto_history_payload(
+    products: Iterable[str] | None = None,
+    range_key: str | None = "1Y",
+) -> dict:
     requested = list(products or PRODUCTS)
     requested = [p for p in requested if p in PRODUCTS]
     if not requested:
         requested = list(PRODUCTS)
 
+    range_key = _normalize_range_key(range_key)
     series = {}
     global_start = None
     global_end = None
-    total_points = 0
+    archive_total_points = 0
+    loaded_total_points = 0
 
     for product_id in requested:
-        daily = _daily_product(product_id)
+        full_daily = _daily_product(product_id)
+        archive_total_points += len(full_daily)
+        daily = _slice_daily_for_range(full_daily, range_key)
         if daily.empty:
             series[product_id] = {
                 "available": False,
@@ -114,7 +145,7 @@ def get_crypto_history_payload(products: Iterable[str] | None = None) -> dict:
             }
             for row in daily.itertuples(index=False)
         ]
-        total_points += len(points)
+        loaded_total_points += len(points)
         series[product_id] = {
             "available": True,
             "start_utc": start.isoformat(),
@@ -132,7 +163,10 @@ def get_crypto_history_payload(products: Iterable[str] | None = None) -> dict:
         "underlying_archive_resolution": "15m",
         "normalization": "Each product begins at index 100 on its own first available observation.",
         "product_count": len(requested),
-        "total_chart_points": total_points,
+        "requested_range": range_key,
+        "total_chart_points": loaded_total_points,
+        "loaded_chart_points": loaded_total_points,
+        "archive_total_chart_points": archive_total_points,
         "global_start_utc": global_start.isoformat() if global_start is not None else None,
         "global_end_utc": global_end.isoformat() if global_end is not None else None,
         "series": series,
