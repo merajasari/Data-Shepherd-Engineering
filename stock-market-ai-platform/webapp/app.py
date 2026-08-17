@@ -44,6 +44,7 @@ from webapp.services.paper_trading_service import get_pnl_attribution, get_portf
 from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
 from webapp.services.v5_shadow_portfolio_service import get_v5_shadow_comparison  # noqa: E402
 from webapp.services.v5_shadow_history_service import get_v5_shadow_history  # noqa: E402
+from webapp.services.v4_realtime_equity_journal_service import get_v4_realtime_equity_history  # noqa: E402
 
 
 app = Flask(__name__)
@@ -153,6 +154,8 @@ def build_v4_dashboard_payload():
         for symbol in portfolio["top_five"]
     ]
     history = list(forward.get("equity_history", []))
+    history.extend(get_v4_realtime_equity_history())
+    history.sort(key=lambda row: str(row.get("timestamp") or ""))
     chart_history = [
         {
             "timestamp": forward.get("start_timestamp"),

@@ -73,7 +73,7 @@
       }
     });
     overlay.addEventListener('mouseleave',()=>{guide.setAttribute('display','none'); if(tooltip)tooltip.style.display='none';});
-    if(status) status.textContent=rows.length<2?'1 OBSERVATION · MORE HISTORY WILL APPEAR HOURLY':'HISTORY READY';
+    if(status) status.textContent=rows.length<2?'1 OBSERVATION · REAL-TIME HISTORY ACTIVE':'HISTORY READY';
   }
 
   async function load(){
@@ -84,5 +84,5 @@
     }catch(err){ if(status){status.textContent='HISTORY ERROR';status.className='negative';} console.warn('[V5 SHADOW HISTORY]',err); }
   }
   load();
-  window.setInterval(load,60000);
+  window.setInterval(load,5000);
 })();
