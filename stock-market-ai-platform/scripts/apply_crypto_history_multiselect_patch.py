@@ -15,6 +15,17 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def replace_first_available(text: str, olds: list[str], new: str, label: str) -> str:
+    if new in text:
+        print(f"[SKIP] {label}")
+        return text
+    for old in olds:
+        if old in text:
+            print(f"[APPLY] {label}")
+            return text.replace(old, new, 1)
+    raise SystemExit(f"Cannot apply {label}: expected text not found")
+
+
 def main() -> None:
     js = JS.read_text(encoding="utf-8")
 
@@ -50,17 +61,26 @@ def main() -> None:
         "chart click multi-select behavior",
     )
 
-    js = replace_once(
+    controls_new = """  document.getElementById('history-show-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-select-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-clear-selection')?.addEventListener('click',clearSelection);\n"""
+    js = replace_first_available(
         js,
-        """  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=!showAll;renderAll();});\n""",
-        """  document.getElementById('history-show-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-select-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-clear-selection')?.addEventListener('click',clearSelection);\n""",
+        [
+            """  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=!showAll;renderAll();});\n""",
+            """  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=true;selected.clear();hoverSymbol=null;zoomLevel=1;panOffset=0;renderAll();});\n""",
+            """  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=true;selected.clear();renderAll();});\n""",
+        ],
+        controls_new,
         "select-all and clear-selection controls",
     )
 
-    js = replace_once(
+    selected_state_new = """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}document.querySelectorAll('.history-legend-chip').forEach(chip=>chip.classList.toggle('history-selected',showAll||selected.has(chip.dataset.symbol)));"""
+    js = replace_first_available(
         js,
-        """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}""",
-        """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}document.querySelectorAll('.history-legend-chip').forEach(chip=>chip.classList.toggle('history-selected',showAll||selected.has(chip.dataset.symbol)));""",
+        [
+            """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}""",
+            """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}const zoomStatus=document.getElementById('history-zoom-status');if(zoomStatus)zoomStatus.textContent=zoomLevel<=1?'FULL RANGE':`${zoomLevel.toFixed(1)}× ZOOM`;""",
+        ],
+        selected_state_new,
         "selected-chip state rendering",
     )
 
@@ -76,8 +96,8 @@ def main() -> None:
 
     if 'id="history-select-all"' not in template:
         controls_anchor = '<button id="history-reset-view" class="history-nav-btn" type="button">RESET VIEW</button>'
-        controls_new = '<button id="history-select-all" class="history-nav-btn" type="button">SELECT ALL</button><button id="history-clear-selection" class="history-nav-btn" type="button">CLEAR SELECTION</button>' + controls_anchor
-        template = replace_once(template, controls_anchor, controls_new, "Select All / Clear Selection buttons")
+        controls_new_html = '<button id="history-select-all" class="history-nav-btn" type="button">SELECT ALL</button><button id="history-clear-selection" class="history-nav-btn" type="button">CLEAR SELECTION</button>' + controls_anchor
+        template = replace_once(template, controls_anchor, controls_new_html, "Select All / Clear Selection buttons")
     else:
         print("[SKIP] Select All / Clear Selection buttons")
 
