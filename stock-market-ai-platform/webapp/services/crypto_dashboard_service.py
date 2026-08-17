@@ -510,6 +510,79 @@ def _future_forward_performance():
         "note": "Untouched Sep 1+ paper-evaluation evidence only. No historical backfill, no tuning, and no real brokerage orders.",
     }
 
+
+FORWARD_VALIDATION_MIN_REALIZATIONS = 30
+
+
+def _forward_validation_track(track):
+    realized = int(track.get("realized_count", 0) or 0)
+    remaining = max(0, FORWARD_VALIDATION_MIN_REALIZATIONS - realized)
+    base = {
+        "name": track.get("name"),
+        "minimum_realizations": FORWARD_VALIDATION_MIN_REALIZATIONS,
+        "realized_count": realized,
+        "observations_remaining": remaining,
+        "brokerage_orders": False,
+    }
+    if realized < FORWARD_VALIDATION_MIN_REALIZATIONS:
+        return {
+            **base,
+            "status": "AWAITING_MINIMUM_FUTURE_SAMPLE",
+            "assessment_ready": False,
+            "assessment": None,
+            "candidate_return": track.get("candidate_return", 0.0),
+            "benchmark_return": track.get("benchmark_return", 0.0),
+            "excess_return": None,
+            "candidate_max_drawdown": track.get("candidate_max_drawdown"),
+            "benchmark_max_drawdown": track.get("benchmark_max_drawdown"),
+            "drawdown_comparison": "NOT_AVAILABLE",
+        }
+
+    candidate_return = float(track.get("candidate_return", 0.0) or 0.0)
+    benchmark_return = float(track.get("benchmark_return", 0.0) or 0.0)
+    excess = candidate_return - benchmark_return
+    tolerance = 1e-12
+    if excess > tolerance:
+        assessment = "OUTPERFORMING_BENCHMARK"
+    elif excess < -tolerance:
+        assessment = "UNDERPERFORMING_BENCHMARK"
+    else:
+        assessment = "MATCHING_BENCHMARK"
+
+    candidate_dd = track.get("candidate_max_drawdown")
+    benchmark_dd = track.get("benchmark_max_drawdown")
+    if candidate_dd is None or benchmark_dd is None:
+        dd_comparison = "NOT_AVAILABLE"
+    elif float(candidate_dd) > float(benchmark_dd) + tolerance:
+        dd_comparison = "BETTER_THAN_BENCHMARK"
+    elif float(candidate_dd) < float(benchmark_dd) - tolerance:
+        dd_comparison = "WORSE_THAN_BENCHMARK"
+    else:
+        dd_comparison = "MATCHING_BENCHMARK"
+
+    return {
+        **base,
+        "status": "FORWARD_SAMPLE_ASSESSMENT_AVAILABLE",
+        "assessment_ready": True,
+        "assessment": assessment,
+        "candidate_return": candidate_return,
+        "benchmark_return": benchmark_return,
+        "excess_return": excess,
+        "candidate_max_drawdown": candidate_dd,
+        "benchmark_max_drawdown": benchmark_dd,
+        "drawdown_comparison": dd_comparison,
+    }
+
+
+def _forward_validation_summary(forward_performance):
+    return {
+        "minimum_realizations": FORWARD_VALIDATION_MIN_REALIZATIONS,
+        "shared_v2": _forward_validation_track(forward_performance["shared_v2"]),
+        "xrp_phase7": _forward_validation_track(forward_performance["xrp_phase7"]),
+        "note": "Fixed 30-realization gate using untouched Sep 1+ evidence only. This is descriptive forward assessment, not model selection, threshold tuning, or a promotion decision.",
+    }
+
+
 def _development_research_tracks():
     shared = _read_json(SHARED_V3_MANIFEST_PATH)
     xrp_v2 = _read_json(XRP_V2_MANIFEST_PATH)
@@ -547,6 +620,7 @@ def get_crypto_dashboard_payload():
     operational_health = _operational_health()
     forward_evaluation_readiness = _forward_evaluation_readiness()
     future_forward_performance = _future_forward_performance()
+    forward_validation_summary = _forward_validation_summary(future_forward_performance)
 
     common = {
         "universe": list(CRYPTO_UNIVERSE),
@@ -559,6 +633,7 @@ def get_crypto_dashboard_payload():
         "operational_health": operational_health,
         "forward_evaluation_readiness": forward_evaluation_readiness,
         "future_forward_performance": future_forward_performance,
+        "forward_validation_summary": forward_validation_summary,
     }
     if primary.empty:
         return {
