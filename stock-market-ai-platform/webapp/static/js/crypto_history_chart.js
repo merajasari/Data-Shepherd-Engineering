@@ -187,7 +187,14 @@
     let minV=Math.min(...values),maxV=Math.max(...values); if(maxV===minV){minV*=.99;maxV*=1.01;}
     const logScale=minV>0 && ((mode==='raw'&&maxV/minV>100)||(mode==='normalized'&&showAll&&maxV/minV>80));
     const transform=v=>logScale?Math.log10(v):v;
-    let yMin=transform(minV),yMax=transform(maxV); const pad=(yMax-yMin)*.07||1; yMin-=pad;yMax+=pad;
+    let yMin=transform(minV),yMax=transform(maxV);
+    const pad=(yMax-yMin)*.07||1;
+    if(mode==='normalized' && !logScale) {
+      yMin=Math.max(0,yMin-pad);
+    } else {
+      yMin-=pad;
+    }
+    yMax+=pad;
     const x=t=>p.l+(W-p.l-p.r)*((t-minT)/Math.max(1,maxT-minT));
     const y=v=>p.t+(H-p.t-p.b)*(1-(transform(v)-yMin)/(yMax-yMin));
 
