@@ -58,8 +58,8 @@
   function cellStyle(r) {
     if(!Number.isFinite(r)) return 'background:rgba(145,166,194,.08);color:#91a6c2';
     const mag=Math.min(1,Math.abs(r));
-    if(r>=0) return `background:rgba(57,227,161,${0.08+mag*0.58});color:${mag>.55?'#04150f':'#dffcf1'}`;
-    return `background:rgba(255,102,128,${0.08+mag*0.58});color:${mag>.55?'#1b0509':'#ffe9ed'}`;
+    if(r>=0) return `background:rgba(57,227,161,${0.12+mag*0.70});color:${mag>.48?'#04150f':'#dffcf1'};box-shadow:inset 0 0 0 1px rgba(57,227,161,${0.10+mag*0.24})`;
+    return `background:rgba(255,102,128,${0.12+mag*0.70});color:${mag>.48?'#1b0509':'#ffe9ed'};box-shadow:inset 0 0 0 1px rgba(255,102,128,${0.10+mag*0.24})`;
   }
 
   function activeSymbols() {
@@ -86,6 +86,38 @@
       if(selected.has(s)) selected.delete(s); else selected.add(s);
       renderAll();
     }));
+  }
+
+
+  function renderPairHighlights() {
+    const syms=activeSymbols();
+    const mostPair=document.getElementById('relationship-most-pair');
+    const mostValue=document.getElementById('relationship-most-value');
+    const leastPair=document.getElementById('relationship-least-pair');
+    const leastValue=document.getElementById('relationship-least-value');
+    if(!mostPair||!mostValue||!leastPair||!leastValue) return;
+    if(syms.length<2){
+      mostPair.textContent='—'; mostValue.textContent='Select at least two assets';
+      leastPair.textContent='—'; leastValue.textContent='Select at least two assets';
+      return;
+    }
+    const maps=Object.fromEntries(syms.map(s=>[s,returnsMap(s)]));
+    const pairs=[];
+    for(let i=0;i<syms.length;i++) for(let j=i+1;j<syms.length;j++) {
+      const result=pearson(maps[syms[i]],maps[syms[j]]);
+      if(Number.isFinite(result.r)) pairs.push({a:syms[i],b:syms[j],r:result.r,n:result.n});
+    }
+    if(!pairs.length){
+      mostPair.textContent='—'; mostValue.textContent='Not enough overlapping observations';
+      leastPair.textContent='—'; leastValue.textContent='Not enough overlapping observations';
+      return;
+    }
+    pairs.sort((a,b)=>b.r-a.r);
+    const most=pairs[0], least=pairs[pairs.length-1];
+    mostPair.textContent=`${short(most.a)} + ${short(most.b)}`;
+    mostValue.textContent=`${most.r.toFixed(2)} correlation · ${most.n} overlapping daily returns`;
+    leastPair.textContent=`${short(least.a)} + ${short(least.b)}`;
+    leastValue.textContent=`${least.r.toFixed(2)} correlation · ${least.n} overlapping daily returns`;
   }
 
   function renderHeatmap() {
@@ -121,7 +153,7 @@
     }).join('');
   }
 
-  function renderAll(){renderSummary();renderChips();renderHeatmap();renderRelative();}
+  function renderAll(){renderSummary();renderChips();renderPairHighlights();renderHeatmap();renderRelative();}
 
   function bind() {
     document.querySelectorAll('[data-relationship-window]').forEach(btn=>btn.addEventListener('click',()=>{

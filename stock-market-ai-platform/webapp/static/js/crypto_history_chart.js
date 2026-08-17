@@ -7,7 +7,7 @@
   let historical = null;
   let liveQuotes = {};
   let mode = 'normalized';
-  let range = 'ALL';
+  let range = '1Y';
   let showAll = true;
   let selected = new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);
   let zoomLevel = 1;

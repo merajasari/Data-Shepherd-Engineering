@@ -1,8 +1,9 @@
 """Read-only historical crypto chart data from the authoritative 15-minute archive.
 
-The archive remains the source of truth.  For browser-scale ALL-history charts we
-reduce each product to its last observed close per UTC day, preserving the full
-available date span without shipping millions of 15-minute observations.
+The archive remains the source of truth. For browser-scale charts we reduce each
+product to its last observed close per UTC day. An archive-signature cache avoids
+re-reading unchanged Parquet history on every dashboard refresh while invalidating
+automatically whenever the product archive changes.
 """
 from __future__ import annotations
 
@@ -14,10 +15,26 @@ import pandas as pd
 from ml.crypto_rt import PRODUCTS
 
 RAW_ROOT = Path("data/research/crypto_intraday/raw_15m")
+_DAILY_CACHE: dict[str, tuple[tuple, pd.DataFrame]] = {}
 
 
-def _read_product(product_id: str) -> pd.DataFrame:
-    paths = sorted((RAW_ROOT / product_id).glob("*.parquet"))
+def _product_paths(product_id: str) -> list[Path]:
+    return sorted((RAW_ROOT / product_id).glob("*.parquet"))
+
+
+def _archive_signature(paths: list[Path]) -> tuple:
+    """Cheap invalidation signature for a product's historical archive."""
+    signature = []
+    for path in paths:
+        try:
+            stat = path.stat()
+            signature.append((path.name, stat.st_size, stat.st_mtime_ns))
+        except OSError:
+            signature.append((path.name, None, None))
+    return tuple(signature)
+
+
+def _read_product_paths(paths: list[Path]) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     for path in paths:
         try:
@@ -43,11 +60,22 @@ def _daily_history(frame: pd.DataFrame) -> pd.DataFrame:
         return frame.copy()
     out = frame.copy()
     out["date"] = out["timestamp_utc"].dt.floor("D")
-    # Keep the final authoritative 15-minute close observed on each UTC day.
     daily = out.groupby("date", as_index=False).tail(1).copy()
     daily = daily[["date", "timestamp_utc", "close"]].sort_values("date")
     first = float(daily.iloc[0]["close"])
     daily["index_100"] = daily["close"] / first * 100.0
+    return daily
+
+
+def _daily_product(product_id: str) -> pd.DataFrame:
+    paths = _product_paths(product_id)
+    signature = _archive_signature(paths)
+    cached = _DAILY_CACHE.get(product_id)
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+
+    daily = _daily_history(_read_product_paths(paths))
+    _DAILY_CACHE[product_id] = (signature, daily)
     return daily
 
 
@@ -63,7 +91,7 @@ def get_crypto_history_payload(products: Iterable[str] | None = None) -> dict:
     total_points = 0
 
     for product_id in requested:
-        daily = _daily_history(_read_product(product_id))
+        daily = _daily_product(product_id)
         if daily.empty:
             series[product_id] = {
                 "available": False,
@@ -108,5 +136,9 @@ def get_crypto_history_payload(products: Iterable[str] | None = None) -> dict:
         "global_start_utc": global_start.isoformat() if global_start is not None else None,
         "global_end_utc": global_end.isoformat() if global_end is not None else None,
         "series": series,
+        "cache": {
+            "strategy": "archive_signature_per_product",
+            "cached_products": len(_DAILY_CACHE),
+        },
         "brokerage_orders": False,
     }
