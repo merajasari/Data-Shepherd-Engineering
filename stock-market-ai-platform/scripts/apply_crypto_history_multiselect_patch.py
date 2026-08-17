@@ -15,74 +15,81 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def replace_first_available(text: str, olds: list[str], new: str, label: str) -> str:
-    if new in text:
-        print(f"[SKIP] {label}")
-        return text
-    for old in olds:
-        if old in text:
-            print(f"[APPLY] {label}")
-            return text.replace(old, new, 1)
-    raise SystemExit(f"Cannot apply {label}: expected text not found")
-
-
 def main() -> None:
     js = JS.read_text(encoding="utf-8")
 
-    js = replace_once(
-        js,
-        """  function toggleCompare(symbol) {\n    showAll=false;\n    if(selected.has(symbol) && selected.size>1) selected.delete(symbol);\n    else selected.add(symbol);\n    hoverSymbol=null;\n    renderAll();\n  }\n""",
-        """  function toggleCompare(symbol) {\n    showAll=false;\n    if(selected.has(symbol)) selected.delete(symbol);\n    else selected.add(symbol);\n    hoverSymbol=null;\n    renderAll();\n  }\n\n  function selectAllAssets() {\n    showAll=true;\n    selected.clear();\n    hoverSymbol=null;\n    zoomLevel=1;\n    panOffset=0;\n    renderAll();\n  }\n\n  function clearSelection() {\n    showAll=false;\n    selected.clear();\n    hoverSymbol=null;\n    renderAll();\n  }\n""",
-        "multi-select toggle behavior",
-    )
+    # Earlier failed runs may already have applied these sections. Only add the helper
+    # functions when they do not already exist.
+    if "function selectAllAssets()" not in js:
+        old = """  function toggleCompare(symbol) {\n    showAll=false;\n    if(selected.has(symbol) && selected.size>1) selected.delete(symbol);\n    else selected.add(symbol);\n    hoverSymbol=null;\n    renderAll();\n  }\n"""
+        new = """  function toggleCompare(symbol) {\n    showAll=false;\n    if(selected.has(symbol)) selected.delete(symbol);\n    else selected.add(symbol);\n    hoverSymbol=null;\n    renderAll();\n  }\n\n  function selectAllAssets() {\n    showAll=true;\n    selected.clear();\n    hoverSymbol=null;\n    zoomLevel=1;\n    panOffset=0;\n    renderAll();\n  }\n\n  function clearSelection() {\n    showAll=false;\n    selected.clear();\n    hoverSymbol=null;\n    renderAll();\n  }\n"""
+        js = replace_once(js, old, new, "multi-select toggle behavior")
+    else:
+        print("[SKIP] multi-select toggle behavior")
 
-    old_legend = """  function renderLegend() {\n    const root=document.getElementById('history-legend'); if(!root||!historical) return;\n    const symbols=activeSymbols();\n    root.innerHTML=symbols.map((s,i)=>`<button type=\"button\" class=\"history-legend-chip\" data-symbol=\"${esc(s)}\" title=\"Click to focus. Shift-click to compare.\"><i style=\"background:${palette[i%palette.length]}\"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`).join('');\n    root.querySelectorAll('.history-legend-chip').forEach(btn=>{\n      btn.addEventListener('click',event=>event.shiftKey?toggleCompare(btn.dataset.symbol):focusOnly(btn.dataset.symbol));\n      btn.addEventListener('mouseenter',()=>{hoverSymbol=btn.dataset.symbol;applyLineEmphasis();});\n      btn.addEventListener('mouseleave',()=>{hoverSymbol=null;applyLineEmphasis();});\n    });\n  }\n"""
-    new_legend = """  function renderLegend() {\n    const root=document.getElementById('history-legend'); if(!root||!historical) return;\n    const symbols=Object.keys(historical?.series||{}).filter(s=>historical.series[s]?.available).sort();\n    root.innerHTML=symbols.map((s,i)=>{\n      const on=showAll||selected.has(s);\n      return `<button type=\"button\" class=\"history-legend-chip${on?' history-selected':''}\" data-symbol=\"${esc(s)}\" title=\"Click to add/remove. Double-click to focus only.\" aria-pressed=\"${on?'true':'false'}\"><i style=\"background:${palette[i%palette.length]}\"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`;\n    }).join('');\n    root.querySelectorAll('.history-legend-chip').forEach(btn=>{\n      let clickTimer=null;\n      btn.addEventListener('click',()=>{\n        if(clickTimer) window.clearTimeout(clickTimer);\n        clickTimer=window.setTimeout(()=>{toggleCompare(btn.dataset.symbol);clickTimer=null;},220);\n      });\n      btn.addEventListener('dblclick',event=>{\n        event.preventDefault();\n        if(clickTimer){window.clearTimeout(clickTimer);clickTimer=null;}\n        focusOnly(btn.dataset.symbol);\n      });\n      btn.addEventListener('mouseenter',()=>{hoverSymbol=btn.dataset.symbol;applyLineEmphasis();});\n      btn.addEventListener('mouseleave',()=>{hoverSymbol=null;applyLineEmphasis();});\n    });\n  }\n"""
-    js = replace_once(js, old_legend, new_legend, "always-visible selectable asset chips")
+    if "Double-click to focus only." not in js:
+        start = js.find("  function renderLegend() {")
+        end = js.find("\n  function renderSearch(", start)
+        if start < 0 or end < 0:
+            raise SystemExit("Cannot apply always-visible selectable asset chips: function markers not found")
+        new_legend = """  function renderLegend() {\n    const root=document.getElementById('history-legend'); if(!root||!historical) return;\n    const symbols=Object.keys(historical?.series||{}).filter(s=>historical.series[s]?.available).sort();\n    root.innerHTML=symbols.map((s,i)=>{\n      const on=showAll||selected.has(s);\n      return `<button type=\"button\" class=\"history-legend-chip${on?' history-selected':''}\" data-symbol=\"${esc(s)}\" title=\"Click to add/remove. Double-click to focus only.\" aria-pressed=\"${on?'true':'false'}\"><i style=\"background:${palette[i%palette.length]}\"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`;\n    }).join('');\n    root.querySelectorAll('.history-legend-chip').forEach(btn=>{\n      let clickTimer=null;\n      btn.addEventListener('click',()=>{\n        if(clickTimer) window.clearTimeout(clickTimer);\n        clickTimer=window.setTimeout(()=>{toggleCompare(btn.dataset.symbol);clickTimer=null;},220);\n      });\n      btn.addEventListener('dblclick',event=>{\n        event.preventDefault();\n        if(clickTimer){window.clearTimeout(clickTimer);clickTimer=null;}\n        focusOnly(btn.dataset.symbol);\n      });\n      btn.addEventListener('mouseenter',()=>{hoverSymbol=btn.dataset.symbol;applyLineEmphasis();});\n      btn.addEventListener('mouseleave',()=>{hoverSymbol=null;applyLineEmphasis();});\n    });\n  }\n"""
+        js = js[:start] + new_legend + js[end:]
+        print("[APPLY] always-visible selectable asset chips")
+    else:
+        print("[SKIP] always-visible selectable asset chips")
 
-    js = replace_once(
-        js,
-        """    root.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{\n      focusOnly(btn.dataset.symbol);\n      document.getElementById('history-search').value=''; root.classList.remove('open');\n    }));\n""",
-        """    root.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{\n      toggleCompare(btn.dataset.symbol);\n      document.getElementById('history-search').value=''; root.classList.remove('open');\n    }));\n""",
-        "search result multi-select behavior",
-    )
+    # Search result behavior.
+    if "toggleCompare(btn.dataset.symbol);" not in js[js.find("function renderSearch"):js.find("function renderSummary")]:
+        search_start = js.find("  function renderSearch(")
+        search_end = js.find("\n  function renderSummary(", search_start)
+        block = js[search_start:search_end]
+        block = block.replace("focusOnly(btn.dataset.symbol);", "toggleCompare(btn.dataset.symbol);")
+        js = js[:search_start] + block + js[search_end:]
+        print("[APPLY] search result multi-select behavior")
+    else:
+        print("[SKIP] search result multi-select behavior")
 
-    js = replace_once(
-        js,
-        """      const hint=svgEl('text',{x:12,y:84,fill:'#91a6c2','font-size':10});hint.textContent='Click to focus · Shift-click to compare';tooltip.appendChild(hint);\n""",
-        """      const hint=svgEl('text',{x:12,y:84,fill:'#91a6c2','font-size':10});hint.textContent='Click to add/remove · Double-click to focus only';tooltip.appendChild(hint);\n""",
-        "chart hover hint",
-    )
+    js = js.replace("Click to focus · Shift-click to compare", "Click to add/remove · Double-click to focus only")
 
-    js = replace_once(
-        js,
-        """    svg.onclick=e=>{if(pointerSymbol){e.shiftKey?toggleCompare(pointerSymbol):focusOnly(pointerSymbol);}};\n""",
-        """    let chartClickTimer=null;\n    svg.onclick=()=>{\n      if(!pointerSymbol)return;\n      const symbol=pointerSymbol;\n      if(chartClickTimer)window.clearTimeout(chartClickTimer);\n      chartClickTimer=window.setTimeout(()=>{toggleCompare(symbol);chartClickTimer=null;},220);\n    };\n    svg.ondblclick=e=>{\n      e.preventDefault();\n      if(!pointerSymbol)return;\n      if(chartClickTimer){window.clearTimeout(chartClickTimer);chartClickTimer=null;}\n      focusOnly(pointerSymbol);\n    };\n""",
-        "chart click multi-select behavior",
-    )
+    if "let chartClickTimer=null;" not in js:
+        old = "    svg.onclick=e=>{if(pointerSymbol){e.shiftKey?toggleCompare(pointerSymbol):focusOnly(pointerSymbol);}};"
+        if old not in js:
+            raise SystemExit("Cannot apply chart click multi-select behavior: click handler not found")
+        new = """    let chartClickTimer=null;\n    svg.onclick=()=>{\n      if(!pointerSymbol)return;\n      const symbol=pointerSymbol;\n      if(chartClickTimer)window.clearTimeout(chartClickTimer);\n      chartClickTimer=window.setTimeout(()=>{toggleCompare(symbol);chartClickTimer=null;},220);\n    };\n    svg.ondblclick=e=>{\n      e.preventDefault();\n      if(!pointerSymbol)return;\n      if(chartClickTimer){window.clearTimeout(chartClickTimer);chartClickTimer=null;}\n      focusOnly(pointerSymbol);\n    };"""
+        js = js.replace(old, new, 1)
+        print("[APPLY] chart click multi-select behavior")
+    else:
+        print("[SKIP] chart click multi-select behavior")
 
-    controls_new = """  document.getElementById('history-show-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-select-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-clear-selection')?.addEventListener('click',clearSelection);\n"""
-    js = replace_first_available(
-        js,
-        [
-            """  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=!showAll;renderAll();});\n""",
-            """  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=true;selected.clear();hoverSymbol=null;zoomLevel=1;panOffset=0;renderAll();});\n""",
-            """  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=true;selected.clear();renderAll();});\n""",
-        ],
-        controls_new,
-        "select-all and clear-selection controls",
-    )
+    # Wire controls by inserting immediately before the history search setup. This is a
+    # stable marker across the existing UX versions and avoids depending on the exact
+    # history-show-all handler text.
+    if "history-select-all')?.addEventListener" not in js:
+        marker = "  const search=document.getElementById('history-search');"
+        if marker not in js:
+            raise SystemExit("Cannot apply select-all and clear-selection controls: stable search marker not found")
+        wiring = """  document.getElementById('history-show-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-select-all')?.addEventListener('click',selectAllAssets);\n  document.getElementById('history-clear-selection')?.addEventListener('click',clearSelection);\n"""
+        # Remove any existing history-show-all handler so one click does not fire twice.
+        import re
+        js = re.sub(r"  document\.getElementById\('history-show-all'\)\?\.addEventListener\('click',[^\n]+\);\n", "", js, count=1)
+        js = js.replace(marker, wiring + marker, 1)
+        print("[APPLY] select-all and clear-selection controls")
+    else:
+        print("[SKIP] select-all and clear-selection controls")
 
-    selected_state_new = """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}document.querySelectorAll('.history-legend-chip').forEach(chip=>chip.classList.toggle('history-selected',showAll||selected.has(chip.dataset.symbol)));"""
-    js = replace_first_available(
-        js,
-        [
-            """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}""",
-            """const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}const zoomStatus=document.getElementById('history-zoom-status');if(zoomStatus)zoomStatus.textContent=zoomLevel<=1?'FULL RANGE':`${zoomLevel.toFixed(1)}× ZOOM`;""",
-        ],
-        selected_state_new,
-        "selected-chip state rendering",
-    )
+    # renderAll selected-state sync: insert separately so we don't need to replace a
+    # long minified renderAll line.
+    if "function syncHistorySelectionUI()" not in js:
+        marker = "  function renderAll(){"
+        if marker not in js:
+            raise SystemExit("Cannot apply selected-chip state rendering: renderAll marker not found")
+        helper = """  function syncHistorySelectionUI() {\n    const all=document.getElementById('history-show-all');\n    if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}\n    document.querySelectorAll('.history-legend-chip').forEach(chip=>{\n      const on=showAll||selected.has(chip.dataset.symbol);\n      chip.classList.toggle('history-selected',on);\n      chip.setAttribute('aria-pressed',on?'true':'false');\n    });\n  }\n\n"""
+        js = js.replace(marker, helper + marker, 1)
+        # renderLegend already creates the right classes; call helper after renderLegend.
+        js = js.replace("renderSummary();renderLegend();renderChart();", "renderSummary();renderLegend();syncHistorySelectionUI();renderChart();", 1)
+        print("[APPLY] selected-chip state rendering")
+    else:
+        print("[SKIP] selected-chip state rendering")
 
     JS.write_text(js, encoding="utf-8")
 
@@ -96,8 +103,11 @@ def main() -> None:
 
     if 'id="history-select-all"' not in template:
         controls_anchor = '<button id="history-reset-view" class="history-nav-btn" type="button">RESET VIEW</button>'
-        controls_new_html = '<button id="history-select-all" class="history-nav-btn" type="button">SELECT ALL</button><button id="history-clear-selection" class="history-nav-btn" type="button">CLEAR SELECTION</button>' + controls_anchor
-        template = replace_once(template, controls_anchor, controls_new_html, "Select All / Clear Selection buttons")
+        if controls_anchor not in template:
+            raise SystemExit("Cannot apply Select All / Clear Selection buttons: reset-view button not found")
+        controls_new = '<button id="history-select-all" class="history-nav-btn" type="button">SELECT ALL</button><button id="history-clear-selection" class="history-nav-btn" type="button">CLEAR SELECTION</button>' + controls_anchor
+        template = template.replace(controls_anchor, controls_new, 1)
+        print("[APPLY] Select All / Clear Selection buttons")
     else:
         print("[SKIP] Select All / Clear Selection buttons")
 
