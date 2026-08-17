@@ -40,7 +40,7 @@ from webapp.services.crypto_history_service import get_crypto_history_payload  #
 from webapp.services.crypto_history_web_cache_service import get_crypto_history_cache_path, normalize_history_range  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
-from webapp.services.paper_trading_service import get_portfolio_summary  # noqa: E402
+from webapp.services.paper_trading_service import get_pnl_attribution, get_portfolio_summary  # noqa: E402
 from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
 
 
@@ -73,6 +73,7 @@ def inject_dashboard_modules(response):
             scripts.extend([
                 '<script src="/static/js/dashboard_layout.js" defer></script>',
                 '<script src="/static/js/v4_equity_chart.js" defer></script>',
+                '<script src="/static/js/v4_pnl_attribution.js" defer></script>',
                 '<script src="/static/js/market_history_chart.js" defer></script>',
                 '<script src="/static/js/primary_stock_spotlight.js" defer></script>',
             ])
@@ -135,6 +136,7 @@ def build_stock_dashboard(symbol):
 def build_v4_dashboard_payload():
     forward = dict(summarize_journal())
     portfolio = dict(get_portfolio_summary())
+    portfolio["pnl_attribution"] = get_pnl_attribution()
     forward["observations"] = forward.get("observation_count", 0)
     portfolio["open_positions"] = portfolio.get("open_position_count", 0)
     portfolio["top_five"] = forward.get("latest_top_five", [])

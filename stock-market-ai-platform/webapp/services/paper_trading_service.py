@@ -361,6 +361,99 @@ def get_portfolio_summary():
     }
 
 
+
+def get_pnl_attribution():
+    """Return read-only dollar attribution for the simulated V4 portfolio.
+
+    Separates current open-position market movement from modeled entry friction,
+    realized paper P&L, sleeve contribution, and completed rebalance costs.
+    No portfolio state is modified.
+    """
+
+    state = load_state()
+    rows = []
+
+    open_entry_friction = 0.0
+    open_market_move = 0.0
+    core_net_pnl = 0.0
+    v4_net_pnl = 0.0
+
+    for symbol, position in state.get("positions", {}).items():
+        quote = get_execution_price(symbol)
+        shares = float(position.get("shares", 0.0))
+        average_cost = float(position.get("average_cost", 0.0))
+        market_entry_price = float(
+            position.get("market_entry_price", average_cost)
+        )
+        current_price = quote.get("price")
+        if current_price is None:
+            current_price = average_cost
+        current_price = float(current_price)
+
+        entry_cost = float(position.get("entry_cost", 0.0))
+        market_move = (current_price - market_entry_price) * shares
+        net_pnl = (current_price - average_cost) * shares
+        sleeve = str(position.get("sleeve", "unknown"))
+
+        open_entry_friction += entry_cost
+        open_market_move += market_move
+        if sleeve == "core":
+            core_net_pnl += net_pnl
+        elif sleeve == "v4":
+            v4_net_pnl += net_pnl
+
+        rows.append(
+            {
+                "symbol": symbol,
+                "sleeve": sleeve,
+                "shares": shares,
+                "market_entry_price": market_entry_price,
+                "average_cost": average_cost,
+                "current_price": current_price,
+                "entry_friction": round(entry_cost, 2),
+                "market_move": round(market_move, 2),
+                "net_pnl": round(net_pnl, 2),
+                "price_source": quote.get("source"),
+                "quote_timestamp": quote.get("timestamp"),
+            }
+        )
+
+    rows.sort(key=lambda row: row["net_pnl"], reverse=True)
+
+    trades = list(state.get("trades", []))
+    sold_symbols = {
+        str(trade.get("symbol", ""))
+        for trade in trades
+        if trade.get("action") == "SELL"
+    }
+
+    total_trade_friction = 0.0
+    realized_rebalance_cost = 0.0
+    for trade in trades:
+        entry_cost = float(trade.get("entry_cost", 0.0) or 0.0)
+        exit_cost = float(trade.get("exit_cost", 0.0) or 0.0)
+        total_trade_friction += entry_cost + exit_cost
+        if str(trade.get("symbol", "")) in sold_symbols:
+            realized_rebalance_cost += entry_cost + exit_cost
+
+    realized_pnl = float(state.get("realized_pnl", 0.0))
+    total_pnl = core_net_pnl + v4_net_pnl + realized_pnl
+
+    return {
+        "total_pnl": round(total_pnl, 2),
+        "realized_pnl": round(realized_pnl, 2),
+        "core_net_pnl": round(core_net_pnl, 2),
+        "v4_net_pnl": round(v4_net_pnl, 2),
+        "open_position_market_move": round(open_market_move, 2),
+        "open_position_entry_friction": round(open_entry_friction, 2),
+        "total_friction": round(total_trade_friction, 2),
+        "realized_rebalance_cost": round(realized_rebalance_cost, 2),
+        "best_contributor": rows[0] if rows else None,
+        "worst_contributor": rows[-1] if rows else None,
+        "positions": rows,
+        "brokerage_orders": False,
+    }
+
 def evaluate_trade_candidates(
     symbols,
 ):

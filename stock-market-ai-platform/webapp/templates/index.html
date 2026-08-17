@@ -62,6 +62,33 @@ main > .card, .container > .card, body > .card{content-visibility:auto;contain-i
       <div class="v4-chart-summary"><div><span>STARTING EQUITY</span><strong id="v4-chart-start">—</strong></div><div><span>CURRENT EQUITY</span><strong id="v4-chart-current">—</strong></div><div><span>NET CHANGE</span><strong id="v4-chart-change">—</strong></div></div>
     </div>
   </div>
+  <div id="v4-pnl-attribution" class="v4-pnl-attribution">
+    <div class="v4-pnl-attribution-head">
+      <div><div class="label">P&amp;L ATTRIBUTION</div><h3>What is driving the portfolio right now?</h3><div class="muted">Separates market movement, modeled trading friction, the SPY core, V4 sleeve, and realized rebalance P&amp;L.</div></div>
+      <div><div class="muted" style="font-size:.72rem;font-weight:900;letter-spacing:.08em">TOTAL P&amp;L</div><div id="v4-pnl-total" class="v4-pnl-total">—</div></div>
+    </div>
+    <div class="v4-pnl-metrics">
+      <div class="metric"><span>SPY CORE</span><strong id="v4-pnl-core">—</strong></div>
+      <div class="metric"><span>V4 OPEN SLEEVE</span><strong id="v4-pnl-sleeve">—</strong></div>
+      <div class="metric"><span>REALIZED P&amp;L</span><strong id="v4-pnl-realized">—</strong></div>
+      <div class="metric"><span>TOTAL TRADING FRICTION</span><strong id="v4-pnl-friction">—</strong></div>
+      <div class="metric"><span>OPEN-POSITION MARKET MOVE</span><strong id="v4-pnl-market">—</strong></div>
+    </div>
+    <div class="v4-pnl-grid">
+      <div class="v4-pnl-panel">
+        <div class="label">OPEN POSITION CONTRIBUTION</div>
+        <div class="v4-pnl-sub" style="display:grid;grid-template-columns:74px 1fr 110px 110px;gap:10px;margin-top:10px"><span>SYMBOL</span><span>RELATIVE SIZE</span><span style="text-align:right">MARKET MOVE</span><span style="text-align:right">NET P&amp;L</span></div>
+        <div id="v4-pnl-positions" style="margin-top:4px">Loading attribution…</div>
+      </div>
+      <div class="v4-pnl-panel">
+        <div class="label">QUICK DIAGNOSTICS</div>
+        <div class="metric" style="margin-top:12px"><span>BEST CONTRIBUTOR</span><strong id="v4-pnl-best">—</strong></div>
+        <div class="metric" style="margin-top:10px"><span>WORST CONTRIBUTOR</span><strong id="v4-pnl-worst">—</strong></div>
+        <div class="metric" style="margin-top:10px"><span>COMPLETED REBALANCE COST</span><strong id="v4-pnl-switch-cost">—</strong></div>
+        <div class="v4-pnl-note">Market move is measured from each position's quoted market-entry price. Net P&amp;L includes modeled entry friction. Completed rebalance cost reports modeled entry/exit friction associated with symbols that have been sold. Simulation only — no brokerage orders.</div>
+      </div>
+    </div>
+  </div>
   <div class="v4-lower">
     <div class="card"><div class="label">CURRENT V4 TOP FIVE</div><div id="v4-top5" class="v4-list">Loading…</div></div>
     <div class="card"><div class="label">PORTFOLIO STRUCTURE</div><h3>60% SPY Core + 40% V4 Sleeve</h3><div class="muted" id="v4-positions">Loading portfolio state…</div><div class="v4-structure-inner"><div class="v4-donut" aria-label="60 percent SPY core and 40 percent V4 sleeve"></div><div class="v4-legend"><div class="v4-legend-item"><span class="v4-dot" style="background:var(--blue)"></span><div><strong>SPY Core (60%)</strong><div class="muted">Permanent benchmark/core allocation</div></div></div><div class="v4-legend-item"><span class="v4-dot" style="background:var(--green)"></span><div><strong>V4 Top-5 Sleeve (40%)</strong><div class="muted">Five selected stocks at an 8% target each</div></div></div></div></div></div>
