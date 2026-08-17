@@ -379,6 +379,12 @@ def crypto_dashboard():
     return render_template("crypto.html", crypto=get_crypto_dashboard_payload())
 
 
+@app.route("/crypto-visual")
+@login_required
+def crypto_visual_dashboard():
+    return render_template("crypto_visual.html", crypto=get_crypto_dashboard_payload())
+
+
 @app.route("/api/crypto-v1")
 @login_required
 def api_crypto_v1():

@@ -29,7 +29,7 @@
   const shell = document.querySelector('.shell');
   const header = shell && shell.querySelector('header');
   const existingTabs = shell && shell.querySelector('.tabs');
-  if (shell && header && !existingTabs && ['/dashboard', '/crypto'].includes(window.location.pathname)) {
+  if (shell && header && !existingTabs && ['/dashboard', '/crypto', '/crypto-visual'].includes(window.location.pathname)) {
     const style = document.createElement('style');
     style.textContent = `
       .ds-dashboard-tabs{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap}
@@ -45,6 +45,7 @@
     nav.innerHTML = `
       <a class="ds-dashboard-tab ${window.location.pathname === '/dashboard' ? 'active' : ''}" href="/dashboard">STOCKS</a>
       <a class="ds-dashboard-tab ${window.location.pathname === '/crypto' ? 'active' : ''}" href="/crypto">CRYPTO</a>
+      <a class="ds-dashboard-tab ${window.location.pathname === '/crypto-visual' ? 'active' : ''}" href="/crypto-visual">CRYPTO VISUAL</a>
     `;
     header.insertAdjacentElement('afterend', nav);
   }

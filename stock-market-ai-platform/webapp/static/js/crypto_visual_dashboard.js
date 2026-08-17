@@ -4,6 +4,9 @@
   const histories = new Map();
   let selected = 'BTC-USD';
   let latestQuotes = {};
+  const assetNames = {
+    'AAVE-USD':'Aave','ADA-USD':'Cardano','ARB-USD':'Arbitrum','ATOM-USD':'Cosmos','AVAX-USD':'Avalanche','BCH-USD':'Bitcoin Cash','BTC-USD':'Bitcoin','DOGE-USD':'Dogecoin','DOT-USD':'Polkadot','ETC-USD':'Ethereum Classic','ETH-USD':'Ethereum','FIL-USD':'Filecoin','HBAR-USD':'Hedera','ICP-USD':'Internet Computer','INJ-USD':'Injective','LINK-USD':'Chainlink','LTC-USD':'Litecoin','NEAR-USD':'NEAR Protocol','OP-USD':'Optimism','SHIB-USD':'Shiba Inu','SOL-USD':'Solana','SUI-USD':'Sui','UNI-USD':'Uniswap','XLM-USD':'Stellar','XRP-USD':'XRP'
+  };
 
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money = (value) => {
@@ -39,9 +42,47 @@
     const select = document.getElementById('visual-asset-select');
     if (!select) return;
     const current = select.value || selected;
-    select.innerHTML = symbols.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    select.innerHTML = symbols.map(s => `<option value="${esc(s)}">${esc(s)} — ${esc(assetNames[s] || s.replace('-USD',''))}</option>`).join('');
     select.value = symbols.includes(current) ? current : (symbols.includes(selected) ? selected : symbols[0]);
     selected = select.value;
+  }
+
+  function chooseSymbol(symbol) {
+    if (!latestQuotes[symbol]) return;
+    selected = symbol;
+    const select = document.getElementById('visual-asset-select');
+    if (select) select.value = selected;
+    const search = document.getElementById('visual-asset-search');
+    if (search) search.value = `${selected} — ${assetNames[selected] || selected.replace('-USD','')}`;
+    const results = document.getElementById('visual-asset-search-results');
+    if (results) results.classList.remove('open');
+    renderSelected();
+    renderMovers(latestQuotes);
+  }
+
+  function searchMatches(query) {
+    const q = String(query || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const symbols = Object.keys(latestQuotes).sort();
+    if (!q) return symbols;
+    return symbols.filter(symbol => {
+      const base = symbol.replace('-USD','');
+      const name = assetNames[symbol] || '';
+      return symbol.toLowerCase().includes(q) || base.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+    });
+  }
+
+  function renderSearchResults(query) {
+    const root = document.getElementById('visual-asset-search-results');
+    if (!root) return;
+    const matches = searchMatches(query).slice(0, 12);
+    if (!matches.length) {
+      root.innerHTML = '<div style="padding:12px 13px;color:#91a6c2">No matching crypto asset</div>';
+      root.classList.add('open');
+      return;
+    }
+    root.innerHTML = matches.map((symbol, index) => { const q=latestQuotes[symbol]; const c=quoteChange(q); return `<button type="button" class="crypto-search-result ${index===0?'active':''}" data-symbol="${esc(symbol)}"><span><strong>${esc(symbol)}</strong><small style="display:block;margin-top:2px">${esc(assetNames[symbol] || symbol.replace('-USD',''))}</small></span><strong class="${colorClass(c)}">${pct(c)}</strong></button>`; }).join('');
+    root.classList.add('open');
+    root.querySelectorAll('.crypto-search-result').forEach(btn => btn.addEventListener('click', () => chooseSymbol(btn.dataset.symbol)));
   }
 
   function renderPulse(quotes, updatedAt) {
@@ -71,11 +112,7 @@
       return `<button type="button" class="mover ${r.product_id===selected?'active':''}" data-symbol="${esc(r.product_id)}"><strong>${esc(r.product_id.replace('-USD',''))}</strong><div class="mover-track"><div class="mover-fill ${r.chg<0?'down':''}" style="width:${width.toFixed(1)}%"></div></div><strong class="${colorClass(r.chg)}">${pct(r.chg)}</strong></button>`;
     }).join('');
     root.querySelectorAll('.mover').forEach(btn => btn.addEventListener('click', () => {
-      selected = btn.dataset.symbol;
-      const select = document.getElementById('visual-asset-select');
-      if (select) select.value = selected;
-      renderSelected();
-      renderMovers(latestQuotes);
+      chooseSymbol(btn.dataset.symbol);
     }));
   }
 
@@ -123,7 +160,7 @@
 
   function renderSelected() {
     const q=latestQuotes[selected];
-    const symbol=document.getElementById('visual-selected-symbol');if(symbol)symbol.textContent=selected;
+    const symbol=document.getElementById('visual-selected-symbol');if(symbol)symbol.textContent=`${selected} — ${assetNames[selected] || selected.replace('-USD','')}`;
     const price=document.getElementById('visual-selected-price');if(price)price.textContent=money(q?.price);
     const change=document.getElementById('visual-selected-change');if(change){const c=quoteChange(q);change.textContent=`24H ${pct(c)}`;change.style.color=c>=0?'#39e3a1':'#ff6680';}
     const list=histories.get(selected)||[];
@@ -142,6 +179,7 @@
       if(!latestQuotes[selected])selected=symbols.includes('BTC-USD')?'BTC-USD':symbols[0];
       symbols.forEach(s=>pushPoint(s,latestQuotes[s]));
       populateSelect(symbols);
+      if (search && !search.matches(':focus')) search.value = `${selected} — ${assetNames[selected] || selected.replace('-USD','')}`;
       renderPulse(latestQuotes,data.updated_at);
       renderMovers(latestQuotes);
       renderSelected();
@@ -151,7 +189,22 @@
     }
   }
 
-  document.getElementById('visual-asset-select')?.addEventListener('change',(e)=>{selected=e.target.value;renderMovers(latestQuotes);renderSelected();});
+  document.getElementById('visual-asset-select')?.addEventListener('change',(e)=>chooseSymbol(e.target.value));
+  const search = document.getElementById('visual-asset-search');
+  const searchResults = document.getElementById('visual-asset-search-results');
+  search?.addEventListener('focus', () => renderSearchResults(search.value));
+  search?.addEventListener('input', () => renderSearchResults(search.value));
+  search?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      const first = searchMatches(search.value)[0];
+      if (first) { event.preventDefault(); chooseSymbol(first); }
+    } else if (event.key === 'Escape') {
+      searchResults?.classList.remove('open');
+    }
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.crypto-search-wrap')) searchResults?.classList.remove('open');
+  });
   refresh();
   window.setInterval(refresh,pollMs);
 })();
