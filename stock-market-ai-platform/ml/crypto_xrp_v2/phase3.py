@@ -3,6 +3,10 @@
 Research only. Uses XRP V2 Phase 2 OOS Ridge scores. A new 15-minute score alone
 never changes state. Candidate policies require hysteresis, confirmation,
 minimum hold, and positive expected net edge after switching-cost assumptions.
+
+Decision state is updated every 15 minutes, while realized economics are sampled
+on a non-overlapping one-hour grid to avoid quadruple-counting overlapping 1h
+forward returns.
 """
 from __future__ import annotations
 
@@ -11,7 +15,6 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 PHASE1_DATASET = Path("data/model/crypto_xrp_v2/phase1/xrp_primary_15m_1h.parquet")
@@ -85,11 +88,12 @@ def realized_return(row, state: str) -> float:
 
 
 def expected_relative_edge(score: float, current: str, proposed: str) -> float:
-    # Ridge predicts XRP minus BTC over the next hour. CASH uses a conservative
-    # zero-return reference; only magnitude beyond the current-state reference
-    # is treated as a switching-edge proxy.
     expected = {"XRP": score, "BTC": 0.0, "CASH": -max(score, 0.0)}
     return float(expected[proposed] - expected[current])
+
+
+def _is_realization_bar(ts: pd.Timestamp) -> bool:
+    return ts.minute == 0 and ts.second == 0
 
 
 def simulate(frame: pd.DataFrame, policy: Policy, cost_bps: float) -> tuple[dict, pd.DataFrame]:
@@ -103,6 +107,7 @@ def simulate(frame: pd.DataFrame, policy: Policy, cost_bps: float) -> tuple[dict
     blocked_cost = 0
     equity = 1.0
     rows = []
+    pending_switch_cost = 0.0
     hurdle = (cost_bps + policy.safety_buffer_bps) / 10000.0
 
     for row in frame.itertuples(index=False):
@@ -142,12 +147,17 @@ def simulate(frame: pd.DataFrame, policy: Policy, cost_bps: float) -> tuple[dict
                     age = 0
                     pending = None
                     pending_count = 0
+                    pending_switch_cost += cost_bps / 10000.0
                     reason = "SWITCH_ALLOWED"
 
-        gross = realized_return(row, executed)
-        cost = cost_bps / 10000.0 if switched else 0.0
-        net = gross - cost
-        equity *= 1.0 + net
+        realized = _is_realization_bar(row.timestamp_utc)
+        gross = realized_return(row, executed) if realized else 0.0
+        cost = pending_switch_cost if realized else 0.0
+        net = gross - cost if realized else 0.0
+        if realized:
+            equity *= 1.0 + net
+            pending_switch_cost = 0.0
+
         rows.append({
             "timestamp_utc": row.timestamp_utc,
             "fold_id": row.fold_id,
@@ -158,25 +168,29 @@ def simulate(frame: pd.DataFrame, policy: Policy, cost_bps: float) -> tuple[dict
             "executed_state": executed,
             "switch": switched,
             "reason": reason,
+            "realization_bar": realized,
             "gross_return_1h": gross,
+            "switch_cost_realized": cost,
             "net_return_1h": net,
             "equity": equity,
         })
         age += 1
 
     detail = pd.DataFrame(rows)
-    dd = detail["equity"] / detail["equity"].cummax() - 1.0
+    realized_detail = detail[detail["realization_bar"]].copy()
+    dd = realized_detail["equity"] / realized_detail["equity"].cummax() - 1.0
     summary = {
         "policy_id": policy.policy_id,
         "cost_bps": cost_bps,
-        "observation_count": len(detail),
+        "decision_count": len(detail),
+        "realized_hour_count": len(realized_detail),
         "executed_switches": switches,
         "blocked_min_hold": blocked_hold,
         "blocked_confirmation": blocked_confirm,
         "blocked_cost_hurdle": blocked_cost,
         "ending_equity": float(equity),
-        "max_drawdown": float(dd.min()),
-        "mean_net_return_1h": float(detail["net_return_1h"].mean()),
+        "max_drawdown": float(dd.min()) if not dd.empty else 0.0,
+        "mean_net_return_1h": float(realized_detail["net_return_1h"].mean()) if not realized_detail.empty else 0.0,
         "xrp_fraction": float((detail["executed_state"] == "XRP").mean()),
         "btc_fraction": float((detail["executed_state"] == "BTC").mean()),
         "cash_fraction": float((detail["executed_state"] == "CASH").mean()),
@@ -206,11 +220,12 @@ def main():
         "model_id": MODEL_ID,
         "decision_cadence_minutes": 15,
         "economic_horizon": "1h BTC-relative",
+        "economic_realization_grid": "non-overlapping hourly rows at minute 00; decisions continue every 15 minutes",
         "research_status": "EXPLORATORY TURNOVER-AWARE POLICY DEVELOPMENT",
         "default_action": "HOLD_CURRENT_STATE",
         "policies": [p.__dict__ for p in POLICIES],
         "cost_scenarios_bps": list(COST_BPS),
-        "important_limitation": "Expected net edge is a conservative score-based proxy; no brokerage execution or live slippage model is used.",
+        "important_limitation": "Expected net edge is a score-based proxy; no brokerage execution or live slippage model is used.",
         "frozen_benchmark": "XRP V1 Phase 6 remains unchanged.",
         "future_holdout_start_utc": "2026-09-01T00:00:00+00:00",
     }, indent=2) + "\n")
