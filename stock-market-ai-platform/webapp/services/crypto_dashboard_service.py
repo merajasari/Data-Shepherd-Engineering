@@ -26,6 +26,9 @@ RECONCILE_STATUS_PATH = Path("data/live/crypto_rt/reconcile_status.json")
 XRP_PHASE6_ROOT = Path("data/model/crypto_xrp_v1/phase6")
 XRP_STATUS_PATH = XRP_PHASE6_ROOT / "forward_service_status.json"
 XRP_SHADOW_PATH = XRP_PHASE6_ROOT / "shadow_latest.json"
+XRP_PHASE7_ROOT = Path("data/model/crypto_xrp_v1/phase7")
+XRP_PHASE7_STATUS_PATH = XRP_PHASE7_ROOT / "evaluation_status.json"
+XRP_PHASE7_SUMMARY_PATH = XRP_PHASE7_ROOT / "forward_summary.json"
 SHARED_V3_MANIFEST_PATH = Path("data/model/crypto_15m_v3/phase4/manifest.json")
 XRP_V2_MANIFEST_PATH = Path("data/model/crypto_xrp_v2/phase5/manifest.json")
 XRP_V3_MANIFEST_PATH = Path("data/model/crypto_xrp_v3/phase4/manifest.json")
@@ -74,7 +77,7 @@ def _heartbeat_time(path, payload):
         return None
 
 
-def _service_health(name, path, payload, stale_after_minutes, extra_error=None):
+def _service_health(name, path, payload, stale_after_minutes, extra_error=None, detail_override=None):
     if not path.exists() or not payload:
         return {
             "name": name,
@@ -119,7 +122,7 @@ def _service_health(name, path, payload, stale_after_minutes, extra_error=None):
 
     age_minutes = max(0.0, (datetime.now(timezone.utc) - heartbeat).total_seconds() / 60.0)
     status = "STALE" if age_minutes > stale_after_minutes else "HEALTHY"
-    detail = (
+    detail = detail_override or (
         f"Heartbeat is {age_minutes:.1f} minutes old; stale threshold is {stale_after_minutes} minutes."
     )
     return {
@@ -136,6 +139,7 @@ def _operational_health():
     reconcile = _read_json(RECONCILE_STATUS_PATH)
     v2 = _read_json(V2_STATUS_PATH)
     xrp = _read_json(XRP_STATUS_PATH)
+    xrp_phase7 = _read_json(XRP_PHASE7_STATUS_PATH)
 
     v2_error = None
     if v2 and v2.get("model_sha256_verified") is False:
@@ -147,10 +151,36 @@ def _operational_health():
     elif xrp and xrp.get("policy_verified") is False:
         xrp_error = "Frozen XRP V1 policy verification failed."
 
+    phase7_error = None
+    if xrp_phase7 and xrp_phase7.get("model_sha256_verified") is False:
+        phase7_error = "XRP Phase 7 frozen model hash verification failed."
+    elif xrp_phase7 and xrp_phase7.get("policy_verified") is False:
+        phase7_error = "XRP Phase 7 frozen policy verification failed."
+    elif xrp_phase7 and xrp_phase7.get("brokerage_orders") is not False:
+        phase7_error = "XRP Phase 7 unexpectedly reports brokerage orders enabled."
+    elif xrp_phase7 and xrp_phase7.get("mode") == "WAITING_PRE_HOLDOUT" and xrp_phase7.get("journal_exists") is True:
+        phase7_error = "XRP Phase 7 journal exists before the untouched future boundary."
+
+    phase7_mode = xrp_phase7.get("mode") if xrp_phase7 else None
+    phase7_detail = None
+    if phase7_mode == "WAITING_PRE_HOLDOUT":
+        phase7_detail = "Readiness heartbeat is fresh. Evaluator is locked from writing decision or performance events before Sep 1, 2026 00:00 UTC."
+    elif phase7_mode:
+        event_count = xrp_phase7.get("journal_event_count")
+        phase7_detail = f"Future evaluator mode is {phase7_mode}; journal events: {event_count if event_count is not None else '—'}."
+
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
         _service_health("Shared V2 Forward", V2_STATUS_PATH, v2, 90, v2_error),
         _service_health("XRP V1 Forward", XRP_STATUS_PATH, xrp, 90, xrp_error),
+        _service_health(
+            "XRP Phase 7 Evaluator",
+            XRP_PHASE7_STATUS_PATH,
+            xrp_phase7,
+            90,
+            phase7_error,
+            phase7_detail,
+        ),
         {
             "name": "Web Dashboard",
             "status": "HEALTHY",
