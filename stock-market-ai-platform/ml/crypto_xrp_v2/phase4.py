@@ -5,8 +5,8 @@ The goal is to expose fold stability, benchmark-relative behavior, drawdown, and
 cost-path sensitivity before any freeze/promotion discussion.
 
 Benchmark accounting is restricted to the exact non-overlapping OOS hourly
-realization timestamps present in corrected Phase 3. This keeps benchmark and
-strategy samples directly comparable.
+realization timestamps explicitly marked by corrected Phase 3. This keeps
+benchmark and strategy samples directly comparable.
 """
 from __future__ import annotations
 
@@ -27,26 +27,28 @@ COST_PATH = OUTPUT_ROOT / "cost_path_diagnostics.csv"
 BENCHMARK_PATH = OUTPUT_ROOT / "benchmark_diagnostics.csv"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
 
+REFERENCE_POLICY = "xrp_hold_c2_1h"
+REFERENCE_COST_BPS = 5.0
+
+
+def _as_bool(series: pd.Series) -> pd.Series:
+    if series.dtype == bool:
+        return series
+    return series.astype(str).str.strip().str.lower().isin({"true", "1", "yes"})
+
 
 def _economic_reference(detail: pd.DataFrame) -> pd.DataFrame:
-    """Return one policy/cost path containing the true hourly realizations.
-
-    Corrected Phase 3 writes one row per 15-minute decision but only rows on the
-    non-overlapping hourly economic grid have a non-null net_return_1h. Use a
-    single policy/cost slice before selecting those rows; otherwise deduplicating
-    across all policy/cost paths can accidentally reintroduce every 15-minute
-    timestamp when different paths realize on different rows.
-    """
+    """Return the exact Phase 3 hourly realization rows for one reference path."""
     ref = detail[
-        detail["policy_id"].eq("xrp_hold_c2_1h")
-        & pd.to_numeric(detail["cost_bps"], errors="coerce").eq(5.0)
+        detail["policy_id"].eq(REFERENCE_POLICY)
+        & pd.to_numeric(detail["cost_bps"], errors="coerce").eq(REFERENCE_COST_BPS)
     ].copy()
-    ref = ref[pd.to_numeric(ref["net_return_1h"], errors="coerce").notna()].copy()
+    ref = ref[_as_bool(ref["realization_bar"])].copy()
     ref = ref.sort_values("timestamp_utc").reset_index(drop=True)
     if ref.empty:
-        raise RuntimeError("No reference Phase 3 hourly economic realization rows")
+        raise RuntimeError("No reference Phase 3 hourly realization rows")
     if ref["timestamp_utc"].duplicated().any():
-        raise RuntimeError("Reference Phase 3 economic realization timestamps are duplicated")
+        raise RuntimeError("Reference Phase 3 realization timestamps are duplicated")
     return ref
 
 
@@ -56,7 +58,6 @@ def _hourly_benchmarks(detail: pd.DataFrame) -> pd.DataFrame:
 
     ref = _economic_reference(detail)
     econ_ts = ref[["timestamp_utc"]].copy()
-
     h = econ_ts.merge(
         df[["timestamp_utc", "forward_return_1h", "btc_forward_return_1h"]],
         on="timestamp_utc",
@@ -103,19 +104,15 @@ def main():
     detail["timestamp_utc"] = pd.to_datetime(detail["timestamp_utc"], utc=True)
 
     required = {
-        "policy_id",
-        "cost_bps",
-        "fold_id",
-        "net_return_1h",
-        "equity",
-        "switch",
+        "policy_id", "cost_bps", "fold_id", "realization_bar",
+        "net_return_1h", "equity", "switch",
     }
     missing = required - set(detail.columns)
     if missing:
         raise RuntimeError(f"Phase 3 detail missing columns: {sorted(missing)}")
 
+    econ = detail[_as_bool(detail["realization_bar"])].copy()
     fold_rows = []
-    econ = detail[pd.to_numeric(detail["net_return_1h"], errors="coerce").notna()].copy()
     for (policy, cost, fold), g in econ.groupby(
         ["policy_id", "cost_bps", "fold_id"], sort=True
     ):
@@ -123,18 +120,16 @@ def main():
         eq = np.cumprod(1.0 + r)
         peak = np.maximum.accumulate(eq)
         dd = eq / peak - 1.0
-        fold_rows.append(
-            {
-                "policy_id": policy,
-                "cost_bps": float(cost),
-                "fold_id": fold,
-                "realized_hour_count": int(len(g)),
-                "ending_equity": float(eq[-1]) if len(eq) else 1.0,
-                "max_drawdown": float(dd.min()) if len(dd) else 0.0,
-                "mean_net_return_1h": float(np.mean(r)) if len(r) else 0.0,
-                "positive_fold": bool(float(eq[-1]) > 1.0) if len(eq) else False,
-            }
-        )
+        fold_rows.append({
+            "policy_id": policy,
+            "cost_bps": float(cost),
+            "fold_id": fold,
+            "realized_hour_count": int(len(g)),
+            "ending_equity": float(eq[-1]) if len(eq) else 1.0,
+            "max_drawdown": float(dd.min()) if len(dd) else 0.0,
+            "mean_net_return_1h": float(np.mean(r)) if len(r) else 0.0,
+            "positive_fold": bool(float(eq[-1]) > 1.0) if len(eq) else False,
+        })
     folds = pd.DataFrame(fold_rows)
 
     path_rows = []
@@ -143,21 +138,19 @@ def main():
         equities = g["ending_equity"].to_numpy(float)
         costs = g["cost_bps"].to_numpy(float)
         monotonic = bool(np.all(np.diff(equities) <= 1e-12))
-        path_rows.append(
-            {
-                "policy_id": policy,
-                "cost_points": int(len(g)),
-                "ending_equity_0bps": float(g.loc[g["cost_bps"].eq(0), "ending_equity"].iloc[0]) if g["cost_bps"].eq(0).any() else np.nan,
-                "ending_equity_5bps": float(g.loc[g["cost_bps"].eq(5), "ending_equity"].iloc[0]) if g["cost_bps"].eq(5).any() else np.nan,
-                "ending_equity_10bps": float(g.loc[g["cost_bps"].eq(10), "ending_equity"].iloc[0]) if g["cost_bps"].eq(10).any() else np.nan,
-                "ending_equity_25bps": float(g.loc[g["cost_bps"].eq(25), "ending_equity"].iloc[0]) if g["cost_bps"].eq(25).any() else np.nan,
-                "equity_monotonic_nonincreasing_with_cost": monotonic,
-                "cost_hurdle_changes_state_path": not monotonic,
-                "min_equity": float(equities.min()),
-                "max_equity": float(equities.max()),
-                "cost_range_bps": f"{costs.min():g}-{costs.max():g}",
-            }
-        )
+        path_rows.append({
+            "policy_id": policy,
+            "cost_points": int(len(g)),
+            "ending_equity_0bps": float(g.loc[g["cost_bps"].eq(0), "ending_equity"].iloc[0]) if g["cost_bps"].eq(0).any() else np.nan,
+            "ending_equity_5bps": float(g.loc[g["cost_bps"].eq(5), "ending_equity"].iloc[0]) if g["cost_bps"].eq(5).any() else np.nan,
+            "ending_equity_10bps": float(g.loc[g["cost_bps"].eq(10), "ending_equity"].iloc[0]) if g["cost_bps"].eq(10).any() else np.nan,
+            "ending_equity_25bps": float(g.loc[g["cost_bps"].eq(25), "ending_equity"].iloc[0]) if g["cost_bps"].eq(25).any() else np.nan,
+            "equity_monotonic_nonincreasing_with_cost": monotonic,
+            "cost_hurdle_changes_state_path": not monotonic,
+            "min_equity": float(equities.min()),
+            "max_equity": float(equities.max()),
+            "cost_range_bps": f"{costs.min():g}-{costs.max():g}",
+        })
     cost_path = pd.DataFrame(path_rows)
     benchmarks = _hourly_benchmarks(detail)
 
@@ -185,24 +178,17 @@ def main():
         fold_stability[
             (fold_stability["policy_id"] == candidate)
             & fold_stability["cost_bps"].eq(5)
-        ]
-        if candidate
-        else pd.DataFrame()
+        ] if candidate else pd.DataFrame()
     )
     positive_fraction = (
         float(candidate_stability["positive_fold_fraction"].iloc[0])
-        if not candidate_stability.empty
-        else 0.0
+        if not candidate_stability.empty else 0.0
     )
     max_dd = float(best_5["max_drawdown"].iloc[0]) if not best_5.empty else -1.0
 
     btc_row = benchmarks[benchmarks["benchmark"].eq("always_btc")]
-    aligned_btc_equity = (
-        float(btc_row["ending_equity"].iloc[0]) if not btc_row.empty else np.nan
-    )
-    candidate_5bps_equity = (
-        float(best_5["ending_equity"].iloc[0]) if not best_5.empty else np.nan
-    )
+    aligned_btc_equity = float(btc_row["ending_equity"].iloc[0]) if not btc_row.empty else np.nan
+    candidate_5bps_equity = float(best_5["ending_equity"].iloc[0]) if not best_5.empty else np.nan
 
     status = "CONTINUE_DIAGNOSTICS_NO_FREEZE"
     if candidate is None:
@@ -219,34 +205,28 @@ def main():
     ):
         status = "ELIGIBLE_FOR_SEPARATE_FREEZE_REVIEW"
 
-    MANIFEST_PATH.write_text(
-        json.dumps(
-            {
-                "research_version": "crypto_xrp_v2",
-                "phase": 4,
-                "stage": "robustness_and_path_sensitivity_diagnostics",
-                "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-                "input_phase3_accounting": "corrected non-overlapping hourly economic realization with 15-minute decisions",
-                "benchmark_alignment": "always-XRP/BTC/CASH benchmarks use the exact non-null economic realization timestamps from the xrp_hold_c2_1h 5bps Phase 3 OOS path",
-                "benchmark_realized_hour_count": int(benchmarks["realized_hour_count"].iloc[0]),
-                "best_5bps_policy_by_aggregate_equity": candidate,
-                "best_5bps_policy_ending_equity": candidate_5bps_equity,
-                "aligned_always_btc_ending_equity": aligned_btc_equity,
-                "best_5bps_positive_fold_fraction": positive_fraction,
-                "best_5bps_max_drawdown": max_dd,
-                "status": status,
-                "important_interpretation": "Higher cost can change the executed state path because cost is part of the switching hurdle. Therefore non-monotonic equity across cost scenarios is path sensitivity, not evidence that higher fees improve performance.",
-                "no_new_model_fit": True,
-                "no_policy_tuning": True,
-                "frozen_xrp_v1_modified": False,
-                "brokerage_orders": False,
-                "future_holdout_start_utc": "2026-09-01T00:00:00+00:00",
-                "next_step": "Use aligned benchmark, fold, and overlay diagnostics to decide whether XRP V2 merits a fresh separately pre-registered hypothesis. Do not freeze this V2 policy family on current evidence.",
-            },
-            indent=2,
-        )
-        + "\n"
-    )
+    MANIFEST_PATH.write_text(json.dumps({
+        "research_version": "crypto_xrp_v2",
+        "phase": 4,
+        "stage": "robustness_and_path_sensitivity_diagnostics",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "input_phase3_accounting": "corrected non-overlapping hourly economic realization with 15-minute decisions",
+        "benchmark_alignment": "benchmarks use realization_bar=true timestamps from xrp_hold_c2_1h at 5bps",
+        "benchmark_realized_hour_count": int(benchmarks["realized_hour_count"].iloc[0]),
+        "best_5bps_policy_by_aggregate_equity": candidate,
+        "best_5bps_policy_ending_equity": candidate_5bps_equity,
+        "aligned_always_btc_ending_equity": aligned_btc_equity,
+        "best_5bps_positive_fold_fraction": positive_fraction,
+        "best_5bps_max_drawdown": max_dd,
+        "status": status,
+        "important_interpretation": "Higher cost can change the executed state path because cost is part of the switching hurdle. Therefore non-monotonic equity across cost scenarios is path sensitivity, not evidence that higher fees improve performance.",
+        "no_new_model_fit": True,
+        "no_policy_tuning": True,
+        "frozen_xrp_v1_modified": False,
+        "brokerage_orders": False,
+        "future_holdout_start_utc": "2026-09-01T00:00:00+00:00",
+        "next_step": "Use aligned benchmark, fold, and overlay diagnostics to decide whether XRP V2 merits a fresh separately pre-registered hypothesis. Do not freeze this V2 policy family on current evidence.",
+    }, indent=2) + "\n")
 
     print("CRYPTO XRP V2 PHASE 4")
     print("=" * 100)
