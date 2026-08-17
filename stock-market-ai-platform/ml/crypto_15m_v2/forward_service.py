@@ -257,6 +257,10 @@ def _apply_confirm2(state: dict, raw_label: str) -> tuple[str, str, dict]:
 
 def _read_journal() -> pd.DataFrame:
     df = pd.read_csv(JOURNAL_PATH)
+    # An all-empty CSV column is otherwise inferred as float64 by pandas.
+    # Realization writes an ISO-8601 timestamp here, so keep it string-capable.
+    if "realized_through_utc" in df.columns:
+        df["realized_through_utc"] = df["realized_through_utc"].astype("object")
     if len(df):
         df["decision_timestamp_utc"] = pd.to_datetime(df["decision_timestamp_utc"], utc=True)
     return df
