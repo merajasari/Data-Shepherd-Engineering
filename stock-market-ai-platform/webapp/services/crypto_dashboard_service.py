@@ -29,6 +29,7 @@ XRP_SHADOW_PATH = XRP_PHASE6_ROOT / "shadow_latest.json"
 XRP_PHASE7_ROOT = Path("data/model/crypto_xrp_v1/phase7")
 XRP_PHASE7_STATUS_PATH = XRP_PHASE7_ROOT / "evaluation_status.json"
 XRP_PHASE7_SUMMARY_PATH = XRP_PHASE7_ROOT / "forward_summary.json"
+READINESS_STATUS_PATH = Path("data/live/crypto_readiness/readiness_status.json")
 SHARED_V3_MANIFEST_PATH = Path("data/model/crypto_15m_v3/phase4/manifest.json")
 XRP_V2_MANIFEST_PATH = Path("data/model/crypto_xrp_v2/phase5/manifest.json")
 XRP_V3_MANIFEST_PATH = Path("data/model/crypto_xrp_v3/phase4/manifest.json")
@@ -196,6 +197,49 @@ def _operational_health():
         "overall_status": overall,
         "services": services,
         "note": "Web Dashboard health is request-path liveness; LaunchAgent process state is checked separately with launchctl.",
+    }
+
+
+def _forward_evaluation_readiness():
+    payload = _read_json(READINESS_STATUS_PATH)
+    if not payload:
+        return {
+            "available": False,
+            "status": "UNAVAILABLE",
+            "ready": False,
+            "message": "Forward-evaluation readiness snapshot is not available yet.",
+        }
+
+    heartbeat = _heartbeat_time(READINESS_STATUS_PATH, payload)
+    age_minutes = None
+    stale = False
+    if heartbeat is not None:
+        age_minutes = max(0.0, (datetime.now(timezone.utc) - heartbeat).total_seconds() / 60.0)
+        stale = age_minutes > 30
+
+    source_status = str(payload.get("status", "NOT_READY_FOR_FORWARD_EVALUATION"))
+    display_status = "STALE" if stale else source_status
+    failures = payload.get("failures") or []
+    return {
+        "available": True,
+        "status": display_status,
+        "source_status": source_status,
+        "ready": bool(payload.get("ready", False)) and not stale,
+        "generated_at_utc": payload.get("generated_at_utc"),
+        "age_minutes": round(age_minutes, 1) if age_minutes is not None else None,
+        "stale_after_minutes": 30,
+        "holdout_start_utc": payload.get("holdout_start_utc"),
+        "pre_holdout": payload.get("pre_holdout"),
+        "passed_checks": int(payload.get("passed_checks", 0) or 0),
+        "total_checks": int(payload.get("total_checks", 0) or 0),
+        "failed_checks": int(payload.get("failed_checks", 0) or 0),
+        "failures": failures[:5],
+        "brokerage_orders": bool(payload.get("brokerage_orders", False)),
+        "message": (
+            "Latest canonical readiness audit passed every check."
+            if payload.get("ready") and not stale
+            else "Readiness requires attention; review failed checks or refresh the audit snapshot."
+        ),
     }
 
 
@@ -434,6 +478,7 @@ def get_crypto_dashboard_payload():
     xrp_live = _xrp_live()
     research_tracks = _development_research_tracks()
     operational_health = _operational_health()
+    forward_evaluation_readiness = _forward_evaluation_readiness()
 
     common = {
         "universe": list(CRYPTO_UNIVERSE),
@@ -444,6 +489,7 @@ def get_crypto_dashboard_payload():
         "xrp_live": xrp_live,
         "development_research_tracks": research_tracks,
         "operational_health": operational_health,
+        "forward_evaluation_readiness": forward_evaluation_readiness,
     }
     if primary.empty:
         return {
