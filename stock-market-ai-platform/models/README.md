@@ -39,6 +39,55 @@ Model hash:
 9f2760f05fca4d3b6cc1e02fc700c4cdf7eeedc5e5d67208c62b534f3a458a6b
 ```
 
+### XRP V1 Phase 6
+
+Current dedicated XRP frozen exploratory forward candidate:
+
+```text
+research version: crypto_xrp_v1
+phase: 6
+research status: EXPLORATORY FORWARD CANDIDATE
+model: ridge
+target: btc_relative_forward_return_4h
+features: 44
+training rows: 106,982
+policy: hyst_10_05_hold24
+decision cadence: 4 hours
+minimum hold: 24 hours
+future boundary: 2026-09-01T00:00:00Z
+promotion status: NOT PROMOTED FOR REAL TRADING
+real brokerage orders: disabled
+```
+
+Frozen files:
+
+```text
+data/model/crypto_xrp_v1/phase6/frozen_ridge.joblib
+data/model/crypto_xrp_v1/phase6/freeze_manifest.json
+```
+
+Model hash:
+
+```text
+4c3f69b4bd41bf69cfaf7ce0633d53fb2e5bec10d1b9c8081fd295d6bfe45553
+```
+
+Shadow-only forward inference:
+
+```text
+ml/crypto_xrp_v1/forward_service.py
+```
+
+Runtime service:
+
+```text
+com.datashepherd.xrpforward
+```
+
+The XRP service verifies the frozen model hash and policy before inference, reconstructs the same 44-feature contract from authoritative reconciled Coinbase 15-minute bars, advances only genuinely available four-hour decisions, and preserves the frozen hysteresis/minimum-hold state machine. It does not replay missed decisions, write a performance journal, place brokerage orders, or modify the shared Crypto 15m V2 candidate.
+
+A separate future-evaluation phase is required before XRP forward observations may be scored or considered for promotion.
+
 ## Crypto 15m V2 phases
 
 ### Phase 1
@@ -205,28 +254,34 @@ Aggregate exploratory evidence:
 
 Fold results remain mixed, so this policy is **not promoted**.
 
-### XRP V1 forward-candidate status
+### Phase 6 — reproducible exploratory forward freeze
 
-`hyst_10_05_hold24` is frozen conceptually as an:
+Phase 6 performs no new model selection or threshold tuning. It freezes the existing Phase 5 exploratory hypothesis for reproducible forward monitoring.
 
-```text
-EXPLORATORY FORWARD CANDIDATE
-```
+Training/freeze contract:
 
-It is not a production or brokerage candidate.
+- post-gap primary XRP era only
+- 106,982 training rows
+- 44 features
+- Ridge pipeline: median imputation -> StandardScaler -> Ridge(alpha=10.0)
+- target: `btc_relative_forward_return_4h`
+- policy: `hyst_10_05_hold24`
+- decision cadence: 4 hours
+- minimum hold: 24 hours
+- future boundary: 2026-09-01T00:00:00Z
+- promotion status: NOT PROMOTED FOR REAL TRADING
 
-Rules:
+Shadow-forward rules:
 
 - no further historical threshold/hold-period tuning on the same folds
-- preserve future evaluation start at 2026-09-01T00:00:00Z
-- forward monitoring must be shadow/research only initially
+- preserve the Sep. 1 boundary
+- no performance journal in the current XRP shadow service
+- no historical replay/backfill of missed decisions
 - no real brokerage orders
 - no leverage
 - no shorting
 - no derivatives
 - do not combine XRP into Crypto 15m V2
-
-The next XRP research-engineering step is a reproducible frozen-candidate artifact/manifest plus shadow-only forward inference.
 
 ## Artifact rules
 
