@@ -11,7 +11,8 @@ Monitored components:
 1. authoritative Coinbase 15-minute reconciliation
 2. frozen Shared Crypto 15m V2 forward service
 3. frozen XRP V1 Phase 6 shadow-forward service
-4. web dashboard request path
+4. XRP V1 Phase 7 future evaluator
+5. web dashboard request path
 
 ## Health states
 
@@ -26,6 +27,8 @@ UNAVAILABLE
 
 A readable runtime status exists and its heartbeat age is within the configured freshness window.
 
+For XRP Phase 7, `WAITING_PRE_HOLDOUT` is a healthy readiness state before 2026-09-01 00:00 UTC when the frozen model/policy checks pass and no future-evaluation journal exists.
+
 ### STALE
 
 The status file is readable and does not report an error, but its heartbeat is older than the configured freshness window.
@@ -38,6 +41,11 @@ For XRP V1 this includes:
 
 - frozen model hash verification failure
 - frozen policy verification failure
+
+For XRP Phase 7 it also includes:
+
+- brokerage orders unexpectedly reported as enabled
+- a Phase 7 journal existing while the evaluator is still in `WAITING_PRE_HOLDOUT`
 
 For Shared V2, an explicit model-hash verification failure is also treated as an error if present in its status payload.
 
@@ -52,6 +60,7 @@ The expected runtime status file is missing/unreadable or has no usable heartbea
 | 15m reconciler | 45 minutes |
 | Shared V2 forward service | 90 minutes |
 | XRP V1 forward service | 90 minutes |
+| XRP Phase 7 evaluator | 90 minutes |
 | Web dashboard request path | 5 minutes |
 
 The dashboard web card is generated during the request itself and therefore represents request-path liveness. It is **not** a substitute for checking the macOS LaunchAgent process state.
@@ -76,11 +85,30 @@ data/model/crypto_15m_v2/phase5/forward_service_status.json
 data/model/crypto_xrp_v1/phase6/forward_service_status.json
 ```
 
+### XRP V1 Phase 7 evaluator
+
+```text
+data/model/crypto_xrp_v1/phase7/evaluation_status.json
+```
+
+Before the untouched future boundary, Phase 7 should report:
+
+```text
+mode: WAITING_PRE_HOLDOUT
+status: ok
+journal_exists: false
+model_sha256_verified: true
+policy_verified: true
+brokerage_orders: false
+```
+
+At or after the boundary, the same status file becomes the evaluator heartbeat while the append-only event journal is maintained separately.
+
 The dashboard uses `generated_at_utc`, `last_updated_utc`, or `updated_at_utc` when present. If none is available, it falls back to the runtime status file modification time.
 
 ## Overall platform state
 
-The dashboard reports the worst current state across the four monitored components using this severity order:
+The dashboard reports the worst current state across the five monitored components using this severity order:
 
 ```text
 HEALTHY < STALE < UNAVAILABLE < ERROR
@@ -104,6 +132,9 @@ launchctl print gui/$(id -u)/com.datashepherd.cryptov2forward \
 
 launchctl print gui/$(id -u)/com.datashepherd.xrpforward \
   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.xrpphase7 \
+  | grep -E 'state =|runs =|pid =|last exit code'
 ```
 
 The dashboard health panel and `launchctl` answer different questions:
@@ -123,6 +154,7 @@ It does not change:
 - XRP V1 Ridge model
 - XRP V1 `hyst_10_05_hold24` policy
 - XRP V1 four-hour decision cadence
+- XRP Phase 7 future-evaluation accounting contract
 - Sep. 1, 2026 future-evaluation boundaries
 - brokerage execution state
 
