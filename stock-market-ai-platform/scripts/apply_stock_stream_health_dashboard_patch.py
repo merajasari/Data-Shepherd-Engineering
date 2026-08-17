@@ -27,12 +27,23 @@ replace_once(
     "stock stream health API route",
 )
 
-replace_once(
-    "webapp/templates/index.html",
-    '<nav class="tabs"><a class="tab active" href="{{ url_for(\'dashboard\') }}">STOCKS</a><a class="tab" href="{{ url_for(\'crypto_dashboard\') }}">CRYPTO</a></nav>',
-    '<nav class="tabs"><a class="tab active" href="{{ url_for(\'dashboard\') }}">STOCKS</a><a class="tab" href="{{ url_for(\'crypto_dashboard\') }}">CRYPTO</a></nav>\n<section class="card" id="stock-stream-health-card" style="margin-bottom:22px"><div class="label">STOCK REAL-TIME STREAM HEALTH</div><h2>Tiingo IEX Live Feed</h2><p class="muted">Read-only monitoring for the full V5 universe (100 stocks + SPY). During regular U.S. trading hours this card turns stale if live quote timestamps stop advancing.</p><div class="mode" id="stock-stream-health-status">CHECKING</div><div class="grid metrics" style="margin-top:18px"><div class="metric"><span>LAUNCHAGENT</span><strong id="stock-stream-agent">—</strong></div><div class="metric"><span>LIVE SYMBOLS</span><strong id="stock-stream-live-count">—</strong></div><div class="metric"><span>CONFIGURED</span><strong id="stock-stream-configured-count">—</strong></div><div class="metric"><span>CACHE AGE</span><strong id="stock-stream-cache-age">—</strong></div><div class="metric"><span>MARKET CLOCK</span><strong id="stock-stream-session">—</strong></div><div class="metric"><span>REAL ORDERS</span><strong class="positive">NO</strong></div></div><p class="muted" id="stock-stream-health-detail" style="margin-top:16px">Checking Tiingo IEX stream health…</p></section>',
-    "stock stream health card",
-)
+p = Path("webapp/templates/index.html")
+text = p.read_text()
+card_marker = 'id="stock-stream-health-card"'
+card = '''<section class="card" id="stock-stream-health-card" style="margin-bottom:22px"><div class="label">STOCK REAL-TIME STREAM HEALTH</div><h2>Tiingo IEX Live Feed</h2><p class="muted">Read-only monitoring for the full V5 universe (100 stocks + SPY). During regular U.S. trading hours this card turns stale if live quote timestamps stop advancing.</p><div class="mode" id="stock-stream-health-status">CHECKING</div><div class="grid metrics" style="margin-top:18px"><div class="metric"><span>LAUNCHAGENT</span><strong id="stock-stream-agent">—</strong></div><div class="metric"><span>LIVE SYMBOLS</span><strong id="stock-stream-live-count">—</strong></div><div class="metric"><span>CONFIGURED</span><strong id="stock-stream-configured-count">—</strong></div><div class="metric"><span>CACHE AGE</span><strong id="stock-stream-cache-age">—</strong></div><div class="metric"><span>MARKET CLOCK</span><strong id="stock-stream-session">—</strong></div><div class="metric"><span>REAL ORDERS</span><strong class="positive">NO</strong></div></div><p class="muted" id="stock-stream-health-detail" style="margin-top:16px">Checking Tiingo IEX stream health…</p></section>'''
+if card_marker in text:
+    print("[SKIP] stock stream health card")
+else:
+    anchors = [
+        '<section class="card v4-dashboard">',
+        '<section class="card" style="margin-top:22px"><div class="label">V5 LEADERS</div>',
+    ]
+    anchor = next((candidate for candidate in anchors if candidate in text), None)
+    if anchor is None:
+        raise SystemExit("Cannot apply stock stream health card: no safe current-template anchor found")
+    text = text.replace(anchor, card + "\n\n" + anchor, 1)
+    p.write_text(text)
+    print("[APPLY] stock stream health card")
 
 p = Path("webapp/static/js/realtime_market_refresh.js")
 text = p.read_text()
