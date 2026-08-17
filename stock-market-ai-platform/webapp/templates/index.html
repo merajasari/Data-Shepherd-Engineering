@@ -31,6 +31,11 @@ header{gap:30px;padding:45px 0 30px}
 main > .card, .container > .card, body > .card{content-visibility:auto;contain-intrinsic-size:auto 520px}
 @media(max-width:760px){main > .card, .container > .card, body > .card{contain-intrinsic-size:auto 620px}}
 </style>
+
+<style id="v5-shadow-comparison-style">
+.v5-shadow-holdings{display:grid;gap:8px;margin-top:12px}.v5-shadow-row{display:flex;justify-content:space-between;gap:18px;align-items:center;padding:12px 14px;border:1px solid rgba(120,155,205,.15);border-radius:12px;background:rgba(8,20,36,.45)}.v5-shadow-row>div:last-child{text-align:right}
+</style>
+
 </head>
 <body>
 <div class="shell">
@@ -95,6 +100,38 @@ main > .card, .container > .card, body > .card{content-visibility:auto;contain-i
   </div>
   <div class="v4-help"><div class="label">WHAT YOU'RE SEEING</div><ul><li><strong>Portfolio Equity</strong> is the current total value of the simulated V4 portfolio. The gain/loss compares it with the original $100,000 paper capital.</li><li>The chart includes a synthetic $100,000 starting baseline, every recorded V4 journal observation, and a read-only <strong>Current</strong> point using the latest mark-to-market equity.</li><li><strong>Total Return Since Start</strong> compares current equity with the original $100,000. <strong>Journal Forward Return</strong> measures only the change between recorded journal observations.</li><li>If several observations share a calendar date, the chart shows time-of-day labels so they are distinguishable.</li><li>60% of the portfolio targets SPY and 40% targets the current V4 Top Five. No real brokerage orders are placed.</li></ul></div>
 </section>
+
+
+<section class="card" id="v5-shadow-comparison" style="margin-top:22px">
+  <div class="label">V4 VS V5 SHADOW COMPARISON</div>
+  <h2>Frozen V5 Hypothetical Portfolio</h2>
+  <p class="muted">A separate $100,000 diagnostic shadow using the frozen V5 60% SPY + 40% Top-5 contract. The existing V4 portfolio remains unchanged. Pre-Sep-1 observations are never written into the official V5 future holdout.</p>
+  <div id="v5-shadow-status" class="mode">LOADING SHADOW</div>
+  <div class="grid grid-3" style="margin-top:18px">
+    <div class="metric"><span>V5 SHADOW EQUITY</span><strong id="v5-shadow-equity">—</strong><div id="v5-shadow-return" class="muted">—</div></div>
+    <div class="metric"><span>V4 NORMALIZED SINCE SHADOW START</span><strong id="v5-shadow-v4-equity">—</strong><div id="v5-shadow-v4-return" class="muted">—</div></div>
+    <div class="metric"><span>SPY NORMALIZED SINCE SHADOW START</span><strong id="v5-shadow-spy-equity">—</strong><div id="v5-shadow-spy-return" class="muted">—</div></div>
+  </div>
+  <div class="grid metrics" style="margin-top:14px">
+    <div class="metric"><span>V5 VS V4</span><strong id="v5-shadow-vs-v4">—</strong></div>
+    <div class="metric"><span>V5 VS SPY</span><strong id="v5-shadow-vs-spy">—</strong></div>
+    <div class="metric"><span>MODELED ENTRY FRICTION</span><strong id="v5-shadow-friction">—</strong></div>
+    <div class="metric"><span>REAL ORDERS</span><strong class="positive">NO</strong></div>
+    <div class="metric"><span>SHADOW STARTED</span><strong id="v5-shadow-started" style="font-size:.9rem">—</strong></div>
+    <div class="metric"><span>V5 DECISION</span><strong id="v5-shadow-decision" style="font-size:.9rem">—</strong></div>
+  </div>
+  <div class="grid grid-2" style="margin-top:18px">
+    <div>
+      <div class="label">V5 SHADOW HOLDINGS</div>
+      <div id="v5-shadow-holdings" class="v5-shadow-holdings"></div>
+    </div>
+    <div class="warning">
+      <strong>Research boundary preserved.</strong><br><br>
+      This panel is descriptive pre-holdout monitoring only. It does not replace V4, does not rebalance the V4 account, does not alter the frozen V5 model, and does not count toward the Sep 1+ untouched V5 evaluation.
+    </div>
+  </div>
+</section>
+
 
 <section class="card" style="margin-top:22px"><div class="label">V5 FROZEN MODEL</div><h2>Cross-Sectional Ranking Snapshot</h2><p class="muted">Predicted 5-trading-day stock return relative to SPY. Scores are ranking signals, not calibrated probabilities.</p><div class="grid metrics" style="margin-top:18px"><div class="metric"><span>DECISION DATE</span><strong>{{ v5.decision_date_utc[:10] }}</strong></div><div class="metric"><span>CANDIDATES</span><strong>{{ v5.candidate_count }}</strong></div><div class="metric"><span>FEATURES</span><strong>{{ v5.feature_count }}</strong></div><div class="metric"><span>MODEL</span><strong>HGB</strong></div><div class="metric"><span>BENCHMARK</span><strong>{{ v5.benchmark_symbol }}</strong></div><div class="metric"><span>TOP N</span><strong>{{ v5.top_n }}</strong></div></div><div class="top5" style="margin-top:18px">{% for row in top5 %}<div class="chip top">#{{ row.rank }} <span class="ticker-hover" data-company="{{ row.company_name }}" title="{{ row.company_name }}">{{ row.symbol }}</span> · {{ "%+.3f"|format(row.predicted_relative_return_5d*100) }}%</div>{% endfor %}</div></section>
 
