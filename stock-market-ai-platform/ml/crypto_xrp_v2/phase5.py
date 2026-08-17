@@ -11,8 +11,8 @@ scores and Phase 3 corrected 5 bps policy path by:
 - fold
 - executed state relative to an always-BTC benchmark
 
-All economic realization uses the same non-overlapping hourly grid as corrected
-Phase 3/4. The frozen XRP V1 candidate remains unchanged.
+All economic realization uses the same explicit realization_bar=true rows as
+corrected Phase 3/4. The frozen XRP V1 candidate remains unchanged.
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ import pandas as pd
 PHASE1_DATASET = Path("data/model/crypto_xrp_v2/phase1/xrp_primary_15m_1h.parquet")
 PHASE2_PREDICTIONS = Path("data/model/crypto_xrp_v2/phase2/predictions.parquet")
 PHASE3_DETAIL = Path("data/model/crypto_xrp_v2/phase3/decision_metrics.csv")
+PHASE4_BENCHMARK = Path("data/model/crypto_xrp_v2/phase4/benchmark_diagnostics.csv")
 OUTPUT_ROOT = Path("data/model/crypto_xrp_v2/phase5")
 REGIME_PATH = OUTPUT_ROOT / "regime_diagnostics.csv"
 SCORE_PATH = OUTPUT_ROOT / "score_strength_diagnostics.csv"
@@ -38,32 +39,62 @@ POLICY_ID = "xrp_hold_c2_1h"
 COST_BPS = 5.0
 
 
+def _as_bool(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_bool_dtype(series):
+        return series.fillna(False)
+    return series.astype(str).str.strip().str.lower().isin({"true", "1", "yes"})
+
+
 def _load_hourly() -> pd.DataFrame:
     data = pd.read_parquet(PHASE1_DATASET).copy()
     data["timestamp_utc"] = pd.to_datetime(data["timestamp_utc"], utc=True)
-    data = data[(data["timestamp_utc"].dt.minute == 0) & (data["timestamp_utc"].dt.second == 0)].copy()
 
     pred = pd.read_parquet(PHASE2_PREDICTIONS).copy()
     pred["timestamp_utc"] = pd.to_datetime(pred["timestamp_utc"], utc=True)
-    pred = pred[(pred["model_id"] == MODEL_ID) & (pred["timestamp_utc"].dt.minute == 0) & (pred["timestamp_utc"].dt.second == 0)].copy()
+    pred = pred[pred["model_id"] == MODEL_ID].copy()
 
     detail = pd.read_csv(PHASE3_DETAIL)
     detail["timestamp_utc"] = pd.to_datetime(detail["timestamp_utc"], utc=True)
-    detail = detail[(detail["policy_id"] == POLICY_ID) & pd.to_numeric(detail["cost_bps"], errors="coerce").eq(COST_BPS)].copy()
-    detail = detail[pd.to_numeric(detail["net_return_1h"], errors="coerce").notna()].copy()
+    required = {
+        "timestamp_utc", "fold_id", "policy_id", "cost_bps", "executed_state",
+        "net_return_1h", "switch", "realization_bar",
+    }
+    missing = required - set(detail.columns)
+    if missing:
+        raise RuntimeError(f"Phase 3 detail missing columns: {sorted(missing)}")
+
+    detail = detail[
+        detail["policy_id"].eq(POLICY_ID)
+        & pd.to_numeric(detail["cost_bps"], errors="coerce").eq(COST_BPS)
+        & _as_bool(detail["realization_bar"])
+    ].copy()
 
     frame = (
         detail[["timestamp_utc", "fold_id", "executed_state", "net_return_1h", "switch"]]
-        .merge(pred[["timestamp_utc", "predicted_score"]], on="timestamp_utc", how="inner", validate="one_to_one")
+        .merge(
+            pred[["timestamp_utc", "predicted_score"]],
+            on="timestamp_utc", how="inner", validate="one_to_one",
+        )
         .merge(
             data[["timestamp_utc", "forward_return_1h", "btc_forward_return_1h"]],
-            on="timestamp_utc", how="inner", validate="one_to_one"
+            on="timestamp_utc", how="inner", validate="one_to_one",
         )
         .sort_values("timestamp_utc")
         .reset_index(drop=True)
     )
     if frame.empty:
         raise RuntimeError("No hourly XRP V2 overlay rows available")
+    if frame["timestamp_utc"].duplicated().any():
+        raise RuntimeError("Duplicate realization timestamps in XRP V2 Phase 5")
+
+    if PHASE4_BENCHMARK.exists():
+        b = pd.read_csv(PHASE4_BENCHMARK)
+        if not b.empty and "realized_hour_count" in b.columns:
+            expected = int(b["realized_hour_count"].iloc[0])
+            if len(frame) != expected:
+                raise RuntimeError(
+                    f"Phase 5 realization count {len(frame)} does not match Phase 4 benchmark count {expected}"
+                )
 
     frame["strategy_return_1h"] = pd.to_numeric(frame["net_return_1h"], errors="coerce").fillna(0.0)
     frame["btc_return_1h"] = pd.to_numeric(frame["btc_forward_return_1h"], errors="coerce").fillna(0.0)
@@ -118,7 +149,9 @@ def main():
 
     # Score-strength buckets are descriptive; quantile cut points are reported so
     # they cannot silently become tuned thresholds.
-    frame["score_strength_bucket"] = pd.qcut(frame["abs_score"], q=5, labels=False, duplicates="drop")
+    frame["score_strength_bucket"] = pd.qcut(
+        frame["abs_score"], q=5, labels=False, duplicates="drop"
+    )
     score_rows = []
     for bucket, g in frame.groupby("score_strength_bucket", sort=True):
         score_rows.append({
@@ -172,7 +205,9 @@ def main():
 
     overall_strategy_eq, overall_strategy_dd = _equity_stats(frame["strategy_return_1h"])
     overall_btc_eq, overall_btc_dd = _equity_stats(frame["btc_return_1h"])
-    folds_beating_btc = float((fold_df["strategy_ending_equity"] > fold_df["btc_ending_equity"]).mean())
+    folds_beating_btc = float(
+        (fold_df["strategy_ending_equity"] > fold_df["btc_ending_equity"]).mean()
+    )
 
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     regime_df.to_csv(REGIME_PATH, index=False)
@@ -189,7 +224,8 @@ def main():
         "model_id": MODEL_ID,
         "policy_id": POLICY_ID,
         "cost_bps": COST_BPS,
-        "economic_accounting": "non-overlapping hourly realizations with 15-minute decision path",
+        "economic_accounting": "explicit realization_bar=true rows from corrected Phase 3",
+        "realized_hour_count": int(len(frame)),
         "overall_strategy_ending_equity": overall_strategy_eq,
         "overall_always_btc_ending_equity_on_same_oos_hours": overall_btc_eq,
         "overall_strategy_max_drawdown": overall_strategy_dd,
