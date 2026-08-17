@@ -37,21 +37,36 @@ VAL_DAYS = 90
 MAX_FOLDS = 8
 
 
+def _is_forward_outcome_column(name: str) -> bool:
+    return (
+        name.startswith("forward_return_")
+        or name.startswith("btc_forward_return_")
+        or name.startswith("btc_relative_forward_return_")
+    )
+
+
 def _load() -> tuple[pd.DataFrame, list[str]]:
     df = pd.read_parquet(INPUT).copy()
     df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"], utc=True)
     df = df[df["timestamp_utc"] < HOLDOUT].sort_values("timestamp_utc").reset_index(drop=True)
     if TARGET not in df.columns:
         raise RuntimeError(f"Missing target: {TARGET}")
-    excluded = {
-        "timestamp_utc",
-        TARGET,
-        "forward_return_1h",
-        "btc_forward_return_1h",
-    }
-    features = [c for c in df.columns if c not in excluded and pd.api.types.is_numeric_dtype(df[c])]
+
+    excluded = {"timestamp_utc", TARGET}
+    features = [
+        c
+        for c in df.columns
+        if c not in excluded
+        and not _is_forward_outcome_column(c)
+        and pd.api.types.is_numeric_dtype(df[c])
+    ]
     if not features:
         raise RuntimeError("No numeric features available")
+
+    leaked = [c for c in features if _is_forward_outcome_column(c)]
+    if leaked:
+        raise RuntimeError(f"Forward outcome leakage in feature set: {leaked}")
+
     return df, features
 
 
@@ -105,10 +120,7 @@ def _models(features: list[str]):
             ),
         ),
     ])
-    return {
-        "ridge": ridge,
-        "hist_gradient_boosting": hgb,
-    }
+    return {"ridge": ridge, "hist_gradient_boosting": hgb}
 
 
 def _metrics(actual: np.ndarray, pred: np.ndarray) -> dict:
@@ -151,7 +163,6 @@ def main():
         X_val = val[features]
         y_val = val[TARGET].to_numpy(float)
 
-        # Fresh simple baseline: trailing 1h BTC-relative momentum, not a V2 policy.
         baseline_col = "btc_relative_return_4bar"
         if baseline_col in val.columns:
             base_pred = pd.to_numeric(val[baseline_col], errors="coerce").fillna(0.0).to_numpy(float)
@@ -190,10 +201,12 @@ def main():
     for model_id, g in metrics.groupby("model_id", sort=True):
         w = g["observation_count"].to_numpy(float)
         total = float(w.sum())
+
         def wav(col):
             x = pd.to_numeric(g[col], errors="coerce").to_numpy(float)
             mask = np.isfinite(x) & np.isfinite(w)
             return float(np.average(x[mask], weights=w[mask])) if mask.any() else np.nan
+
         summary_rows.append({
             "model_id": model_id,
             "fold_count": int(g["fold_id"].nunique()),
@@ -217,12 +230,18 @@ def main():
     MANIFEST.write_text(json.dumps({
         "research_version": "crypto_xrp_v3",
         "phase": 2,
-        "stage": "fresh_walk_forward_modeling",
+        "stage": "fresh_walk_forward_modeling_leakage_corrected",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "objective": "Predict 1h XRP-minus-BTC return for a BTC-default selective overlay research track",
         "target": TARGET,
         "feature_count": len(features),
         "features": features,
+        "forward_outcome_columns_excluded": True,
+        "forward_outcome_exclusion_rule": [
+            "forward_return_*",
+            "btc_forward_return_*",
+            "btc_relative_forward_return_*",
+        ],
         "models": ["momentum_1h", "ridge_alpha_10", "hist_gradient_boosting"],
         "walk_forward": {
             "validation_days": VAL_DAYS,
@@ -230,17 +249,19 @@ def main():
             "minimum_training_days": MIN_TRAIN_DAYS,
             "purge": "1h",
         },
+        "invalidated_prior_run": "Any XRP V3 Phase 2 result produced before forward-outcome exclusion is invalid development evidence due to target leakage.",
         "policy_contract": "No policy simulation or threshold selection in Phase 2. BTC remains the pre-registered default state for later phases.",
         "v2_threshold_reuse": False,
         "future_holdout_start_utc": HOLDOUT.isoformat(),
         "future_holdout_inspected": False,
         "brokerage_orders": False,
-        "next_step": "Compare model stability. Only if predictive evidence is adequate, design a separately pre-registered BTC-default turnover-aware overlay policy; do not copy XRP V2 thresholds.",
+        "next_step": "Re-evaluate corrected model stability. Only if leakage-free predictive evidence is adequate, design a separately pre-registered BTC-default turnover-aware overlay policy.",
     }, indent=2) + "\n")
 
     print("CRYPTO XRP V3 PHASE 2")
     print("=" * 100)
     print(summary.to_string(index=False))
+    print("Forward outcome columns excluded. Prior leaked V3 Phase 2 run is invalid.")
     print("No policy tuning, freeze, holdout evaluation, or orders.")
 
 
