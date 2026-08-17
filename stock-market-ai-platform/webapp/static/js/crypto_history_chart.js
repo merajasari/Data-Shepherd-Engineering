@@ -8,7 +8,7 @@
   let liveQuotes = {};
   let mode = 'normalized';
   let range = 'ALL';
-  let showAll = false;
+  let showAll = true;
   let selected = new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);
 
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -25,7 +25,6 @@
   function svgEl(tag, attrs={}) { const n=document.createElementNS('http://www.w3.org/2000/svg',tag); Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v))); return n; }
 
   function rangeStart(endMs) {
-    const d = new Date(endMs);
     const day = 86400000;
     if(range==='30D') return endMs-30*day;
     if(range==='90D') return endMs-90*day;
@@ -59,10 +58,11 @@
   function renderLegend() {
     const root=document.getElementById('history-legend'); if(!root||!historical) return;
     const symbols=activeSymbols();
-    root.innerHTML=symbols.map((s,i)=>`<button type="button" class="history-legend-chip" data-symbol="${esc(s)}" title="Remove ${esc(s)}"><i style="background:${palette[i%palette.length]}"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`).join('');
+    root.innerHTML=symbols.map((s,i)=>`<button type="button" class="history-legend-chip" data-symbol="${esc(s)}" title="Focus ${esc(s)}"><i style="background:${palette[i%palette.length]}"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`).join('');
     root.querySelectorAll('.history-legend-chip').forEach(btn=>btn.addEventListener('click',()=>{
       if(showAll){showAll=false; selected=new Set([btn.dataset.symbol]);}
-      else if(selected.size>1) selected.delete(btn.dataset.symbol);
+      else if(selected.has(btn.dataset.symbol) && selected.size>1) selected.delete(btn.dataset.symbol);
+      else selected.add(btn.dataset.symbol);
       renderAll();
     }));
   }
@@ -122,7 +122,7 @@
       const last=b.rows[b.rows.length-1]; if(last&&Number.isFinite(value(last))) svg.appendChild(svgEl('circle',{cx:x(last.t),cy:y(value(last)),r:showAll?2.2:4,fill:b.color}));
     });
     const guide=svgEl('line',{y1:p.t,y2:H-p.b,stroke:'#efc56b','stroke-width':1,'stroke-dasharray':'4 4',visibility:'hidden'});svg.appendChild(guide);
-    const tooltip=svgEl('g',{visibility:'hidden'}); const bg=svgEl('rect',{width:250,height:Math.min(320,50+bundles.length*22),rx:10,fill:'#081526',stroke:'#244261'});tooltip.appendChild(bg);svg.appendChild(tooltip);
+    const tooltip=svgEl('g',{visibility:'hidden'}); const bg=svgEl('rect',{width:250,height:Math.min(320,50+Math.min(12,bundles.length)*22),rx:10,fill:'#081526',stroke:'#244261'});tooltip.appendChild(bg);svg.appendChild(tooltip);
     svg.onmousemove=e=>{
       const rect=svg.getBoundingClientRect(),mx=(e.clientX-rect.left)/rect.width*W; const targetT=minT+(Math.max(p.l,Math.min(W-p.r,mx))-p.l)/(W-p.l-p.r)*(maxT-minT); const xx=x(targetT);
       guide.setAttribute('x1',xx);guide.setAttribute('x2',xx);guide.setAttribute('visibility','visible');
