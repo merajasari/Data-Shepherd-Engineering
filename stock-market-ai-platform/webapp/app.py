@@ -36,6 +36,7 @@ from webapp.services.crypto_dashboard_service import get_crypto_dashboard_payloa
 from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
 from webapp.services.stock_stream_health_service import get_stock_stream_health  # noqa: E402
 from webapp.services.crypto_live_market_service import get_all_crypto_live_tickers  # noqa: E402
+from webapp.services.crypto_history_service import get_crypto_history_payload  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
 from webapp.services.paper_trading_service import get_portfolio_summary  # noqa: E402
@@ -439,6 +440,12 @@ def api_stock_stream_health():
 @login_required
 def api_crypto_live_quotes():
     return jsonify(get_all_crypto_live_tickers())
+
+
+@app.route("/api/crypto-history")
+@login_required
+def api_crypto_history():
+    return jsonify(get_crypto_history_payload())
 
 
 @app.route("/api/paper-portfolio")

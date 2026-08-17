@@ -70,18 +70,46 @@
 
   function toggleCompare(symbol) {
     showAll=false;
-    if(selected.has(symbol) && selected.size>1) selected.delete(symbol);
+    if(selected.has(symbol)) selected.delete(symbol);
     else selected.add(symbol);
+    hoverSymbol=null;
+    renderAll();
+  }
+
+  function selectAllAssets() {
+    showAll=true;
+    selected.clear();
+    hoverSymbol=null;
+    zoomLevel=1;
+    panOffset=0;
+    renderAll();
+  }
+
+  function clearSelection() {
+    showAll=false;
+    selected.clear();
     hoverSymbol=null;
     renderAll();
   }
 
   function renderLegend() {
     const root=document.getElementById('history-legend'); if(!root||!historical) return;
-    const symbols=activeSymbols();
-    root.innerHTML=symbols.map((s,i)=>`<button type="button" class="history-legend-chip" data-symbol="${esc(s)}" title="Click to focus. Shift-click to compare."><i style="background:${palette[i%palette.length]}"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`).join('');
+    const symbols=Object.keys(historical?.series||{}).filter(s=>historical.series[s]?.available).sort();
+    root.innerHTML=symbols.map((s,i)=>{
+      const on=showAll||selected.has(s);
+      return `<button type="button" class="history-legend-chip${on?' history-selected':''}" data-symbol="${esc(s)}" title="Click to add/remove. Double-click to focus only." aria-pressed="${on?'true':'false'}"><i style="background:${palette[i%palette.length]}"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`;
+    }).join('');
     root.querySelectorAll('.history-legend-chip').forEach(btn=>{
-      btn.addEventListener('click',event=>event.shiftKey?toggleCompare(btn.dataset.symbol):focusOnly(btn.dataset.symbol));
+      let clickTimer=null;
+      btn.addEventListener('click',()=>{
+        if(clickTimer) window.clearTimeout(clickTimer);
+        clickTimer=window.setTimeout(()=>{toggleCompare(btn.dataset.symbol);clickTimer=null;},220);
+      });
+      btn.addEventListener('dblclick',event=>{
+        event.preventDefault();
+        if(clickTimer){window.clearTimeout(clickTimer);clickTimer=null;}
+        focusOnly(btn.dataset.symbol);
+      });
       btn.addEventListener('mouseenter',()=>{hoverSymbol=btn.dataset.symbol;applyLineEmphasis();});
       btn.addEventListener('mouseleave',()=>{hoverSymbol=null;applyLineEmphasis();});
     });
@@ -94,7 +122,7 @@
     root.innerHTML=symbols.map(s=>`<button type="button" data-symbol="${esc(s)}"><strong>${esc(s)}</strong><span>${esc(assetNames[s]||'')}</span><small>${historical.series[s].start_utc?.slice(0,10)||'—'} → now</small></button>`).join('');
     root.classList.toggle('open',symbols.length>0);
     root.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
-      focusOnly(btn.dataset.symbol);
+      toggleCompare(btn.dataset.symbol);
       document.getElementById('history-search').value=''; root.classList.remove('open');
     }));
   }
@@ -200,11 +228,23 @@
       const title=svgEl('text',{x:12,y:22,fill:closest.color,'font-size':13,'font-weight':800});title.textContent=`${closest.symbol.replace('-USD','')} · ${assetNames[closest.symbol]||''}`;tooltip.appendChild(title);
       const date=svgEl('text',{x:12,y:43,fill:'#91a6c2','font-size':11});date.textContent=new Date(closestRow.t).toLocaleDateString();tooltip.appendChild(date);
       const val=svgEl('text',{x:12,y:66,fill:'#f2f6ff','font-size':13,'font-weight':800});val.textContent=mode==='normalized'?`Index ${compact(closestRow.index)} · ${money(closestRow.close)}`:money(closestRow.close);tooltip.appendChild(val);
-      const hint=svgEl('text',{x:12,y:84,fill:'#91a6c2','font-size':10});hint.textContent='Click to focus · Shift-click to compare';tooltip.appendChild(hint);
+      const hint=svgEl('text',{x:12,y:84,fill:'#91a6c2','font-size':10});hint.textContent='Click to add/remove · Double-click to focus only';tooltip.appendChild(hint);
       tooltip.setAttribute('transform',`translate(${Math.min(W-250,Math.max(p.l+8,mx+14))},${Math.min(H-p.b-104,Math.max(p.t+8,my-30))})`);tooltip.setAttribute('visibility','visible');
     };
     svg.onmouseleave=()=>{guide.setAttribute('visibility','hidden');tooltip.setAttribute('visibility','hidden');pointerSymbol=null;hoverSymbol=null;applyLineEmphasis();};
-    svg.onclick=e=>{if(pointerSymbol){e.shiftKey?toggleCompare(pointerSymbol):focusOnly(pointerSymbol);}};
+    let chartClickTimer=null;
+    svg.onclick=()=>{
+      if(!pointerSymbol)return;
+      const symbol=pointerSymbol;
+      if(chartClickTimer)window.clearTimeout(chartClickTimer);
+      chartClickTimer=window.setTimeout(()=>{toggleCompare(symbol);chartClickTimer=null;},220);
+    };
+    svg.ondblclick=e=>{
+      e.preventDefault();
+      if(!pointerSymbol)return;
+      if(chartClickTimer){window.clearTimeout(chartClickTimer);chartClickTimer=null;}
+      focusOnly(pointerSymbol);
+    };
 
     const note=document.getElementById('history-scale-note');if(note){
       const base=mode==='normalized'?'Growth index: each asset starts at 100 on its own first available historical observation.':'Raw USD prices.';
@@ -213,8 +253,18 @@
     applyLineEmphasis();
   }
 
+  function syncHistorySelectionUI() {
+    const all=document.getElementById('history-show-all');
+    if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}
+    document.querySelectorAll('.history-legend-chip').forEach(chip=>{
+      const on=showAll||selected.has(chip.dataset.symbol);
+      chip.classList.toggle('history-selected',on);
+      chip.setAttribute('aria-pressed',on?'true':'false');
+    });
+  }
+
   function renderAll(){
-    renderSummary();renderLegend();renderChart();
+    renderSummary();renderLegend();syncHistorySelectionUI();renderChart();
     document.querySelectorAll('[data-history-range]').forEach(b=>b.classList.toggle('active',b.dataset.historyRange===range));
     document.querySelectorAll('[data-history-mode]').forEach(b=>b.classList.toggle('active',b.dataset.historyMode===mode));
     const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}
@@ -233,12 +283,14 @@
 
   document.querySelectorAll('[data-history-range]').forEach(b=>b.addEventListener('click',()=>{range=b.dataset.historyRange;zoomLevel=1;panOffset=0;renderAll();}));
   document.querySelectorAll('[data-history-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.historyMode;renderAll();}));
-  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=true;selected=new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);hoverSymbol=null;renderAll();});
   document.getElementById('history-zoom-in')?.addEventListener('click',()=>{zoomLevel=Math.min(16,zoomLevel*1.6);panOffset=Math.min(1,panOffset+.18);renderAll();});
   document.getElementById('history-zoom-out')?.addEventListener('click',()=>{zoomLevel=Math.max(1,zoomLevel/1.6);if(zoomLevel===1)panOffset=0;renderAll();});
   document.getElementById('history-pan-left')?.addEventListener('click',()=>{if(zoomLevel>1){panOffset=Math.max(0,panOffset-.18);renderAll();}});
   document.getElementById('history-pan-right')?.addEventListener('click',()=>{if(zoomLevel>1){panOffset=Math.min(1,panOffset+.18);renderAll();}});
   document.getElementById('history-reset-view')?.addEventListener('click',()=>{range='ALL';mode='normalized';showAll=true;selected=new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);zoomLevel=1;panOffset=0;hoverSymbol=null;renderAll();});
+  document.getElementById('history-show-all')?.addEventListener('click',selectAllAssets);
+  document.getElementById('history-select-all')?.addEventListener('click',selectAllAssets);
+  document.getElementById('history-clear-selection')?.addEventListener('click',clearSelection);
   const search=document.getElementById('history-search');search?.addEventListener('focus',()=>renderSearch(search.value));search?.addEventListener('input',()=>renderSearch(search.value));search?.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('history-search-results')?.classList.remove('open');});
   document.addEventListener('click',e=>{if(!e.target.closest('.history-search-wrap'))document.getElementById('history-search-results')?.classList.remove('open');});
   loadHistory();refreshLive();window.setInterval(refreshLive,refreshMs);
