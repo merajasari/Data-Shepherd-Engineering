@@ -10,6 +10,9 @@
   let range = 'ALL';
   let showAll = true;
   let selected = new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);
+  let zoomLevel = 1;
+  let panOffset = 0;
+  let hoverSymbol = null;
 
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money = value => {
@@ -55,16 +58,33 @@
     return showAll?all:[...selected].filter(s=>historical?.series?.[s]?.available);
   }
 
+  function focusOnly(symbol) {
+    if(!historical?.series?.[symbol]?.available) return;
+    showAll=false;
+    selected=new Set([symbol]);
+    hoverSymbol=null;
+    zoomLevel=1;
+    panOffset=0;
+    renderAll();
+  }
+
+  function toggleCompare(symbol) {
+    showAll=false;
+    if(selected.has(symbol) && selected.size>1) selected.delete(symbol);
+    else selected.add(symbol);
+    hoverSymbol=null;
+    renderAll();
+  }
+
   function renderLegend() {
     const root=document.getElementById('history-legend'); if(!root||!historical) return;
     const symbols=activeSymbols();
-    root.innerHTML=symbols.map((s,i)=>`<button type="button" class="history-legend-chip" data-symbol="${esc(s)}" title="Focus ${esc(s)}"><i style="background:${palette[i%palette.length]}"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`).join('');
-    root.querySelectorAll('.history-legend-chip').forEach(btn=>btn.addEventListener('click',()=>{
-      if(showAll){showAll=false; selected=new Set([btn.dataset.symbol]);}
-      else if(selected.has(btn.dataset.symbol) && selected.size>1) selected.delete(btn.dataset.symbol);
-      else selected.add(btn.dataset.symbol);
-      renderAll();
-    }));
+    root.innerHTML=symbols.map((s,i)=>`<button type="button" class="history-legend-chip" data-symbol="${esc(s)}" title="Click to focus. Shift-click to compare."><i style="background:${palette[i%palette.length]}"></i><span>${esc(s.replace('-USD',''))}</span><small>${esc(assetNames[s]||'')}</small></button>`).join('');
+    root.querySelectorAll('.history-legend-chip').forEach(btn=>{
+      btn.addEventListener('click',event=>event.shiftKey?toggleCompare(btn.dataset.symbol):focusOnly(btn.dataset.symbol));
+      btn.addEventListener('mouseenter',()=>{hoverSymbol=btn.dataset.symbol;applyLineEmphasis();});
+      btn.addEventListener('mouseleave',()=>{hoverSymbol=null;applyLineEmphasis();});
+    });
   }
 
   function renderSearch(query='') {
@@ -74,7 +94,8 @@
     root.innerHTML=symbols.map(s=>`<button type="button" data-symbol="${esc(s)}"><strong>${esc(s)}</strong><span>${esc(assetNames[s]||'')}</span><small>${historical.series[s].start_utc?.slice(0,10)||'—'} → now</small></button>`).join('');
     root.classList.toggle('open',symbols.length>0);
     root.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
-      showAll=false; selected.add(btn.dataset.symbol); document.getElementById('history-search').value=''; root.classList.remove('open'); renderAll();
+      focusOnly(btn.dataset.symbol);
+      document.getElementById('history-search').value=''; root.classList.remove('open');
     }));
   }
 
@@ -88,54 +109,117 @@
     set('history-resolution','DAILY + LIVE');
   }
 
+  function applyLineEmphasis(symbol=hoverSymbol) {
+    const svg=document.getElementById('crypto-history-chart'); if(!svg) return;
+    svg.querySelectorAll('[data-history-line]').forEach(line=>{
+      const match=!symbol||line.dataset.historyLine===symbol;
+      line.setAttribute('stroke-opacity',symbol?(match?'1':'0.10'):(showAll?'0.62':'0.95'));
+      line.setAttribute('stroke-width',symbol?(match?'4':'1'):(showAll?'1.35':'2.6'));
+    });
+    svg.querySelectorAll('[data-history-dot]').forEach(dot=>{
+      const match=!symbol||dot.dataset.historyDot===symbol;
+      dot.setAttribute('opacity',symbol?(match?'1':'0.14'):'1');
+      dot.setAttribute('r',symbol&&match?'5':showAll?'2.2':'4');
+    });
+    document.querySelectorAll('.history-legend-chip').forEach(chip=>{
+      chip.classList.toggle('history-hover',!!symbol&&chip.dataset.symbol===symbol);
+      chip.style.opacity=symbol&&chip.dataset.symbol!==symbol?'.38':'1';
+    });
+  }
+
+  function zoomWindow(minT,maxT) {
+    if(zoomLevel<=1) return [minT,maxT];
+    const full=maxT-minT;
+    const visible=full/zoomLevel;
+    const maxPan=Math.max(0,full-visible);
+    const start=minT+Math.min(maxPan,Math.max(0,panOffset*maxPan));
+    return [start,start+visible];
+  }
+
+  function nearestAtTime(rows,targetT) {
+    let best=null,dist=Infinity;
+    for(const row of rows){const d=Math.abs(row.t-targetT);if(d<dist){dist=d;best=row;}}
+    return best;
+  }
+
   function renderChart() {
     const svg=document.getElementById('crypto-history-chart'); if(!svg||!historical) return;
     svg.innerHTML='';
     const W=1200,H=520,p={l:86,r:34,t:28,b:58};
     const symbols=activeSymbols();
-    const bundles=symbols.map((s,i)=>({symbol:s,color:palette[i%palette.length],rows:getSeries(s)})).filter(b=>b.rows.length);
+    let bundles=symbols.map((s,i)=>({symbol:s,color:palette[i%palette.length],rows:getSeries(s)})).filter(b=>b.rows.length);
     if(!bundles.length){const t=svgEl('text',{x:W/2,y:H/2,'text-anchor':'middle',fill:'#91a6c2'});t.textContent='No historical observations available.';svg.appendChild(t);return;}
+    const sourceRows=bundles.flatMap(b=>b.rows);
+    const sourceMinT=Math.min(...sourceRows.map(r=>r.t)), sourceMaxT=Math.max(...sourceRows.map(r=>r.t));
+    const [minT,maxT]=zoomWindow(sourceMinT,sourceMaxT);
+    bundles=bundles.map(b=>({...b,rows:b.rows.filter(r=>r.t>=minT&&r.t<=maxT)})).filter(b=>b.rows.length);
     const allRows=bundles.flatMap(b=>b.rows);
-    const minT=Math.min(...allRows.map(r=>r.t)), maxT=Math.max(...allRows.map(r=>r.t));
     const value=r=>mode==='normalized'?r.index:r.close;
     const values=allRows.map(value).filter(Number.isFinite);
     let minV=Math.min(...values),maxV=Math.max(...values); if(maxV===minV){minV*=.99;maxV*=1.01;}
-    const logRaw=mode==='raw' && minV>0 && maxV/minV>100;
-    const transform=v=>logRaw?Math.log10(v):v;
+    const logScale=minV>0 && ((mode==='raw'&&maxV/minV>100)||(mode==='normalized'&&showAll&&maxV/minV>80));
+    const transform=v=>logScale?Math.log10(v):v;
     let yMin=transform(minV),yMax=transform(maxV); const pad=(yMax-yMin)*.07||1; yMin-=pad;yMax+=pad;
     const x=t=>p.l+(W-p.l-p.r)*((t-minT)/Math.max(1,maxT-minT));
     const y=v=>p.t+(H-p.t-p.b)*(1-(transform(v)-yMin)/(yMax-yMin));
+
     for(let i=0;i<5;i++){
-      const tv=yMin+(yMax-yMin)*i/4; const raw=logRaw?10**tv:tv; const yy=p.t+(H-p.t-p.b)*(1-i/4);
+      const tv=yMin+(yMax-yMin)*i/4; const raw=logScale?10**tv:tv; const yy=p.t+(H-p.t-p.b)*(1-i/4);
       svg.appendChild(svgEl('line',{x1:p.l,y1:yy,x2:W-p.r,y2:yy,stroke:'rgba(145,166,194,.13)','stroke-width':1}));
       const label=svgEl('text',{x:p.l-10,y:yy+4,'text-anchor':'end',fill:'#91a6c2','font-size':11}); label.textContent=mode==='normalized'?compact(raw):money(raw);svg.appendChild(label);
     }
+
     const yearMs=365.25*86400000; const span=maxT-minT; const ticks=span>4*yearMs?7:span>yearMs?6:5;
     for(let i=0;i<ticks;i++){
       const t=minT+(maxT-minT)*i/(ticks-1); const xx=x(t); const d=new Date(t);
       const label=svgEl('text',{x:xx,y:H-22,'text-anchor':i===0?'start':i===ticks-1?'end':'middle',fill:'#91a6c2','font-size':11});
       label.textContent=span>2*yearMs?String(d.getFullYear()):d.toLocaleDateString([], {month:'short',year:'numeric'});svg.appendChild(label);
     }
+
     bundles.forEach(b=>{
       const pts=b.rows.filter(r=>Number.isFinite(value(r))).map(r=>`${x(r.t)},${y(value(r))}`).join(' ');
-      if(pts) svg.appendChild(svgEl('polyline',{points:pts,fill:'none',stroke:b.color,'stroke-width':showAll?1.35:2.4,'stroke-opacity':showAll?.72:.95,'stroke-linejoin':'round','stroke-linecap':'round'}));
-      const last=b.rows[b.rows.length-1]; if(last&&Number.isFinite(value(last))) svg.appendChild(svgEl('circle',{cx:x(last.t),cy:y(value(last)),r:showAll?2.2:4,fill:b.color}));
+      if(pts){const line=svgEl('polyline',{points:pts,fill:'none',stroke:b.color,'stroke-width':showAll?1.35:2.6,'stroke-opacity':showAll?.62:.95,'stroke-linejoin':'round','stroke-linecap':'round','data-history-line':b.symbol});line.dataset.historyLine=b.symbol;svg.appendChild(line);}
+      const last=b.rows[b.rows.length-1]; if(last&&Number.isFinite(value(last))){const dot=svgEl('circle',{cx:x(last.t),cy:y(value(last)),r:showAll?2.2:4,fill:b.color,'data-history-dot':b.symbol});dot.dataset.historyDot=b.symbol;svg.appendChild(dot);}
     });
+
     const guide=svgEl('line',{y1:p.t,y2:H-p.b,stroke:'#efc56b','stroke-width':1,'stroke-dasharray':'4 4',visibility:'hidden'});svg.appendChild(guide);
-    const tooltip=svgEl('g',{visibility:'hidden'}); const bg=svgEl('rect',{width:250,height:Math.min(320,50+Math.min(12,bundles.length)*22),rx:10,fill:'#081526',stroke:'#244261'});tooltip.appendChild(bg);svg.appendChild(tooltip);
+    const tooltip=svgEl('g',{visibility:'hidden'}); const bg=svgEl('rect',{width:235,height:94,rx:10,fill:'#081526',stroke:'#244261'});tooltip.appendChild(bg);svg.appendChild(tooltip);
+    let pointerSymbol=null;
+
     svg.onmousemove=e=>{
-      const rect=svg.getBoundingClientRect(),mx=(e.clientX-rect.left)/rect.width*W; const targetT=minT+(Math.max(p.l,Math.min(W-p.r,mx))-p.l)/(W-p.l-p.r)*(maxT-minT); const xx=x(targetT);
-      guide.setAttribute('x1',xx);guide.setAttribute('x2',xx);guide.setAttribute('visibility','visible');
+      const rect=svg.getBoundingClientRect();
+      const mx=(e.clientX-rect.left)/rect.width*W, my=(e.clientY-rect.top)/rect.height*H;
+      if(mx<p.l||mx>W-p.r||my<p.t||my>H-p.b){guide.setAttribute('visibility','hidden');tooltip.setAttribute('visibility','hidden');hoverSymbol=null;applyLineEmphasis();return;}
+      const targetT=minT+(mx-p.l)/(W-p.l-p.r)*(maxT-minT);
+      let closest=null,closestRow=null,closestPx=Infinity;
+      bundles.forEach(b=>{const row=nearestAtTime(b.rows,targetT);if(!row||!Number.isFinite(value(row)))return;const d=Math.abs(y(value(row))-my);if(d<closestPx){closestPx=d;closest=b;closestRow=row;}});
+      if(!closest||!closestRow)return;
+      pointerSymbol=closest.symbol;hoverSymbol=closest.symbol;applyLineEmphasis();
+      const xx=x(closestRow.t);guide.setAttribute('x1',xx);guide.setAttribute('x2',xx);guide.setAttribute('visibility','visible');
       while(tooltip.childNodes.length>1) tooltip.removeChild(tooltip.lastChild);
-      const date=svgEl('text',{x:12,y:20,fill:'#f2f6ff','font-size':12,'font-weight':700});date.textContent=new Date(targetT).toLocaleDateString();tooltip.appendChild(date);
-      bundles.slice(0,12).forEach((b,i)=>{let best=null,dist=Infinity;for(const r of b.rows){const d=Math.abs(r.t-targetT);if(d<dist){dist=d;best=r;}}if(!best)return;const text=svgEl('text',{x:12,y:43+i*22,fill:b.color,'font-size':11});text.textContent=`${b.symbol.replace('-USD','')}  ${mode==='normalized'?compact(best.index):money(best.close)}`;tooltip.appendChild(text);});
-      tooltip.setAttribute('transform',`translate(${Math.min(W-270,Math.max(p.l+8,xx+12))},${p.t+8})`);tooltip.setAttribute('visibility','visible');
+      const title=svgEl('text',{x:12,y:22,fill:closest.color,'font-size':13,'font-weight':800});title.textContent=`${closest.symbol.replace('-USD','')} · ${assetNames[closest.symbol]||''}`;tooltip.appendChild(title);
+      const date=svgEl('text',{x:12,y:43,fill:'#91a6c2','font-size':11});date.textContent=new Date(closestRow.t).toLocaleDateString();tooltip.appendChild(date);
+      const val=svgEl('text',{x:12,y:66,fill:'#f2f6ff','font-size':13,'font-weight':800});val.textContent=mode==='normalized'?`Index ${compact(closestRow.index)} · ${money(closestRow.close)}`:money(closestRow.close);tooltip.appendChild(val);
+      const hint=svgEl('text',{x:12,y:84,fill:'#91a6c2','font-size':10});hint.textContent='Click to focus · Shift-click to compare';tooltip.appendChild(hint);
+      tooltip.setAttribute('transform',`translate(${Math.min(W-250,Math.max(p.l+8,mx+14))},${Math.min(H-p.b-104,Math.max(p.t+8,my-30))})`);tooltip.setAttribute('visibility','visible');
     };
-    svg.onmouseleave=()=>{guide.setAttribute('visibility','hidden');tooltip.setAttribute('visibility','hidden');};
-    const note=document.getElementById('history-scale-note');if(note)note.textContent=mode==='normalized'?'Growth index: each asset starts at 100 on its own first available historical observation.':'Raw USD prices'+(logRaw?' · logarithmic scale':'')+'.';
+    svg.onmouseleave=()=>{guide.setAttribute('visibility','hidden');tooltip.setAttribute('visibility','hidden');pointerSymbol=null;hoverSymbol=null;applyLineEmphasis();};
+    svg.onclick=e=>{if(pointerSymbol){e.shiftKey?toggleCompare(pointerSymbol):focusOnly(pointerSymbol);}};
+
+    const note=document.getElementById('history-scale-note');if(note){
+      const base=mode==='normalized'?'Growth index: each asset starts at 100 on its own first available historical observation.':'Raw USD prices.';
+      note.textContent=base+(logScale?' Automatic logarithmic scale is active so large winners do not flatten the other lines.':'')+(zoomLevel>1?` Zoom ${zoomLevel.toFixed(1)}×.`:'');
+    }
+    applyLineEmphasis();
   }
 
-  function renderAll(){renderSummary();renderLegend();renderChart();document.querySelectorAll('[data-history-range]').forEach(b=>b.classList.toggle('active',b.dataset.historyRange===range));document.querySelectorAll('[data-history-mode]').forEach(b=>b.classList.toggle('active',b.dataset.historyMode===mode));const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}}
+  function renderAll(){
+    renderSummary();renderLegend();renderChart();
+    document.querySelectorAll('[data-history-range]').forEach(b=>b.classList.toggle('active',b.dataset.historyRange===range));
+    document.querySelectorAll('[data-history-mode]').forEach(b=>b.classList.toggle('active',b.dataset.historyMode===mode));
+    const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}
+    const zoom=document.getElementById('history-zoom-status');if(zoom)zoom.textContent=zoomLevel>1?`${zoomLevel.toFixed(1)}× ZOOM`:'FULL RANGE';
+  }
 
   async function loadHistory(){
     const status=document.getElementById('history-load-status');
@@ -147,9 +231,14 @@
     catch(_err){}
   }
 
-  document.querySelectorAll('[data-history-range]').forEach(b=>b.addEventListener('click',()=>{range=b.dataset.historyRange;renderAll();}));
+  document.querySelectorAll('[data-history-range]').forEach(b=>b.addEventListener('click',()=>{range=b.dataset.historyRange;zoomLevel=1;panOffset=0;renderAll();}));
   document.querySelectorAll('[data-history-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.historyMode;renderAll();}));
-  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=!showAll;renderAll();});
+  document.getElementById('history-show-all')?.addEventListener('click',()=>{showAll=true;selected=new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);hoverSymbol=null;renderAll();});
+  document.getElementById('history-zoom-in')?.addEventListener('click',()=>{zoomLevel=Math.min(16,zoomLevel*1.6);panOffset=Math.min(1,panOffset+.18);renderAll();});
+  document.getElementById('history-zoom-out')?.addEventListener('click',()=>{zoomLevel=Math.max(1,zoomLevel/1.6);if(zoomLevel===1)panOffset=0;renderAll();});
+  document.getElementById('history-pan-left')?.addEventListener('click',()=>{if(zoomLevel>1){panOffset=Math.max(0,panOffset-.18);renderAll();}});
+  document.getElementById('history-pan-right')?.addEventListener('click',()=>{if(zoomLevel>1){panOffset=Math.min(1,panOffset+.18);renderAll();}});
+  document.getElementById('history-reset-view')?.addEventListener('click',()=>{range='ALL';mode='normalized';showAll=true;selected=new Set(['BTC-USD','ETH-USD','XRP-USD','SOL-USD','ADA-USD']);zoomLevel=1;panOffset=0;hoverSymbol=null;renderAll();});
   const search=document.getElementById('history-search');search?.addEventListener('focus',()=>renderSearch(search.value));search?.addEventListener('input',()=>renderSearch(search.value));search?.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('history-search-results')?.classList.remove('open');});
   document.addEventListener('click',e=>{if(!e.target.closest('.history-search-wrap'))document.getElementById('history-search-results')?.classList.remove('open');});
   loadHistory();refreshLive();window.setInterval(refreshLive,refreshMs);
