@@ -21,9 +21,10 @@ The project now contains two primary research/application tracks:
    - Crypto 15m V1 cross-sectional research.
    - Crypto 15m V2 BTC / ALT / CASH regime research.
    - Frozen Crypto 15m V2 forward candidate with an hourly decision cadence and `confirm_2` execution policy.
-   - Dedicated XRP V1 research through exploratory Phase 5.
-   - XRP V1 exploratory forward candidate using Ridge plus XRP/BTC/CASH hysteresis and a 24-hour minimum hold.
-   - Shadow forward inference before 2026-09-01 UTC; automatic future paper evaluation begins only at/after frozen holdout boundaries.
+   - Dedicated XRP V1 research through Phase 6.
+   - Frozen XRP V1 exploratory forward candidate using Ridge plus XRP/BTC/CASH hysteresis and a 24-hour minimum hold.
+   - Unattended shadow-only XRP forward inference via `com.datashepherd.xrpforward`.
+   - Shared V2 remains shadow-only before 2026-09-01 UTC; XRP Phase 6 remains shadow-only until a separate future-evaluation phase is explicitly created.
 
 ## Crypto 15m V2 frozen candidate
 
@@ -122,15 +123,26 @@ XRP V1 research progression:
 - **Phase 3:** analyzed OOS confidence and sign asymmetry; confidence-only threshold promotion was rejected.
 - **Phase 4:** tested exploratory XRP / BTC / CASH economic threshold policies; high turnover proved too cost-sensitive.
 - **Phase 5:** tested hysteresis and minimum holding periods to reduce turnover.
+- **Phase 6:** froze the exact Ridge + `hyst_10_05_hold24` exploratory candidate without additional tuning and added shadow-only forward inference.
 
-Current exploratory forward hypothesis:
+Frozen XRP Phase 6 contract:
 
 ```text
-policy: hyst_10_05_hold24
+research status: EXPLORATORY FORWARD CANDIDATE
 model: Ridge
 target: btc_relative_forward_return_4h
+features: 44
+training rows: 106,982
 decision cadence: 4h
+policy: hyst_10_05_hold24
+minimum hold: 24h
+future boundary: 2026-09-01T00:00:00Z
+promotion status: NOT PROMOTED FOR REAL TRADING
+```
 
+Policy thresholds:
+
+```text
 XRP entry:  score >= +0.0010
 CASH entry: score <= -0.0010
 XRP exit:   score <= +0.0005
@@ -139,7 +151,29 @@ neutral:    BTC
 minimum hold: 24h
 ```
 
-Phase 5 development evidence for this hypothesis:
+Frozen model:
+
+```text
+data/model/crypto_xrp_v1/phase6/frozen_ridge.joblib
+```
+
+SHA-256:
+
+```text
+4c3f69b4bd41bf69cfaf7ce0633d53fb2e5bec10d1b9c8081fd295d6bfe45553
+```
+
+Shadow service:
+
+```text
+ml/crypto_xrp_v1/forward_service.py
+```
+
+The XRP Phase 6 service verifies the frozen model and policy contract, reads authoritative reconciled Coinbase 15-minute data, reconstructs the exact 44-feature row, advances only genuinely available four-hour decisions, preserves state across cycles, and places no brokerage orders.
+
+It deliberately does **not** write a performance journal. A separate future-evaluation phase is required before XRP forward results are scored or considered for promotion.
+
+Phase 5 development evidence for the frozen hypothesis remains exploratory:
 
 - decisions: 3,987
 - switches: 524
@@ -150,14 +184,13 @@ Phase 5 development evidence for this hypothesis:
 - ending equity at 20 bps: 0.6117x
 - always-BTC development reference: approximately 1.0162x
 
-The fold results remain mixed. Therefore this is an **exploratory forward candidate only**:
+The fold results remain mixed. Therefore XRP V1 remains:
 
 - not historically validated
 - not promoted for real trading
 - no further threshold/hold-period tuning on the same development folds
-- XRP remains separate from frozen Crypto 15m V2
-- untouched future boundary remains 2026-09-01 00:00 UTC
-- brokerage execution remains disabled
+- separate from frozen Crypto 15m V2
+- brokerage execution disabled
 
 ### Crypto 15m V2
 
@@ -171,9 +204,9 @@ V2 changed the research question from constant risky cross-sectional allocation 
 
 The Phase 5 freeze must not be modified in place. Any change to features, model hyperparameters, class definitions, execution policy, cost reference, XRP policy, or holdout rules requires a new research version.
 
-## Forward crypto service
+## Forward crypto services
 
-The frozen shared V2 forward inference service:
+### Shared Crypto 15m V2
 
 ```text
 ml/crypto_15m_v2/forward_service.py
@@ -202,7 +235,23 @@ data/model/crypto_15m_v2/phase5/forward_service_status.json
 data/model/crypto_15m_v2/phase5/shadow_latest.json
 ```
 
-The next XRP engineering step is separate: create a reproducible XRP frozen-candidate artifact/manifest and a shadow-only XRP forward inference service using the exact Phase 5 exploratory rule without further historical tuning.
+### XRP V1 Phase 6
+
+```text
+ml/crypto_xrp_v1/forward_service.py
+```
+
+Current Phase 6 state files:
+
+```text
+data/model/crypto_xrp_v1/phase6/frozen_ridge.joblib
+data/model/crypto_xrp_v1/phase6/freeze_manifest.json
+data/model/crypto_xrp_v1/phase6/forward_state.json
+data/model/crypto_xrp_v1/phase6/forward_service_status.json
+data/model/crypto_xrp_v1/phase6/shadow_latest.json
+```
+
+The XRP service remains shadow-only. No performance journal exists in the current Phase 6 forward service.
 
 ## macOS background services
 
@@ -220,6 +269,12 @@ Frozen Crypto V2 forward inference:
 com.datashepherd.cryptov2forward
 ```
 
+Frozen XRP V1 shadow forward inference:
+
+```text
+com.datashepherd.xrpforward
+```
+
 Web application:
 
 ```text
@@ -232,6 +287,8 @@ Typical status check:
 launchctl print gui/$(id -u)/com.datashepherd.cryptoreconcile   | grep -E 'state =|runs =|pid =|last exit code'
 
 launchctl print gui/$(id -u)/com.datashepherd.cryptov2forward   | grep -E 'state =|runs =|pid =|last exit code'
+
+launchctl print gui/$(id -u)/com.datashepherd.xrpforward   | grep -E 'state =|runs =|pid =|last exit code'
 
 launchctl print gui/$(id -u)/com.datashepherd.web   | grep -E 'state =|runs =|pid =|last exit code'
 ```
@@ -252,16 +309,21 @@ The member web application includes:
 
 The crypto page now surfaces:
 
-- SHADOW / FORWARD mode
-- current executed sleeve
-- raw model prediction
+- shared V2 SHADOW / FORWARD mode
+- current shared V2 executed sleeve
+- raw V2 model prediction
 - BTC / ALT / CASH probabilities
 - eligible ALT count
-- hourly decision timestamp
+- hourly V2 decision timestamp
 - reconciliation freshness
 - missing/ineligible ALT assets
-- forward-journal counts
+- V2 forward-journal counts
 - Crypto 15m V2 exploratory development evidence
+- dedicated XRP V1 Phase 6 shadow state
+- XRP 4-hour BTC-relative Ridge score
+- XRP policy and minimum-hold state
+- XRP model-hash and policy verification
+- XRP/BTC/common latest-bar timestamps
 - explicit no-real-orders status
 - automatic in-place live-state refresh
 
@@ -292,6 +354,7 @@ The following rules are intentional and should be preserved:
 - generated research artifacts kept separate from source
 - XRP kept separate from the shared Crypto 15m V2 model
 - no further XRP historical threshold/hold-period tuning on the same development folds
+- no XRP forward-performance scoring until a separate future-evaluation phase is explicitly created
 - no leverage, shorting, derivatives, or real brokerage execution in the frozen candidates
 
 ## Repository workflow
@@ -313,10 +376,10 @@ Generated model/data artifacts should not be committed unless explicitly intende
 
 ## Immediate next work
 
-1. Freeze the XRP V1 exploratory forward candidate reproducibly with an artifact/manifest.
-2. Build shadow-only XRP forward inference using the exact frozen `hyst_10_05_hold24` rule.
-3. Preserve both Sep. 1 future boundaries and do not tune from future observations.
-4. Add service staleness/health alerting.
-5. Add forward-performance visualizations only after genuine Sep. 1+ observations exist.
+1. Monitor both frozen forward services without changing either contract.
+2. Preserve both Sep. 1 boundaries and do not tune from future observations.
+3. Add service staleness/health alerting for reconciliation, V2 forward, XRP forward, and the web service.
+4. Keep XRP performance journaling disabled until a separate future-evaluation phase is created.
+5. Add forward-performance visualizations only after genuine future-evaluation observations exist.
 6. Research ALT constituent-level turnover/costs in a new research version without changing the V2 Phase 5 freeze.
 7. Continue stock-model work without changing frozen benchmarks.
