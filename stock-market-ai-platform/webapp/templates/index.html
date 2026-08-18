@@ -174,5 +174,22 @@ async function loadV4(){try{const r=await fetch('/api/v4-forward');const d=await
 loadV4();
 const selectorForm=document.getElementById('stock-selector-form'),stockSelect=document.getElementById('stock-select'),stockSearch=document.getElementById('stock-search');const originalOptions=Array.from(stockSelect.options).map(option=>({value:option.value,text:option.textContent,company:option.dataset.company||'',selected:option.selected}));function rebuildStockOptions(query){const q=query.trim().toLowerCase(),currentValue=stockSelect.value,matches=originalOptions.filter(item=>!q||item.value.toLowerCase().includes(q)||item.company.toLowerCase().includes(q));stockSelect.innerHTML='';if(!matches.length){const empty=document.createElement('option');empty.textContent='No matching stocks';empty.disabled=true;empty.selected=true;stockSelect.appendChild(empty);return;}matches.forEach(item=>{const option=document.createElement('option');option.value=item.value;option.textContent=item.text;option.dataset.company=item.company;option.selected=item.value===currentValue||(!currentValue&&item.selected);stockSelect.appendChild(option);});if(!Array.from(stockSelect.options).some(option=>option.selected)){stockSelect.options[0].selected=true;}}stockSearch.addEventListener('input',()=>rebuildStockOptions(stockSearch.value));stockSearch.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();if(stockSelect.options.length&&!stockSelect.options[0].disabled){stockSelect.selectedIndex=0;selectorForm.submit();}}});stockSelect.addEventListener('change',()=>selectorForm.submit());
 </script>
+
+<section id="v8-holdout-monitor" class="panel" style="margin-top:18px">
+  <div class="panel-head"><div><h2>V8 FROZEN FORWARD HOLDOUT</h2><p>Exact frozen DISTANCE_ONLY candidate — append-only monitoring beginning September 1, 2026.</p></div></div>
+  <div class="v8h-grid">
+    <div class="v8h-card"><div class="v8h-label">State</div><div class="v8h-value" data-v8h-state>Loading…</div></div>
+    <div class="v8h-card"><div class="v8h-label">Decisions</div><div class="v8h-value" data-v8h-decisions>—</div></div>
+    <div class="v8h-card"><div class="v8h-label">Completed Cohorts</div><div class="v8h-value" data-v8h-exits>—</div></div>
+    <div class="v8h-card"><div class="v8h-label">Mean Net Excess</div><div class="v8h-value" data-v8h-edge>—</div></div>
+    <div class="v8h-card"><div class="v8h-label">Excess Hit Rate</div><div class="v8h-value" data-v8h-hit>—</div></div>
+    <div class="v8h-card"><div class="v8h-label">Holdout Start</div><div class="v8h-value" data-v8h-start>—</div></div>
+  </div>
+  <div class="v8h-sha">Frozen SHA-256: <span data-v8h-sha>—</span></div>
+  <div class="v8h-chart"></div>
+  <div class="v8h-note">Solid = frozen V8 completed-cohort normalized wealth; dashed = SPY. Diagnostic monitoring only. Strategy SHA, Top-10, 5-session hold, next-open execution, five cohort offsets, and 10-bps cost contract cannot change here.</div>
+</section>
+
+<script src="/static/js/v8_holdout_monitor.js"></script>
 </body>
 </html>

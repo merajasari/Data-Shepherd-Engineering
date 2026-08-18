@@ -1,3 +1,4 @@
+from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
 """Data Shepherd Engineering presentation layer.
 
 The member dashboard presents the frozen V5 cross-sectional ranking model,
@@ -513,6 +514,12 @@ def health():
         "live_cache_updated_at": live_state["updated_at"],
     })
 
+
+
+
+@app.get("/api/v8/holdout")
+def api_v8_holdout():
+    return get_v8_holdout_dashboard()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
