@@ -46,6 +46,7 @@ from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
 from webapp.services.v5_shadow_portfolio_service import get_v5_shadow_comparison  # noqa: E402
 from webapp.services.v5_shadow_history_service import get_v5_shadow_history  # noqa: E402
 from webapp.services.v4_realtime_equity_journal_service import get_v4_realtime_equity_history  # noqa: E402
+from webapp.services.v4_reconstructed_history_service import get_v4_reconstructed_history  # noqa: E402
 
 
 app = Flask(__name__)
@@ -154,15 +155,21 @@ def build_v4_dashboard_payload():
         {"symbol": symbol, "company_name": get_v5_company_name(symbol)}
         for symbol in portfolio["top_five"]
     ]
-    history = list(forward.get("equity_history", []))
+
+    reconstructed = list(get_v4_reconstructed_history())
+    history = list(reconstructed)
+    history.extend(forward.get("equity_history", []))
     history.extend(get_v4_realtime_equity_history())
     history.sort(key=lambda row: str(row.get("timestamp") or ""))
+
+    reconstructed_start = reconstructed[0].get("timestamp") if reconstructed else forward.get("start_timestamp")
     chart_history = [
         {
-            "timestamp": forward.get("start_timestamp"),
+            "timestamp": reconstructed_start,
             "label": "Start",
             "equity": starting_cash,
             "synthetic_baseline": True,
+            "history_type": "reconstruction_baseline" if reconstructed else "paper_baseline",
         },
         *[
             {**row, "label": None, "synthetic_baseline": False}
@@ -183,6 +190,8 @@ def build_v4_dashboard_payload():
     elif chart_history:
         chart_history[-1] = {**chart_history[-1], "label": "Current", "current_mark": True}
     forward["chart_history"] = chart_history
+    forward["reconstructed_observations"] = len(reconstructed)
+    forward["reconstructed_start_timestamp"] = reconstructed_start
     return {"forward": forward, "portfolio": portfolio}
 
 
@@ -429,16 +438,16 @@ def api_prices(symbol):
     return jsonify(get_recent_prices(symbol, limit=60))
 
 
-@app.route("/api/live/<symbol>")
+@app.route("/api/live-prices")
 @login_required
-def api_live_quote(symbol):
-    return jsonify(get_live_quote(symbol.upper().strip()))
+def api_live_prices():
+    return jsonify({"stocks": get_all_live_quotes()})
 
 
-@app.route("/api/live")
+@app.route("/api/crypto-live")
 @login_required
-def api_live_quotes():
-    return jsonify(get_all_live_quotes())
+def api_crypto_live():
+    return jsonify({"crypto": get_all_crypto_live_tickers()})
 
 
 @app.route("/api/stock-stream-health")
@@ -447,51 +456,15 @@ def api_stock_stream_health():
     return jsonify(get_stock_stream_health())
 
 
-@app.route("/api/crypto-live")
-@login_required
-def api_crypto_live_quotes():
-    return jsonify(get_all_crypto_live_tickers())
-
-
-@app.route("/api/crypto-history")
-@login_required
-def api_crypto_history():
-    range_name = normalize_history_range(request.args.get("range"))
-    cache_path = get_crypto_history_cache_path(range_name)
-    if cache_path.exists():
-        response = send_file(
-            cache_path,
-            mimetype="application/json",
-            conditional=True,
-            max_age=30,
-        )
-        response.headers["Cache-Control"] = "private, max-age=30"
-        response.headers["X-Data-Shepherd-History-Source"] = "persistent-web-cache"
-        return response
-
-    # Safe fallback for first install or a missing cache file. This preserves the
-    # current read-only service contract, but normal page loads should never need it.
-    try:
-        payload = get_crypto_history_payload(range_name=range_name)
-    except TypeError:
-        payload = get_crypto_history_payload()
-    return jsonify(payload)
-
-@app.route("/api/paper-portfolio")
-@login_required
-def api_paper_portfolio():
-    return jsonify(get_portfolio_summary())
-
-
 @app.route("/api/v4-forward")
 @login_required
 def api_v4_forward():
     return jsonify(build_v4_dashboard_payload())
 
 
-@app.route("/api/v5-shadow-comparison")
+@app.route("/api/v5-shadow")
 @login_required
-def api_v5_shadow_comparison():
+def api_v5_shadow():
     return jsonify(get_v5_shadow_comparison())
 
 
@@ -501,25 +474,36 @@ def api_v5_shadow_history():
     return jsonify(get_v5_shadow_history())
 
 
+@app.route("/api/crypto-history")
+@login_required
+def api_crypto_history():
+    history_range = normalize_history_range(request.args.get("range", "ALL"))
+    return jsonify(get_crypto_history_payload(history_range))
+
+
+@app.route("/api/crypto-history-file")
+@login_required
+def api_crypto_history_file():
+    history_range = normalize_history_range(request.args.get("range", "ALL"))
+    path = get_crypto_history_cache_path(history_range)
+    if not path.exists():
+        get_crypto_history_payload(history_range)
+    return send_file(path, mimetype="application/json", conditional=True, max_age=30)
+
+
 @app.route("/health")
 def health():
-    live_state = get_all_live_quotes()
-    rankings = get_v5_rankings()
     return jsonify({
-        "status": "healthy",
-        "service": "stock-market-ai-platform",
-        "v5_candidates": rankings.get("candidate_count", 100),
-        "v5_decision_date_utc": rankings.get("decision_date_utc"),
-        "live_symbols": live_state["symbol_count"],
-        "live_cache_updated_at": live_state["updated_at"],
+        "status": "ok",
+        "service": "data-shepherd-web",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
     })
-
-
 
 
 @app.get("/api/v8/holdout")
 def api_v8_holdout():
     return get_v8_holdout_dashboard()
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
