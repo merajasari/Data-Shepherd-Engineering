@@ -3,6 +3,10 @@
 Tracks the exact frozen V8 candidate in a separate append-only paper journal.
 This journal is operational diagnostics only and is never used as Sep-1+ holdout
 evidence. No brokerage orders are placed.
+
+The runner also publishes a tiny latest-ranking JSON snapshot for the web
+presentation layer. The Flask dashboard reads that snapshot instead of scanning
+the large Phase-4 parquet on every page request.
 """
 from __future__ import annotations
 
@@ -25,6 +29,7 @@ from ml.v8.holdout_runner import (
 ROOT = Path("data/model/v8/paper")
 JOURNAL_PATH = ROOT / "journal.jsonl"
 STATUS_PATH = ROOT / "status.json"
+DASHBOARD_RANKINGS_PATH = Path("data/live/v8_latest_rankings.json")
 
 
 def _read_events():
@@ -65,6 +70,40 @@ def _write_status(**kwargs):
     STATUS_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True)+"\n")
 
 
+def _write_dashboard_snapshot(decision_ts, ranking):
+    """Write the current frozen-V8 ranking as a small web-friendly JSON file."""
+    n=len(ranking)
+    rows=[]
+    for i,r in enumerate(ranking.itertuples(), start=1):
+        rows.append({
+            "rank":i,
+            "symbol":str(r.symbol),
+            "score":float(r.orthogonal_signal),
+            "rank_percentile":1.0-((i-1)/max(1,n-1)),
+            "selected_top10":i<=TOP_N,
+        })
+    payload={
+        "available":True,
+        "research_version":"v8",
+        "candidate_id":"V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
+        "frozen_sha256":EXPECTED_SHA,
+        "decision_date_utc":pd.Timestamp(decision_ts).isoformat(),
+        "candidate_count":n,
+        "feature":"distance_from_low_20d",
+        "neutralization_controls":["volatility_20d","beta_60"],
+        "top_n":TOP_N,
+        "holding_sessions":HOLD_SESSIONS,
+        "cost_bps":COST_BPS,
+        "rankings":rows,
+        "top10":rows[:TOP_N],
+        "generated_at_utc":datetime.now(timezone.utc).isoformat(),
+    }
+    DASHBOARD_RANKINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp=DASHBOARD_RANKINGS_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, separators=(",",":"))+"\n", encoding="utf-8")
+    tmp.replace(DASHBOARD_RANKINGS_PATH)
+
+
 def main():
     _verify_freeze()
     symbols, frames, dates, date_to_idx = _load_market()
@@ -83,10 +122,13 @@ def main():
         decision_dates=[dates[-1]]
 
     appended=0
+    snapshot_written=False
     for decision_ts in decision_dates:
         i=date_to_idx[decision_ts]
         cohort=int(i % HOLD_SESSIONS)
         ranking=_rank_for_date(decision_ts, symbols, frames)
+        _write_dashboard_snapshot(decision_ts, ranking)
+        snapshot_written=True
         picks=ranking.head(TOP_N)["symbol"].astype(str).tolist()
         entry_ts=dates[i+1] if i+1 < len(dates) else None
         planned_exit=dates[i+1+HOLD_SESSIONS] if i+1+HOLD_SESSIONS < len(dates) else None
@@ -105,6 +147,13 @@ def main():
             "holdout_evidence":False,
             "created_at_utc":datetime.now(timezone.utc).isoformat(),
         }, existing))
+
+    # Migration/repair path: guarantee the web snapshot exists even if today's
+    # decision was already journaled before this optimization was installed.
+    if not snapshot_written and not DASHBOARD_RANKINGS_PATH.exists():
+        decision_ts=dates[-1]
+        ranking=_rank_for_date(decision_ts, symbols, frames)
+        _write_dashboard_snapshot(decision_ts, ranking)
 
     events=_read_events()
     decisions=[e for e in events if e.get("event_type")=="DECISION"]
@@ -177,8 +226,10 @@ def main():
         entries=sum(e.get("event_type")=="ENTRY" for e in final),
         exits=sum(e.get("event_type")=="EXIT" for e in final),
         appended_this_run=appended,
+        dashboard_snapshot=str(DASHBOARD_RANKINGS_PATH),
     )
     print(f"V8 operational paper monitor active. Appended {appended} event(s). No brokerage orders.")
+    print(f"Dashboard ranking snapshot: {DASHBOARD_RANKINGS_PATH}")
 
 
 if __name__ == "__main__":
