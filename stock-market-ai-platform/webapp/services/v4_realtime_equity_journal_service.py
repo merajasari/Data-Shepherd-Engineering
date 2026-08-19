@@ -10,6 +10,7 @@ from webapp.services.paper_trading_service import get_pnl_attribution, get_portf
 
 JOURNAL_DIR = Path("data/paper_trading")
 JOURNAL_PATH = JOURNAL_DIR / "realtime_equity_journal.jsonl"
+MAX_DASHBOARD_POINTS = 200
 
 _HISTORY_CACHE_MTIME_NS: int | None = None
 _HISTORY_CACHE_ROWS: list[dict] = []
@@ -86,7 +87,7 @@ def append_realtime_equity_observation(skip_duplicate_quotes=True):
 
 
 def get_v4_realtime_equity_history():
-    """Return cached parsed journal rows, reloading only when the file changes."""
+    """Return cached recent journal rows for dashboard transport."""
     global _HISTORY_CACHE_MTIME_NS, _HISTORY_CACHE_ROWS
 
     if not JOURNAL_PATH.exists():
@@ -117,6 +118,9 @@ def get_v4_realtime_equity_history():
             if ts is None or eq is None:
                 continue
             rows.append({"timestamp": ts, "equity": float(eq), "realtime_mark": True})
+
+    if len(rows) > MAX_DASHBOARD_POINTS:
+        rows = rows[-MAX_DASHBOARD_POINTS:]
 
     _HISTORY_CACHE_MTIME_NS = mtime_ns
     _HISTORY_CACHE_ROWS = rows
