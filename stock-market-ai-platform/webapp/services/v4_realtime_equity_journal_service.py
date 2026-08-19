@@ -11,6 +11,9 @@ from webapp.services.paper_trading_service import get_pnl_attribution, get_portf
 JOURNAL_DIR = Path("data/paper_trading")
 JOURNAL_PATH = JOURNAL_DIR / "realtime_equity_journal.jsonl"
 
+_HISTORY_CACHE_MTIME_NS: int | None = None
+_HISTORY_CACHE_ROWS: list[dict] = []
+
 
 def _utc_now():
     return datetime.now(timezone.utc).isoformat()
@@ -83,8 +86,22 @@ def append_realtime_equity_observation(skip_duplicate_quotes=True):
 
 
 def get_v4_realtime_equity_history():
+    """Return cached parsed journal rows, reloading only when the file changes."""
+    global _HISTORY_CACHE_MTIME_NS, _HISTORY_CACHE_ROWS
+
     if not JOURNAL_PATH.exists():
+        _HISTORY_CACHE_MTIME_NS = None
+        _HISTORY_CACHE_ROWS = []
         return []
+
+    try:
+        mtime_ns = JOURNAL_PATH.stat().st_mtime_ns
+    except OSError:
+        return []
+
+    if _HISTORY_CACHE_MTIME_NS == mtime_ns:
+        return _HISTORY_CACHE_ROWS
+
     rows = []
     with JOURNAL_PATH.open("r", encoding="utf-8") as handle:
         for line in handle:
@@ -100,4 +117,7 @@ def get_v4_realtime_equity_history():
             if ts is None or eq is None:
                 continue
             rows.append({"timestamp": ts, "equity": float(eq), "realtime_mark": True})
-    return rows
+
+    _HISTORY_CACHE_MTIME_NS = mtime_ns
+    _HISTORY_CACHE_ROWS = rows
+    return _HISTORY_CACHE_ROWS
