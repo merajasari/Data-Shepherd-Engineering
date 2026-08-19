@@ -1,10 +1,5 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
-"""Data Shepherd Engineering presentation layer.
-
-The member dashboard presents the frozen V5 cross-sectional ranking model,
-the separate frozen V4 stock paper-trading monitor, and a read-only Crypto V1
-research simulation view.
-"""
+"""Data Shepherd Engineering presentation layer."""
 
 import os
 import sys
@@ -18,11 +13,7 @@ from werkzeug.security import check_password_hash
 load_dotenv()
 sys.path.append("data-ingestion")
 
-from v5_symbols import (  # noqa: E402
-    get_v5_company_name,
-    get_v5_symbol_options,
-    get_v5_symbols,
-)
+from v5_symbols import get_v5_company_name, get_v5_symbol_options, get_v5_symbols  # noqa: E402
 from webapp.services.account_service import (  # noqa: E402
     authenticate_account,
     begin_signup,
@@ -48,7 +39,6 @@ from webapp.services.v5_shadow_history_service import get_v5_shadow_history  # n
 from webapp.services.v4_realtime_equity_journal_service import get_v4_realtime_equity_history  # noqa: E402
 from webapp.services.v4_reconstructed_history_service import get_v4_reconstructed_history  # noqa: E402
 
-
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key:
@@ -65,7 +55,6 @@ initialize_account_store()
 
 @app.after_request
 def inject_dashboard_modules(response):
-    """Load small presentation modules without duplicating template markup."""
     if response.mimetype == "text/html" and response.status_code == 200:
         html = response.get_data(as_text=True)
         marker = "</body>"
@@ -83,6 +72,7 @@ def inject_dashboard_modules(response):
                 '<script src="/static/js/v5_shadow_history_chart.js" defer></script>',
                 '<script src="/static/js/market_history_chart.js" defer></script>',
                 '<script src="/static/js/primary_stock_spotlight.js" defer></script>',
+                '<script src="/static/js/lazy_top10_metrics.js" defer></script>',
             ])
         if marker in html:
             for script in scripts:
@@ -171,22 +161,17 @@ def build_v4_dashboard_payload():
             "synthetic_baseline": True,
             "history_type": "reconstruction_baseline" if reconstructed else "paper_baseline",
         },
-        *[
-            {**row, "label": None, "synthetic_baseline": False}
-            for row in history
-        ],
+        *[{**row, "label": None, "synthetic_baseline": False} for row in history],
     ]
     current_timestamp = datetime.now(timezone.utc).isoformat()
     if not chart_history or abs(float(chart_history[-1]["equity"]) - equity) > 1e-9:
-        chart_history.append(
-            {
-                "timestamp": current_timestamp,
-                "label": "Current",
-                "equity": equity,
-                "synthetic_baseline": False,
-                "current_mark": True,
-            }
-        )
+        chart_history.append({
+            "timestamp": current_timestamp,
+            "label": "Current",
+            "equity": equity,
+            "synthetic_baseline": False,
+            "current_mark": True,
+        })
     elif chart_history:
         chart_history[-1] = {**chart_history[-1], "label": "Current", "current_mark": True}
     forward["chart_history"] = chart_history
@@ -196,47 +181,39 @@ def build_v4_dashboard_payload():
 
 
 def enrich_ranking_rows(rows):
-    return [
-        {**dict(row), "company_name": get_v5_company_name(row["symbol"])}
-        for row in rows
-    ]
+    return [{**dict(row), "company_name": get_v5_company_name(row["symbol"])} for row in rows]
+
+
+def _lightweight_top10(rankings):
+    """Return render-safe placeholders; expensive market metrics are loaded later."""
+    rows = []
+    for source in rankings[:10]:
+        row = dict(source)
+        row.setdefault("display_price", 0.0)
+        row.setdefault("eod_change_pct", 0.0)
+        row.setdefault("rsi_14", 0.0)
+        rows.append(row)
+    return rows
 
 
 @app.route("/")
 def home():
-    return render_template(
-        "landing.html",
-        authenticated=session.get("authenticated", False),
-        login_error=None,
-    )
+    return render_template("landing.html", authenticated=session.get("authenticated", False), login_error=None)
 
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "GET":
         return render_template("signup.html", error=None, success=None)
-
     full_name = request.form.get("full_name", "").strip()
     email = request.form.get("email", "").strip()
     try:
         token = begin_signup(full_name, email)
         verification_url = url_for("verify_email", token=token, _external=True, _scheme="https")
         send_verification_email(email, full_name, verification_url)
-        return render_template(
-            "signup.html",
-            error=None,
-            success="Verification email sent. Check your inbox and open the link within 30 minutes.",
-            full_name=full_name,
-            email=email,
-        )
+        return render_template("signup.html", error=None, success="Verification email sent. Check your inbox and open the link within 30 minutes.", full_name=full_name, email=email)
     except (ValueError, RuntimeError) as exc:
-        return render_template(
-            "signup.html",
-            error=str(exc),
-            success=None,
-            full_name=full_name,
-            email=email,
-        ), 400
+        return render_template("signup.html", error=str(exc), success=None, full_name=full_name, email=email), 400
 
 
 @app.route("/verify-email/<token>")
@@ -244,21 +221,9 @@ def verify_email(token):
     try:
         setup = verify_email_token(token)
         session["verified_setup_account_id"] = setup["account_id"]
-        return render_template(
-            "verified_account.html",
-            mode="choose_username",
-            setup=setup,
-            credentials=None,
-            error=None,
-        )
+        return render_template("verified_account.html", mode="choose_username", setup=setup, credentials=None, error=None)
     except ValueError as exc:
-        return render_template(
-            "verified_account.html",
-            mode="error",
-            setup=None,
-            credentials=None,
-            error=str(exc),
-        ), 400
+        return render_template("verified_account.html", mode="error", setup=None, credentials=None, error=str(exc)), 400
 
 
 @app.route("/complete-account", methods=["POST"])
@@ -266,66 +231,34 @@ def complete_account():
     account_id = session.get("verified_setup_account_id")
     if not account_id:
         return redirect(url_for("signup"))
-
     requested_username = request.form.get("username", "").strip()
     try:
         credentials = complete_account_setup(account_id, requested_username)
         session.pop("verified_setup_account_id", None)
-        return render_template(
-            "verified_account.html",
-            mode="credentials",
-            setup=None,
-            credentials=credentials,
-            error=None,
-        )
+        return render_template("verified_account.html", mode="credentials", setup=None, credentials=credentials, error=None)
     except ValueError as exc:
         try:
             setup = get_account_setup_context(account_id, requested_username)
         except ValueError:
             session.pop("verified_setup_account_id", None)
             return redirect(url_for("signup"))
-        return render_template(
-            "verified_account.html",
-            mode="choose_username",
-            setup=setup,
-            credentials=None,
-            error=str(exc),
-        ), 400
+        return render_template("verified_account.html", mode="choose_username", setup=setup, credentials=None, error=str(exc)), 400
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return redirect(url_for("dashboard" if session.get("authenticated") else "home"))
-
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "")
-
     if valid_legacy_member_credentials(username, password):
-        session.clear()
-        session.permanent = True
-        session["authenticated"] = True
-        session["username"] = username
-        session["legacy_member"] = True
+        session.clear(); session.permanent = True; session["authenticated"] = True; session["username"] = username; session["legacy_member"] = True
         return redirect(url_for("dashboard"))
-
     account = authenticate_account(username, password)
     if account:
-        session.clear()
-        session.permanent = True
-        session["authenticated"] = True
-        session["username"] = account["username"]
-        session["account_id"] = account["id"]
-        session["must_change_password"] = bool(account["must_change_password"])
-        if session["must_change_password"]:
-            return redirect(url_for("change_member_password"))
-        return redirect(url_for("dashboard"))
-
-    return render_template(
-        "landing.html",
-        authenticated=False,
-        login_error="Invalid username or password.",
-    ), 401
+        session.clear(); session.permanent = True; session["authenticated"] = True; session["username"] = account["username"]; session["account_id"] = account["id"]; session["must_change_password"] = bool(account["must_change_password"])
+        return redirect(url_for("change_member_password" if session["must_change_password"] else "dashboard"))
+    return render_template("landing.html", authenticated=False, login_error="Invalid username or password."), 401
 
 
 @app.route("/change-password", methods=["GET", "POST"])
@@ -336,7 +269,6 @@ def change_member_password():
         return redirect(url_for("dashboard"))
     if request.method == "GET":
         return render_template("change_password.html", error=None)
-
     current_password = request.form.get("current_password", "")
     new_password = request.form.get("new_password", "")
     confirm_password = request.form.get("confirm_password", "")
@@ -363,24 +295,15 @@ def dashboard():
     if selected_symbol not in V5_SYMBOLS:
         return redirect(url_for("dashboard", symbol=DEFAULT_SYMBOL))
 
-    selected = build_stock_dashboard(selected_symbol)
-    recent_prices = get_recent_prices(selected_symbol, limit=60)
     rankings_payload = get_v5_rankings()
     rankings = enrich_ranking_rows(rankings_payload["rankings"])
-    top5 = rankings[:5]
 
-    top10_rows = []
-    for row in rankings[:10]:
-        try:
-            market = get_market_summary(row["symbol"])
-            live = get_live_quote(row["symbol"])
-            row = dict(row)
-            row["display_price"] = live["reference_price"] if live["available"] else market["close"]
-            row["eod_change_pct"] = market["price_change_pct"]
-            row["rsi_14"] = market["rsi_14"]
-            top10_rows.append(row)
-        except Exception as exc:
-            print(f"[V5 TOP10 ERROR] {row['symbol']}: {exc}")
+    # Only selected-stock data is required before first paint. Top-10 market
+    # metrics are deliberately deferred to /api/v8-top10-details.
+    selected = build_stock_dashboard(selected_symbol)
+    recent_prices = get_recent_prices(selected_symbol, limit=60)
+    top5 = rankings[:5]
+    top10_rows = _lightweight_top10(rankings)
 
     return render_template(
         "index.html",
@@ -418,6 +341,27 @@ def api_v5_rankings():
     payload = dict(get_v5_rankings())
     payload["rankings"] = enrich_ranking_rows(payload["rankings"])
     return jsonify(payload)
+
+
+@app.route("/api/v8-top10-details")
+@login_required
+def api_v8_top10_details():
+    """Load expensive per-symbol market metrics only after dashboard first paint."""
+    rankings = enrich_ranking_rows(get_v5_rankings()["rankings"])
+    rows = []
+    for source in rankings[:10]:
+        try:
+            market = get_market_summary(source["symbol"])
+            live = get_live_quote(source["symbol"])
+            rows.append({
+                "symbol": source["symbol"],
+                "display_price": live["reference_price"] if live["available"] else market["close"],
+                "eod_change_pct": market["price_change_pct"],
+                "rsi_14": market["rsi_14"],
+            })
+        except Exception as exc:
+            print(f"[V8 TOP10 DETAIL ERROR] {source['symbol']}: {exc}")
+    return jsonify({"rows": rows})
 
 
 @app.route("/api/dashboard-stock/<symbol>")
@@ -493,11 +437,7 @@ def api_crypto_history_file():
 
 @app.route("/health")
 def health():
-    return jsonify({
-        "status": "ok",
-        "service": "data-shepherd-web",
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-    })
+    return jsonify({"status": "ok", "service": "data-shepherd-web", "timestamp_utc": datetime.now(timezone.utc).isoformat()})
 
 
 @app.get("/api/v8/holdout")
