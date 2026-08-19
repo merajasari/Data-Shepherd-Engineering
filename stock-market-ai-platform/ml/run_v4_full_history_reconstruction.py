@@ -8,8 +8,19 @@ training, purge gap, ranking, execution and cost rules remain centralized.
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# The legacy V4 modules use script-style sibling imports such as
+# ``from train_model_v4 import ...``.  When this runner is launched with
+# ``python -m ml.run_v4_full_history_reconstruction`` Python resolves the
+# package itself, but not those legacy sibling imports.  Put the ml directory
+# on sys.path before importing the existing backtest so we can reuse it without
+# changing the frozen/legacy V4 implementation.
+ML_DIR = Path(__file__).resolve().parent
+if str(ML_DIR) not in sys.path:
+    sys.path.insert(0, str(ML_DIR))
 
 from ml.backtest_portfolio_v4 import run_backtest
 
