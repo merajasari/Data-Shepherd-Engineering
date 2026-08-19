@@ -1,4 +1,9 @@
-"""Read-only V4 reconstructed equity-history service."""
+"""Read-only V4 reconstructed equity-history service.
+
+The full-history artifact is immutable between reconstruction runs, so cache the
+parsed rows in memory and only reload when the file modification time changes.
+This keeps the dashboard from reparsing thousands of JSON rows on every poll.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,10 @@ LEGACY_90D_PATHS = (
     Path("data/model/v4/reconstructed_90d_history.json"),
     Path("data/model/v4/v4_90d_reconstructed_history.json"),
 )
+
+_CACHE_PATH: Path | None = None
+_CACHE_MTIME_NS: int | None = None
+_CACHE_ROWS: list[dict] = []
 
 
 def _read_rows(path: Path) -> list[dict]:
@@ -45,14 +54,39 @@ def _read_rows(path: Path) -> list[dict]:
     return clean
 
 
-def get_v4_reconstructed_history() -> list[dict]:
-    """Prefer the full-history artifact; retain legacy fallback during migration."""
+def _preferred_path() -> Path | None:
     if FULL_HISTORY_PATH.exists():
-        return _read_rows(FULL_HISTORY_PATH)
+        return FULL_HISTORY_PATH
     for path in LEGACY_90D_PATHS:
         if path.exists():
-            return _read_rows(path)
-    return []
+            return path
+    return None
+
+
+def get_v4_reconstructed_history() -> list[dict]:
+    """Return cached full-history rows, reloading only when the artifact changes."""
+    global _CACHE_PATH, _CACHE_MTIME_NS, _CACHE_ROWS
+
+    path = _preferred_path()
+    if path is None:
+        _CACHE_PATH = None
+        _CACHE_MTIME_NS = None
+        _CACHE_ROWS = []
+        return []
+
+    try:
+        mtime_ns = path.stat().st_mtime_ns
+    except OSError:
+        return []
+
+    if _CACHE_PATH == path and _CACHE_MTIME_NS == mtime_ns:
+        return _CACHE_ROWS
+
+    rows = _read_rows(path)
+    _CACHE_PATH = path
+    _CACHE_MTIME_NS = mtime_ns
+    _CACHE_ROWS = rows
+    return _CACHE_ROWS
 
 
 def get_v4_reconstructed_90d_history() -> list[dict]:
