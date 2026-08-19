@@ -12,8 +12,30 @@ HOLDOUT_STATUS = HOLDOUT_ROOT / "status.json"
 PAPER_ROOT = Path("data/model/v8/paper")
 PAPER_JOURNAL = PAPER_ROOT / "journal.jsonl"
 PAPER_STATUS = PAPER_ROOT / "status.json"
+DASHBOARD_RANKINGS = Path("data/live/v8_latest_rankings.json")
 RANKED_PANEL = Path("data/model/v8/phase4/fixed_complementarity_ranked_panel.parquet")
 FREEZE_SPEC = Path("data/model/v8/phase7/frozen_candidate_spec.json")
+
+_JSON_CACHE = {}
+_RANKING_CACHE = {"mtime_ns": None, "payload": None}
+
+
+def _read_json_cached(path):
+    if not path.exists():
+        return {}
+    try:
+        mtime=path.stat().st_mtime_ns
+    except OSError:
+        return {}
+    cached=_JSON_CACHE.get(str(path))
+    if cached and cached[0]==mtime:
+        return cached[1]
+    try:
+        payload=json.loads(path.read_text())
+    except Exception:
+        payload={}
+    _JSON_CACHE[str(path)]=(mtime,payload)
+    return payload
 
 
 def _events(path):
@@ -54,10 +76,7 @@ def _paper_payload():
     latest_entry=entries[-1] if entries else None
     equity=curve[-1]["strategy_equity"] if curve else 100000.0
     spy=curve[-1]["spy_equity"] if curve else 100000.0
-    status={}
-    if PAPER_STATUS.exists():
-        try: status=json.loads(PAPER_STATUS.read_text())
-        except Exception: status={}
+    status=_read_json_cached(PAPER_STATUS)
     return {
         "state":status.get("status","WAITING_FOR_FIRST_RUN"),
         "starting_equity":100000.0,
@@ -77,16 +96,33 @@ def _paper_payload():
 
 
 def _ranking_payload():
-    spec={}
-    if FREEZE_SPEC.exists():
-        try: spec=json.loads(FREEZE_SPEC.read_text())
-        except Exception: spec={}
+    # Fast path: the V8 paper monitor publishes a tiny latest-ranking snapshot.
+    # This keeps web requests independent from the large Phase-4 parquet.
+    if DASHBOARD_RANKINGS.exists():
+        payload=_read_json_cached(DASHBOARD_RANKINGS)
+        if payload.get("available") and payload.get("rankings"):
+            return payload
+
+    # Migration fallback only. Cache the result by parquet mtime so even before
+    # the first paper-monitor run we never scan the research parquet repeatedly.
+    spec=_read_json_cached(FREEZE_SPEC)
     if not RANKED_PANEL.exists():
         return {
             "available":False,"candidate_id":"V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
             "frozen_sha256":EXPECTED_SHA,"rankings":[],"top10":[],"candidate_count":100,
         }
-    p=pd.read_parquet(RANKED_PANEL)
+    try:
+        mtime=RANKED_PANEL.stat().st_mtime_ns
+    except OSError:
+        mtime=None
+    if _RANKING_CACHE.get("mtime_ns")==mtime and _RANKING_CACHE.get("payload") is not None:
+        return _RANKING_CACHE["payload"]
+
+    cols=["timestamp_utc","symbol","score_id","score"]
+    try:
+        p=pd.read_parquet(RANKED_PANEL, columns=cols)
+    except Exception:
+        p=pd.read_parquet(RANKED_PANEL)
     if "score_id" in p.columns:
         p=p[p["score_id"].astype(str)=="DISTANCE_ONLY"].copy()
     p["timestamp_utc"]=pd.to_datetime(p["timestamp_utc"],utc=True)
@@ -100,9 +136,9 @@ def _ranking_payload():
         rows.append({
             "rank":i+1,"symbol":str(r["symbol"]),"score":float(r[score_col]),
             "rank_percentile":1.0-(i/max(1,n-1)),"selected_top10":i<10,
-            "sector":str(r.get("sector","")) if hasattr(r,"get") else "",
+            "sector":"",
         })
-    return {
+    payload={
         "available":True,
         "candidate_id":spec.get("candidate_id","V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS"),
         "frozen_sha256":EXPECTED_SHA,
@@ -113,14 +149,14 @@ def _ranking_payload():
         "top_n":10,"holding_sessions":5,"cost_bps":10,
         "rankings":rows,"top10":rows[:10],
     }
+    _RANKING_CACHE["mtime_ns"]=mtime
+    _RANKING_CACHE["payload"]=payload
+    return payload
 
 
 def _holdout_payload():
     now=pd.Timestamp.now(tz="UTC")
-    status={}
-    if HOLDOUT_STATUS.exists():
-        try: status=json.loads(HOLDOUT_STATUS.read_text())
-        except Exception: status={}
+    status=_read_json_cached(HOLDOUT_STATUS)
     ev=_events(HOLDOUT_JOURNAL)
     decisions=[e for e in ev if e.get("event_type")=="DECISION"]
     entries=[e for e in ev if e.get("event_type")=="ENTRY"]
