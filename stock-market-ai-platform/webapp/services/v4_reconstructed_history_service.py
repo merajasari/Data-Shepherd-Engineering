@@ -1,8 +1,7 @@
 """Read-only V4 reconstructed equity-history service.
 
-The full-history artifact is immutable between reconstruction runs, so cache the
-parsed rows in memory and only reload when the file modification time changes.
-This keeps the dashboard from reparsing thousands of JSON rows on every poll.
+The full-history artifact is cached in memory and compacted for dashboard
+transport. The source artifact on disk remains complete and unchanged.
 """
 
 from __future__ import annotations
@@ -15,10 +14,19 @@ LEGACY_90D_PATHS = (
     Path("data/model/v4/reconstructed_90d_history.json"),
     Path("data/model/v4/v4_90d_reconstructed_history.json"),
 )
+MAX_DASHBOARD_POINTS = 900
 
 _CACHE_PATH: Path | None = None
 _CACHE_MTIME_NS: int | None = None
 _CACHE_ROWS: list[dict] = []
+
+
+def _compact(rows: list[dict], max_points: int = MAX_DASHBOARD_POINTS) -> list[dict]:
+    if len(rows) <= max_points:
+        return rows
+    step = (len(rows) - 1) / (max_points - 1)
+    indices = sorted({0, len(rows) - 1, *[round(i * step) for i in range(max_points)]})
+    return [rows[i] for i in indices if 0 <= i < len(rows)]
 
 
 def _read_rows(path: Path) -> list[dict]:
@@ -51,7 +59,7 @@ def _read_rows(path: Path) -> list[dict]:
             }
         )
     clean.sort(key=lambda row: str(row.get("timestamp") or ""))
-    return clean
+    return _compact(clean)
 
 
 def _preferred_path() -> Path | None:
@@ -64,7 +72,7 @@ def _preferred_path() -> Path | None:
 
 
 def get_v4_reconstructed_history() -> list[dict]:
-    """Return cached full-history rows, reloading only when the artifact changes."""
+    """Return cached, compacted rows for the dashboard."""
     global _CACHE_PATH, _CACHE_MTIME_NS, _CACHE_ROWS
 
     path = _preferred_path()
@@ -82,13 +90,11 @@ def get_v4_reconstructed_history() -> list[dict]:
     if _CACHE_PATH == path and _CACHE_MTIME_NS == mtime_ns:
         return _CACHE_ROWS
 
-    rows = _read_rows(path)
     _CACHE_PATH = path
     _CACHE_MTIME_NS = mtime_ns
-    _CACHE_ROWS = rows
+    _CACHE_ROWS = _read_rows(path)
     return _CACHE_ROWS
 
 
 def get_v4_reconstructed_90d_history() -> list[dict]:
-    """Backward-compatible name used by older dashboard code."""
     return get_v4_reconstructed_history()
