@@ -23,6 +23,8 @@ if str(ML_DIR) not in sys.path:
     sys.path.insert(0, str(ML_DIR))
 
 from ml.backtest_portfolio_v4 import run_backtest
+from ml.build_v4_dataset import main as build_v4_dataset
+from ml.train_model_v4 import DATA_PATH
 
 OUTPUT_PATH = Path("data/model/v4/full_history_equity.json")
 
@@ -33,7 +35,23 @@ def _iso(value) -> str:
     return str(value)
 
 
+def ensure_v4_dataset() -> None:
+    """Build the derived V4 cross-sectional parquet if it is not present locally."""
+    if DATA_PATH.exists():
+        print(f"Using existing V4 dataset: {DATA_PATH}")
+        return
+
+    print(f"V4 dataset not found: {DATA_PATH}")
+    print("Building it from the existing per-symbol feature history...")
+    build_v4_dataset()
+
+    if not DATA_PATH.exists():
+        raise RuntimeError(f"V4 dataset build completed but {DATA_PATH} was not created")
+
+
 def main() -> None:
+    ensure_v4_dataset()
+
     result = run_backtest()
     curve = result.get("equity_curve", [])
     if not curve:
