@@ -27,6 +27,7 @@ from webapp.services.crypto_live_market_service import get_all_crypto_live_ticke
 from webapp.services.crypto_history_service import get_crypto_history_payload  # noqa: E402
 from webapp.services.crypto_history_web_cache_service import get_crypto_history_cache_path, normalize_history_range  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
+from webapp.services.fast_market_history_service import get_recent_prices_local  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
 from webapp.services.paper_trading_service import get_pnl_attribution, get_portfolio_summary  # noqa: E402
 from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
@@ -145,11 +146,20 @@ def logout():session.clear();return redirect(url_for("home"))
 def dashboard():
     selected_symbol=request.args.get("symbol",DEFAULT_SYMBOL).upper().strip()
     if selected_symbol not in V5_SYMBOLS:return redirect(url_for("dashboard",symbol=DEFAULT_SYMBOL))
-    selected=build_stock_dashboard(selected_symbol);recent_prices=get_recent_prices(selected_symbol,limit=60);rankings_payload=get_v5_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top5=rankings[:5];top10_rows=[]
-    for row in rankings[:10]:
-        try:
-            market=get_market_summary(row["symbol"]);live=get_live_quote(row["symbol"]);row=dict(row);row["display_price"]=live["reference_price"] if live["available"] else market["close"];row["eod_change_pct"]=market["price_change_pct"];row["rsi_14"]=market["rsi_14"];top10_rows.append(row)
-        except Exception as exc:print(f"[V5 TOP10 ERROR] {row['symbol']}: {exc}")
+    live_view=request.args.get("view")=="live"
+    selected=build_stock_dashboard(selected_symbol)
+    # Critical performance rule: never block the first Live Stock Viewer HTML response
+    # on an external Tiingo REST call. Render from local Gold immediately, then let the
+    # existing live-refresh layer hydrate newer EOD/live data after first paint.
+    recent_prices=get_recent_prices_local(selected_symbol,limit=60) if live_view else get_recent_prices(selected_symbol,limit=60)
+    rankings_payload=get_v5_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top5=rankings[:5];top10_rows=[]
+    # The legacy/model Top-10 cards are hidden on Live Stock Viewer, so avoid the
+    # unnecessary feature-file/live-cache loop during that page's initial request.
+    if not live_view:
+        for row in rankings[:10]:
+            try:
+                market=get_market_summary(row["symbol"]);live=get_live_quote(row["symbol"]);row=dict(row);row["display_price"]=live["reference_price"] if live["available"] else market["close"];row["eod_change_pct"]=market["price_change_pct"];row["rsi_14"]=market["rsi_14"];top10_rows.append(row)
+            except Exception as exc:print(f"[V5 TOP10 ERROR] {row['symbol']}: {exc}")
     return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top5=top5,top10_rows=top10_rows,v5_symbols=V5_SYMBOL_OPTIONS,v5=rankings_payload)
 @app.route("/crypto")
 @login_required
