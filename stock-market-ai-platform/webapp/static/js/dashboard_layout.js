@@ -1,4 +1,34 @@
 (() => {
+  // Move the selected-stock technical indicators (RSI, moving averages,
+  // volatility and volume ratio) out of Model Research and into Live Stock Viewer.
+  const technicalIndicators = Array.from(document.querySelectorAll('section.grid.metrics')).find(section => {
+    const labels = Array.from(section.querySelectorAll('.metric > span')).map(node => node.textContent.trim());
+    return ['RSI 14','SMA 20','SMA 50','SMA 200','20D VOL','VOLUME RATIO'].every(label => labels.includes(label));
+  });
+
+  if (technicalIndicators) {
+    technicalIndicators.classList.add('ds-technical-indicators', 'ds-live-stock-keep');
+    technicalIndicators.setAttribute('data-selected-stock-indicators', 'true');
+
+    // Keep the indicator strip beside the selected-stock market context on the
+    // Live Stock Viewer. The server-rendered values are tied to the symbol in
+    // /dashboard?view=live&symbol=..., so every search/dropdown selection reloads
+    // this strip with the newly selected stock's values.
+    const marketSection = document.querySelector('.ds-market-section');
+    if (marketSection && marketSection.nextElementSibling !== technicalIndicators) {
+      marketSection.insertAdjacentElement('afterend', technicalIndicators);
+    }
+  }
+
+  const technicalStyle = document.createElement('style');
+  technicalStyle.id = 'ds-technical-indicators-placement';
+  technicalStyle.textContent = `
+    body.ds-model-research-view .ds-technical-indicators{display:none!important}
+    body.ds-live-stock-view .ds-technical-indicators{display:grid!important}
+  `;
+  document.getElementById(technicalStyle.id)?.remove();
+  document.head.appendChild(technicalStyle);
+
   // Remove only the compact V4 paper-portfolio chart shown beside the dashboard metrics.
   // Do not touch .v4-chart-card, which is repurposed by v4_equity_chart.js for the
   // MODEL PERFORMANCE COMPARISON panel.
@@ -33,9 +63,9 @@
   removeCompactV4Equity();
   moveV8RankSignal();
 
-  // Both compact equity cards and the V8 replacement signal are injected by
-  // other dashboard scripts, so watch briefly for their final DOM state and
-  // enforce only these two layout rules.
+  // Compact equity cards and the V8 replacement signal are injected by other
+  // dashboard scripts, so watch briefly for their final DOM state and enforce
+  // only these layout rules.
   const layoutObserver = new MutationObserver(() => {
     removeCompactV4Equity();
     moveV8RankSignal();
