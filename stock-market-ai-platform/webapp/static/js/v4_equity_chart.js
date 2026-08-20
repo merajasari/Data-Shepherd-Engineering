@@ -120,3 +120,41 @@
     if (label?.textContent.trim() === 'V5 FROZEN MODEL') section.remove();
   });
 })();
+
+/* Replace the legacy V4 portfolio-structure card with the frozen V8 portfolio contract. */
+(() => {
+  const lower = document.querySelector('.v4-dashboard .v4-lower');
+  if (!lower) return;
+  const target = Array.from(lower.querySelectorAll(':scope > .card')).find(section => {
+    const label = section.querySelector(':scope > .label');
+    return label?.textContent.trim() === 'PORTFOLIO STRUCTURE';
+  });
+  if (!target) return;
+
+  target.id = 'v8-portfolio-structure';
+  target.innerHTML = `
+    <div class="label">V8 MODEL STRUCTURE</div>
+    <h3>Top-10 Equal-Weight Basket</h3>
+    <div class="muted" id="v8-structure-state">Frozen contract · formal forward holdout begins Sep 1, 2026</div>
+    <div class="v4-structure-inner">
+      <div class="v4-donut" style="background:repeating-conic-gradient(var(--gold) 0deg 32deg, rgba(239,197,107,.32) 32deg 36deg)" aria-label="Ten equal-weight V8 stock positions at 10 percent each"></div>
+      <div class="v4-legend">
+        <div class="v4-legend-item"><span class="v4-dot" style="background:var(--gold)"></span><div><strong>Top-10 Stock Basket (100%)</strong><div class="muted">Ten V8-selected stocks, equal weighted</div></div></div>
+        <div class="v4-legend-item"><span class="v4-dot" style="background:var(--cyan)"></span><div><strong>10% per selected stock</strong><div class="muted">No SPY core allocation — SPY is the benchmark only</div></div></div>
+        <div class="v4-legend-item"><span class="v4-dot" style="background:var(--green)"></span><div><strong>5-session hold · next-open execution</strong><div class="muted">Five staggered cohort offsets with 10-bps modeled trading cost</div></div></div>
+      </div>
+    </div>`;
+
+  fetch('/api/v8/holdout',{cache:'no-store'})
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    .then(d => {
+      const state = target.querySelector('#v8-structure-state');
+      if (!state) return;
+      const readable = String(d.state || 'UNKNOWN').replaceAll('_',' ');
+      state.textContent = `${readable} · ${d.decisions ?? 0} decisions · ${d.entries ?? 0} entries · ${d.completed_cohorts ?? 0} completed cohorts`;
+    })
+    .catch(() => {
+      const state = target.querySelector('#v8-structure-state');
+      if (state) state.textContent = 'Frozen V8 contract · holdout monitor temporarily unavailable';
+    });
+})();
