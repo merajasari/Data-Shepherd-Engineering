@@ -1,7 +1,16 @@
 (() => {
+  const loadScript = src => new Promise((resolve,reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(`Unable to load ${src}`));
+    document.head.appendChild(s);
+  });
+
   const core = document.createElement('script');
   core.src = '/static/js/v8_holdout_monitor_core.js';
-  core.onload = () => {
+  core.onload = async () => {
     const help = document.querySelector('.v4-dashboard .v4-help');
     if (help) {
       help.innerHTML = `
@@ -15,280 +24,14 @@
         </ul>`;
     }
 
-    const pnl = document.getElementById('v4-pnl-attribution');
-    if (!pnl) return;
-    pnl.id = 'v8-pnl-attribution';
-
-    const style = document.createElement('style');
-    style.id = 'v8-pnl-visual-style';
-    style.textContent = `
-      #v8-pnl-attribution{overflow:hidden}
-      #v8-pnl-attribution .v8pa-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;flex-wrap:wrap}
-      #v8-pnl-attribution .v8pa-state{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(239,197,107,.28);border-radius:999px;background:rgba(239,197,107,.07);color:var(--gold);font-size:.72rem;font-weight:900;letter-spacing:.04em}
-      #v8-pnl-attribution .v8pa-state-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
-      #v8-pnl-attribution .v8pa-summary{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:20px}
-      #v8-pnl-attribution .v8pa-summary .metric{min-width:0}
-      #v8-pnl-attribution .v8pa-summary strong{font-size:1.28rem;white-space:nowrap}
-      #v8-pnl-attribution .v8pa-main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.8fr);gap:18px;margin-top:18px}
-      #v8-pnl-attribution .v8pa-panel{border:1px solid rgba(120,155,205,.16);border-radius:18px;background:rgba(7,16,31,.48);padding:18px;min-width:0}
-      #v8-pnl-attribution .v8pa-panel-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
-      #v8-pnl-attribution .v8pa-panel-title{font-weight:950;font-size:1rem}
-      #v8-pnl-attribution .v8pa-panel-sub{color:var(--muted);font-size:.76rem;line-height:1.45;margin-top:4px}
-      #v8-pnl-attribution .v8pa-empty{min-height:300px;display:grid;place-items:center;text-align:center;padding:28px;border:1px dashed rgba(120,155,205,.22);border-radius:16px;background:linear-gradient(180deg,rgba(54,216,255,.025),rgba(239,197,107,.025))}
-      #v8-pnl-attribution .v8pa-empty-icon{width:74px;height:74px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;border:1px solid rgba(54,216,255,.28);background:rgba(54,216,255,.07);color:var(--cyan);font-size:1.6rem;font-weight:950}
-      #v8-pnl-attribution .v8pa-empty strong{display:block;font-size:1.05rem;margin-bottom:8px}
-      #v8-pnl-attribution .v8pa-empty p{max-width:560px;margin:0;color:var(--muted);font-size:.82rem;line-height:1.55}
-      #v8-pnl-attribution .v8pa-cohorts{display:grid;gap:11px}
-      #v8-pnl-attribution .v8pa-cohort-row{display:grid;grid-template-columns:80px minmax(0,1fr) 90px;gap:10px;align-items:center}
-      #v8-pnl-attribution .v8pa-cohort-name{font-size:.76rem;font-weight:900;color:#dfe8f6}
-      #v8-pnl-attribution .v8pa-track{height:14px;border-radius:999px;background:rgba(120,155,205,.10);position:relative;overflow:hidden}
-      #v8-pnl-attribution .v8pa-zero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(145,166,194,.35)}
-      #v8-pnl-attribution .v8pa-bar{position:absolute;top:2px;bottom:2px;border-radius:999px}
-      #v8-pnl-attribution .v8pa-value{text-align:right;font-size:.76rem;font-weight:900}
-      #v8-pnl-attribution .v8pa-compare{display:grid;gap:12px}
-      #v8-pnl-attribution .v8pa-compare-row{padding:14px;border:1px solid rgba(120,155,205,.14);border-radius:14px;background:rgba(8,20,36,.52)}
-      #v8-pnl-attribution .v8pa-compare-top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
-      #v8-pnl-attribution .v8pa-compare-label{font-size:.68rem;color:var(--muted);font-weight:900;letter-spacing:.08em}
-      #v8-pnl-attribution .v8pa-compare-value{font-size:1.15rem;font-weight:950}
-      #v8-pnl-attribution .v8pa-rail{height:8px;border-radius:999px;background:rgba(120,155,205,.11);overflow:hidden;margin-top:10px}
-      #v8-pnl-attribution .v8pa-rail span{display:block;height:100%;border-radius:999px;transition:width .35s ease}
-      #v8-pnl-attribution .v8pa-cost-note{margin-top:12px;padding:12px 13px;border:1px solid rgba(239,197,107,.22);border-radius:13px;background:rgba(239,197,107,.06);color:var(--gold);font-size:.75rem;line-height:1.45}
-      #v8-pnl-attribution .v8pa-contract{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid rgba(120,155,205,.14)}
-      #v8-pnl-attribution .v8pa-contract-label{color:var(--muted);font-size:.65rem;font-weight:900;letter-spacing:.09em;margin-right:3px}
-      #v8-pnl-attribution .v8pa-chip{padding:7px 10px;border-radius:999px;border:1px solid rgba(120,155,205,.17);background:rgba(8,20,36,.48);color:#dfe8f6;font-size:.7rem;font-weight:850}
-      @media(max-width:1100px){#v8-pnl-attribution .v8pa-summary{grid-template-columns:repeat(3,1fr)}#v8-pnl-attribution .v8pa-main{grid-template-columns:1fr}}
-      @media(max-width:650px){#v8-pnl-attribution .v8pa-summary{grid-template-columns:1fr 1fr}#v8-pnl-attribution .v8pa-cohort-row{grid-template-columns:66px minmax(0,1fr) 76px}}
-    `;
-    document.getElementById(style.id)?.remove();
-    document.head.appendChild(style);
-
-    pnl.innerHTML = `
-      <div class="v8pa-head">
-        <div>
-          <div class="label">V8 P&amp;L ATTRIBUTION</div>
-          <h3>What is driving V8?</h3>
-          <div class="muted">Forward-only attribution for the frozen V8 DISTANCE_ONLY strategy. The visual focus is V8 net return, SPY benchmark return, excess return, and cohort contribution.</div>
-        </div>
-        <div class="v8pa-state"><span class="v8pa-state-dot"></span><span id="v8pa-state">LOADING</span></div>
-      </div>
-
-      <div class="v8pa-summary">
-        <div class="metric"><span>V8 NET RETURN</span><strong id="v8pa-v8-return">—</strong></div>
-        <div class="metric"><span>SPY RETURN</span><strong id="v8pa-spy-return">—</strong></div>
-        <div class="metric"><span>EXCESS VS SPY</span><strong id="v8pa-excess">—</strong></div>
-        <div class="metric"><span>EXCESS HIT RATE</span><strong id="v8pa-hit">—</strong></div>
-        <div class="metric"><span>COMPLETED COHORTS</span><strong id="v8pa-completed">0</strong></div>
-        <div class="metric"><span>DECISIONS</span><strong id="v8pa-decisions">0</strong></div>
-      </div>
-
-      <div class="v8pa-main">
-        <div class="v8pa-panel">
-          <div class="v8pa-panel-head">
-            <div><div class="label">COHORT CONTRIBUTION</div><div class="v8pa-panel-title">Where is V8's edge coming from?</div><div class="v8pa-panel-sub">Average net SPY-relative return by frozen cohort offset. Positive bars extend right; negative bars extend left.</div></div>
-          </div>
-          <div id="v8pa-contribution"></div>
-        </div>
-
-        <div class="v8pa-panel">
-          <div class="v8pa-panel-head">
-            <div><div class="label">V8 VS SPY</div><div class="v8pa-panel-title">Net performance decomposition</div><div class="v8pa-panel-sub">Forward completed-cohort wealth only.</div></div>
-          </div>
-          <div class="v8pa-compare">
-            <div class="v8pa-compare-row"><div class="v8pa-compare-top"><span class="v8pa-compare-label">V8 NET RETURN</span><strong id="v8pa-compare-v8" class="v8pa-compare-value">—</strong></div><div class="v8pa-rail"><span id="v8pa-rail-v8" style="width:0;background:var(--gold)"></span></div></div>
-            <div class="v8pa-compare-row"><div class="v8pa-compare-top"><span class="v8pa-compare-label">SPY BENCHMARK RETURN</span><strong id="v8pa-compare-spy" class="v8pa-compare-value">—</strong></div><div class="v8pa-rail"><span id="v8pa-rail-spy" style="width:0;background:var(--purple)"></span></div></div>
-            <div class="v8pa-compare-row"><div class="v8pa-compare-top"><span class="v8pa-compare-label">EXCESS RETURN</span><strong id="v8pa-compare-excess" class="v8pa-compare-value">—</strong></div><div class="v8pa-rail"><span id="v8pa-rail-excess" style="width:0;background:var(--green)"></span></div></div>
-          </div>
-          <div class="v8pa-cost-note"><strong>Trading-cost model:</strong> 10 bps per dollar traded is already part of the frozen V8 evaluation contract. The current API exposes net completed-cohort returns, not a separate cumulative dollar-cost ledger, so this panel does not invent one.</div>
-        </div>
-      </div>
-
-      <div class="v8pa-contract">
-        <span class="v8pa-contract-label">FROZEN V8 CONTRACT</span>
-        <span class="v8pa-chip">DISTANCE_ONLY</span><span class="v8pa-chip">Top 10</span><span class="v8pa-chip">10% each</span><span class="v8pa-chip">Next-open entry</span><span class="v8pa-chip">5-session hold</span><span class="v8pa-chip">Cohorts 0–4</span><span class="v8pa-chip">10 bps</span><span class="v8pa-chip">SPY benchmark only</span><span class="v8pa-chip" id="v8pa-start-chip">Holdout: Sep 1, 2026</span>
-      </div>`;
-
-    const pct = v => v == null || !Number.isFinite(Number(v)) ? '—' : `${Number(v) >= 0 ? '+' : ''}${(Number(v) * 100).toFixed(3)}%`;
-    const setTone = (el, v) => { el.classList.remove('positive','negative'); if (Number.isFinite(Number(v))) el.classList.add(Number(v) < 0 ? 'negative' : 'positive'); };
-    const literalDate = iso => {
-      const ymd = String(iso || '').slice(0,10);
-      const [y,m,d] = ymd.split('-').map(Number);
-      if (!y || !m || !d) return 'Sep 1, 2026';
-      return new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,d)));
-    };
-
-    function renderEmpty(startDate){
-      pnl.querySelector('#v8pa-contribution').innerHTML = `
-        <div class="v8pa-empty">
-          <div>
-            <div class="v8pa-empty-icon">V8</div>
-            <strong>FORWARD ATTRIBUTION BEGINS AFTER COMPLETED V8 COHORTS</strong>
-            <p>Holdout begins ${startDate}. Once the first 5-session cohort completes, this panel will automatically populate cohort contribution, V8 net return, SPY return, excess return, and hit-rate evidence. No development-period or V4 results are substituted here.</p>
-          </div>
-        </div>`;
+    try {
+      await loadScript('/static/js/v8_pnl_visual.js');
+      await loadScript('/static/js/v8_leaders.js');
+      await loadScript('/static/js/v8_ranking_board.js');
+    } catch (e) {
+      console.error('Unable to load one or more V8 dashboard enhancements.', e);
     }
-
-    function renderCohorts(history){
-      const exits = (history || []).filter(x => x.event_type === 'EXIT' && x.net_relative_return != null);
-      if (!exits.length) return false;
-      const groups = Array.from({length:5},(_,offset) => {
-        const rows = exits.filter(x => Number(x.cohort_offset) === offset);
-        const avg = rows.length ? rows.reduce((s,x)=>s+Number(x.net_relative_return||0),0)/rows.length : null;
-        return {offset,avg,count:rows.length};
-      });
-      const maxAbs = Math.max(.000001,...groups.filter(g=>g.avg!=null).map(g=>Math.abs(g.avg)));
-      pnl.querySelector('#v8pa-contribution').innerHTML = `<div class="v8pa-cohorts">${groups.map(g=>{
-        const width = g.avg == null ? 0 : Math.min(50, Math.abs(g.avg)/maxAbs*48);
-        const left = g.avg == null ? 50 : (g.avg >= 0 ? 50 : 50-width);
-        const bg = g.avg == null ? 'var(--muted)' : (g.avg >= 0 ? 'var(--green)' : 'var(--red)');
-        const value = g.avg == null ? '—' : pct(g.avg);
-        return `<div class="v8pa-cohort-row"><div class="v8pa-cohort-name">Cohort ${g.offset}<div class="muted" style="font-size:.62rem">${g.count} exit${g.count===1?'':'s'}</div></div><div class="v8pa-track"><span class="v8pa-zero"></span><span class="v8pa-bar" style="left:${left}%;width:${width}%;background:${bg}"></span></div><div class="v8pa-value ${g.avg!=null?(g.avg<0?'negative':'positive'):''}">${value}</div></div>`;
-      }).join('')}</div>`;
-      return true;
-    }
-
-    function updateRail(id, value, scale){
-      const el = pnl.querySelector(id);
-      if (!el) return;
-      const width = Number.isFinite(Number(value)) && scale > 0 ? Math.min(100, Math.abs(Number(value))/scale*100) : 0;
-      el.style.width = `${width}%`;
-    }
-
-    async function refreshV8Pnl(){
-      try {
-        const r = await fetch('/api/v8/holdout',{cache:'no-store'});
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const d = await r.json();
-        const startDate = literalDate(d.holdout_start_utc);
-        pnl.querySelector('#v8pa-state').textContent = String(d.state || 'UNKNOWN').replaceAll('_',' ');
-        pnl.querySelector('#v8pa-start-chip').textContent = `Holdout: ${startDate}`;
-        pnl.querySelector('#v8pa-completed').textContent = d.completed_cohorts ?? 0;
-        pnl.querySelector('#v8pa-decisions').textContent = d.decisions ?? 0;
-        pnl.querySelector('#v8pa-hit').textContent = pct(d.net_relative_hit_rate);
-
-        const curve = Array.isArray(d.curve) ? d.curve : [];
-        let v8Return = null, spyReturn = null, excess = null;
-        if (curve.length) {
-          const last = curve[curve.length-1];
-          v8Return = Number(last.strategy_normalized)/100000 - 1;
-          spyReturn = Number(last.spy_normalized)/100000 - 1;
-          excess = v8Return - spyReturn;
-        }
-
-        const ids = [
-          ['#v8pa-v8-return',v8Return],['#v8pa-spy-return',spyReturn],['#v8pa-excess',excess],
-          ['#v8pa-compare-v8',v8Return],['#v8pa-compare-spy',spyReturn],['#v8pa-compare-excess',excess]
-        ];
-        ids.forEach(([sel,val])=>{const el=pnl.querySelector(sel);el.textContent=pct(val);setTone(el,val);});
-
-        const scale = Math.max(.000001, ...[v8Return,spyReturn,excess].filter(v=>Number.isFinite(Number(v))).map(v=>Math.abs(Number(v))));
-        updateRail('#v8pa-rail-v8',v8Return,scale);
-        updateRail('#v8pa-rail-spy',spyReturn,scale);
-        updateRail('#v8pa-rail-excess',excess,scale);
-
-        if (!renderCohorts(d.event_history)) renderEmpty(startDate);
-      } catch (e) {
-        pnl.querySelector('#v8pa-state').textContent = 'DATA UNAVAILABLE';
-        renderEmpty('Sep 1, 2026');
-        console.error('V8 P&L attribution failed:', e);
-      }
-    }
-
-    refreshV8Pnl();
-    setInterval(refreshV8Pnl,15000);
   };
   core.onerror = () => console.error('Unable to load V8 dashboard core.');
   document.head.appendChild(core);
-})();
-
-/* Replace the legacy V5 LEADERS section with frozen V8 Top-10 leaders and move it directly above the V8 help section. */
-(() => {
-  const dashboard = document.querySelector('.v4-dashboard');
-  const help = dashboard?.querySelector('.v4-help');
-  if (!dashboard || !help) return;
-
-  const leaders = Array.from(document.querySelectorAll('section.card')).find(section =>
-    section.querySelector(':scope > .label')?.textContent?.trim() === 'V5 LEADERS'
-  );
-  if (!leaders) return;
-
-  const style = document.createElement('style');
-  style.id = 'v8-leaders-style';
-  style.textContent = `
-    #v8-leaders{margin-top:20px;overflow:hidden}
-    #v8-leaders .v8l-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap}
-    #v8-leaders .v8l-state{padding:7px 10px;border:1px solid rgba(239,197,107,.28);border-radius:999px;background:rgba(239,197,107,.07);color:var(--gold);font-size:.68rem;font-weight:900;letter-spacing:.04em}
-    #v8-leaders .v8l-note{margin-top:5px;color:var(--muted);font-size:.78rem;line-height:1.5}
-    #v8-leaders .v8l-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
-    #v8-leaders .v8l-row{display:grid;grid-template-columns:46px minmax(0,1fr) 120px 90px;gap:12px;align-items:center;padding:12px 14px;border:1px solid rgba(120,155,205,.15);border-radius:14px;background:rgba(8,20,36,.5);transition:transform .15s ease,border-color .15s ease,background .15s ease}
-    #v8-leaders .v8l-row:hover{transform:translateY(-1px);border-color:rgba(239,197,107,.42);background:rgba(239,197,107,.055)}
-    #v8-leaders .v8l-rank{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:rgba(239,197,107,.14);color:var(--gold);font-weight:950}
-    #v8-leaders .v8l-symbol{font-size:1rem;font-weight:950}
-    #v8-leaders .v8l-score{color:var(--muted);font-size:.7rem;margin-top:3px}
-    #v8-leaders .v8l-bar{height:8px;border-radius:999px;background:rgba(120,155,205,.11);overflow:hidden;margin-top:7px}
-    #v8-leaders .v8l-bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--gold),var(--cyan))}
-    #v8-leaders .v8l-signal{text-align:right}.v8l-signal span{display:block;color:var(--muted);font-size:.62rem;font-weight:900;letter-spacing:.06em}.v8l-signal strong{display:block;margin-top:3px;font-size:.86rem}
-    #v8-leaders .v8l-weight{text-align:right;color:var(--green);font-size:.78rem;font-weight:900}
-    #v8-leaders .v8l-footer{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid rgba(120,155,205,.14)}
-    #v8-leaders .v8l-chip{padding:6px 9px;border-radius:999px;border:1px solid rgba(120,155,205,.16);background:rgba(8,20,36,.45);color:#dfe8f6;font-size:.68rem;font-weight:850}
-    @media(max-width:1000px){#v8-leaders .v8l-grid{grid-template-columns:1fr}}
-    @media(max-width:650px){#v8-leaders .v8l-row{grid-template-columns:42px minmax(0,1fr) 80px}.v8l-weight{display:none}}
-  `;
-  document.getElementById(style.id)?.remove();
-  document.head.appendChild(style);
-
-  leaders.id = 'v8-leaders';
-  leaders.innerHTML = `
-    <div class="v8l-head">
-      <div>
-        <div class="label">V8 LEADERS</div>
-        <h2>Top 10 Frozen DISTANCE_ONLY Rankings</h2>
-        <div class="v8l-note" id="v8l-note">Loading the latest eligible frozen-model snapshot…</div>
-      </div>
-      <div class="v8l-state" id="v8l-state">LOADING</div>
-    </div>
-    <div class="v8l-grid" id="v8l-grid"></div>
-    <div class="v8l-footer"><span class="v8l-chip">Top 10</span><span class="v8l-chip">10% target each</span><span class="v8l-chip">DISTANCE_ONLY</span><span class="v8l-chip">SPY benchmark only</span><span class="v8l-chip">Development snapshot — not holdout evidence</span></div>`;
-
-  help.insertAdjacentElement('beforebegin', leaders);
-
-  const grid = leaders.querySelector('#v8l-grid');
-  const state = leaders.querySelector('#v8l-state');
-  const note = leaders.querySelector('#v8l-note');
-
-  async function load(){
-    try {
-      const r = await fetch('/api/v8/holdout',{cache:'no-store'});
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      const rows = Array.isArray(d.latest_research_top10) ? d.latest_research_top10.slice(0,10) : [];
-      state.textContent = String(d.state || 'FROZEN').replaceAll('_',' ');
-      const ts = d.latest_research_top10_timestamp_utc ? new Date(d.latest_research_top10_timestamp_utc) : null;
-      note.textContent = ts && !Number.isNaN(ts.getTime())
-        ? `Latest eligible frozen V8 development snapshot: ${ts.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'})}. Scores are ranking signals, not calibrated probabilities.`
-        : 'Latest eligible frozen V8 development snapshot. Scores are ranking signals, not calibrated probabilities.';
-
-      const finiteScores = rows.map(x=>Number(x.score)).filter(Number.isFinite);
-      const lo = finiteScores.length ? Math.min(...finiteScores) : 0;
-      const hi = finiteScores.length ? Math.max(...finiteScores) : 1;
-      const span = Math.max(1e-9,hi-lo);
-      grid.innerHTML = rows.length ? rows.map(row=>{
-        const score = Number(row.score);
-        const width = Number.isFinite(score) ? 20 + 80*((score-lo)/span) : 0;
-        return `<div class="v8l-row">
-          <div class="v8l-rank">#${row.rank}</div>
-          <div><div class="v8l-symbol">${row.symbol}</div><div class="v8l-score">DISTANCE_ONLY score ${Number.isFinite(score)?score.toFixed(4):'—'}</div><div class="v8l-bar"><span style="width:${Math.max(0,Math.min(100,width))}%"></span></div></div>
-          <div class="v8l-signal"><span>RANK SIGNAL</span><strong>${Number.isFinite(score)?score.toFixed(4):'—'}</strong></div>
-          <div class="v8l-weight">10% target</div>
-        </div>`;
-      }).join('') : '<div class="muted">V8 Top-10 ranking snapshot is unavailable.</div>';
-    } catch (e) {
-      state.textContent = 'DATA UNAVAILABLE';
-      note.textContent = 'Unable to load the frozen V8 ranking snapshot.';
-      grid.innerHTML = '<div class="muted">V8 leaders are temporarily unavailable.</div>';
-      console.error('V8 leaders failed:',e);
-    }
-  }
-
-  load();
-  setInterval(load,30000);
 })();
