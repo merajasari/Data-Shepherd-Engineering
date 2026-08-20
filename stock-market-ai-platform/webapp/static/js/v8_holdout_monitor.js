@@ -36,3 +36,141 @@
   }
   refresh(); setInterval(refresh,15000);
 })();
+
+/* Additive V4 portfolio-equity chart. This intentionally leaves the existing model-comparison panel untouched. */
+(() => {
+  const metrics = document.querySelector('.v4-dashboard .v4-small-metrics');
+  if (!metrics || document.getElementById('v4-compact-equity-card')) return;
+
+  const style = document.createElement('style');
+  style.id = 'v4-compact-equity-style';
+  style.textContent = `
+    .v4-compact-equity{margin-top:20px;padding:18px 16px 16px;border:1px solid var(--border);border-radius:18px;background:rgba(8,20,36,.72);box-shadow:0 14px 34px rgba(0,0,0,.18);min-width:0}
+    .v4-compact-equity-title{color:var(--cyan);font-size:.72rem;font-weight:950;letter-spacing:.15em;text-transform:uppercase}
+    .v4-compact-equity-sub{margin-top:6px;color:var(--muted);font-size:.78rem;line-height:1.4}
+    .v4-compact-equity-legend{display:flex;align-items:center;gap:8px;margin-top:12px;color:#dfe8f6;font-size:.76rem;font-weight:800}
+    .v4-compact-equity-dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 12px rgba(57,227,161,.28)}
+    .v4-compact-equity-wrap{position:relative;height:340px;margin-top:8px}
+    .v4-compact-equity-wrap svg{width:100%;height:100%;display:block;overflow:visible;cursor:crosshair}
+    .v4-compact-equity-tooltip{position:absolute;display:none;pointer-events:none;z-index:20;min-width:180px;padding:11px 12px;border:1px solid #2a5277;border-radius:12px;background:rgba(7,21,39,.97);box-shadow:0 16px 36px rgba(0,0,0,.38);font-size:.75rem;line-height:1.45;color:#f2f6ff}
+    .v4-compact-equity-tooltip strong{display:block;margin-bottom:5px;font-size:.8rem}.v4-compact-equity-tooltip-row{display:flex;justify-content:space-between;gap:16px}.v4-compact-equity-tooltip-name{display:flex;align-items:center;gap:7px}.v4-compact-equity-tooltip-value{font-weight:900}
+    .v4-compact-equity-summary{display:grid;grid-template-columns:1fr;gap:9px;border-top:1px solid rgba(120,155,205,.16);padding-top:13px;margin-top:8px}
+    .v4-compact-equity-summary-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.v4-compact-equity-summary-row span{color:var(--muted);font-size:.66rem;font-weight:900;letter-spacing:.08em}.v4-compact-equity-summary-row strong{font-size:.9rem;text-align:right}
+    @media(max-width:1000px){.v4-compact-equity-wrap{height:320px}}
+  `;
+  document.head.appendChild(style);
+
+  const card = document.createElement('div');
+  card.id = 'v4-compact-equity-card';
+  card.className = 'v4-compact-equity';
+  card.innerHTML = `
+    <div class="v4-compact-equity-title">PORTFOLIO EQUITY OVER TIME</div>
+    <div class="v4-compact-equity-sub">Recorded V4 journal equity plus the current read-only mark-to-market point.</div>
+    <div class="v4-compact-equity-legend"><span class="v4-compact-equity-dot"></span><span>V4 Paper Portfolio</span></div>
+    <div class="v4-compact-equity-wrap">
+      <svg id="v4-compact-equity-chart" viewBox="0 0 420 340" preserveAspectRatio="none" aria-label="V4 portfolio equity over time"></svg>
+      <div id="v4-compact-equity-tooltip" class="v4-compact-equity-tooltip"></div>
+    </div>
+    <div class="v4-compact-equity-summary">
+      <div class="v4-compact-equity-summary-row"><span>STARTING EQUITY</span><strong id="v4-compact-start">—</strong></div>
+      <div class="v4-compact-equity-summary-row"><span>CURRENT EQUITY</span><strong id="v4-compact-current">—</strong></div>
+      <div class="v4-compact-equity-summary-row"><span>NET CHANGE</span><strong id="v4-compact-change">—</strong></div>
+    </div>`;
+  metrics.insertAdjacentElement('afterend', card);
+
+  const svg = card.querySelector('#v4-compact-equity-chart');
+  const tooltip = card.querySelector('#v4-compact-equity-tooltip');
+  const ns = 'http://www.w3.org/2000/svg';
+  const money = v => '$' + Number(v || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const signedMoney = v => (Number(v)>=0?'+':'-') + '$' + Math.abs(Number(v||0)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const signedPct = v => (Number(v)>=0?'+':'') + (Number(v||0)*100).toFixed(2) + '%';
+  const make = (tag,attrs={}) => { const n=document.createElementNS(ns,tag); Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v))); svg.appendChild(n); return n; };
+
+  function render(history, startingEquity) {
+    svg.innerHTML = '';
+    tooltip.style.display = 'none';
+    if (!history || history.length < 2) {
+      const t=make('text',{x:210,y:170,'text-anchor':'middle',fill:'#91a6c2','font-size':12});
+      t.textContent='More observations are needed.';
+      return;
+    }
+
+    const W=420,H=340,p={l:62,r:18,t:22,b:42};
+    const rows=history.map(r=>({...r,equity:Number(r.equity)})).filter(r=>Number.isFinite(r.equity));
+    const values=rows.map(r=>r.equity);
+    let min=Math.min(...values,startingEquity),max=Math.max(...values,startingEquity);
+    const span=Math.max(max-min,Math.max(100,startingEquity*.002));
+    min-=span*.18; max+=span*.18;
+    const x=i=>p.l+(W-p.l-p.r)*(i/Math.max(1,rows.length-1));
+    const y=v=>p.t+(H-p.t-p.b)*(1-(v-min)/Math.max(.000001,max-min));
+
+    for(let i=0;i<5;i++){
+      const val=min+(max-min)*i/4, yy=y(val);
+      make('line',{x1:p.l,y1:yy,x2:W-p.r,y2:yy,stroke:'rgba(145,166,194,.15)','stroke-width':1});
+      const t=make('text',{x:p.l-8,y:yy+4,'text-anchor':'end',fill:'#91a6c2','font-size':10});
+      t.textContent='$'+Math.round(val).toLocaleString();
+    }
+
+    const baselineY=y(startingEquity);
+    make('line',{x1:p.l,y1:baselineY,x2:W-p.r,y2:baselineY,stroke:'#91a6c2','stroke-width':1.2,'stroke-dasharray':'5 5',opacity:.75});
+
+    const pts=rows.map((r,i)=>[x(i),y(r.equity)]);
+    make('polyline',{points:pts.map(q=>q.join(',')).join(' '),fill:'none',stroke:'#39e3a1','stroke-width':3,'stroke-linecap':'round','stroke-linejoin':'round'});
+
+    const guide=make('line',{y1:p.t,y2:H-p.b,stroke:'#dfe8f6','stroke-width':1,'stroke-dasharray':'4 4',opacity:.45,visibility:'hidden'});
+    const marker=make('circle',{r:5.5,fill:'#39e3a1',stroke:'#07101f','stroke-width':2,visibility:'hidden'});
+    const overlay=make('rect',{x:p.l,y:p.t,width:W-p.l-p.r,height:H-p.t-p.b,fill:'rgba(0,0,0,.001)','pointer-events':'all'});
+
+    const labels=[0,Math.floor((rows.length-1)/2),rows.length-1];
+    labels.forEach((idx,pos)=>{
+      const row=rows[idx], t=make('text',{x:x(idx),y:H-16,'text-anchor':pos===0?'start':pos===2?'end':'middle',fill:'#91a6c2','font-size':9.5});
+      t.textContent=row.label || (row.timestamp ? new Date(row.timestamp).toLocaleDateString(undefined,{month:'numeric',day:'numeric'}) : (pos===0?'Start':pos===2?'Current':''));
+    });
+
+    function inspect(e){
+      const rect=svg.getBoundingClientRect();
+      const mx=(e.clientX-rect.left)/rect.width*W;
+      const raw=(mx-p.l)/(W-p.l-p.r)*Math.max(1,rows.length-1);
+      const idx=Math.max(0,Math.min(rows.length-1,Math.round(raw)));
+      const row=rows[idx], xx=x(idx), yy=y(row.equity);
+      guide.setAttribute('x1',xx); guide.setAttribute('x2',xx); guide.setAttribute('visibility','visible');
+      marker.setAttribute('cx',xx); marker.setAttribute('cy',yy); marker.setAttribute('visibility','visible');
+      const when=row.label || (row.timestamp ? new Date(row.timestamp).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : 'Portfolio observation');
+      tooltip.innerHTML=`<strong>${when}</strong><div class="v4-compact-equity-tooltip-row"><span class="v4-compact-equity-tooltip-name"><span class="v4-compact-equity-dot"></span>V4</span><span class="v4-compact-equity-tooltip-value">${money(row.equity)}</span></div>`;
+      tooltip.style.display='block';
+      const host=card.querySelector('.v4-compact-equity-wrap').getBoundingClientRect();
+      tooltip.style.left=Math.min(e.clientX-host.left+10,host.width-195)+'px';
+      tooltip.style.top=Math.max(6,e.clientY-host.top-58)+'px';
+    }
+    overlay.addEventListener('pointermove',inspect);
+    overlay.addEventListener('pointerleave',()=>{tooltip.style.display='none';guide.setAttribute('visibility','hidden');marker.setAttribute('visibility','hidden');});
+  }
+
+  async function load(){
+    try{
+      const r=await fetch('/api/v4-forward',{cache:'no-store'}); if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const d=await r.json(), f=d.forward||{}, p=d.portfolio||{};
+      const start=Number(p.starting_cash||f.starting_equity||100000);
+      const current=Number(p.equity||f.ending_equity||start);
+      const gain=current-start, gainPct=start?gain/start:0;
+      let history=Array.isArray(f.equity_history)?f.equity_history.slice():[];
+      history=history.filter(row=>Number.isFinite(Number(row.equity)));
+      if(!history.length || Math.abs(Number(history[0].equity)-start)>.0001) history.unshift({label:'Start',equity:start});
+      else history[0]={...history[0],label:history[0].label||'Start'};
+      if(!history.length || Math.abs(Number(history.at(-1).equity)-current)>.0001) history.push({label:'Current',equity:current,timestamp:new Date().toISOString()});
+      else history[history.length-1]={...history.at(-1),label:'Current'};
+      card.querySelector('#v4-compact-start').textContent=money(start);
+      card.querySelector('#v4-compact-current').textContent=money(current);
+      const change=card.querySelector('#v4-compact-change');
+      change.textContent=`${signedMoney(gain)} (${signedPct(gainPct)})`;
+      change.className=gain<0?'negative':'positive';
+      render(history,start);
+    }catch(e){
+      console.error('Compact V4 equity chart failed:',e);
+      svg.innerHTML=''; const t=make('text',{x:210,y:170,'text-anchor':'middle',fill:'#91a6c2','font-size':12}); t.textContent='Portfolio equity history unavailable.';
+    }
+  }
+
+  load();
+  setInterval(load,30000);
+})();
