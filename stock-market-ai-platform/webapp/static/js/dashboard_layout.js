@@ -11,12 +11,37 @@
     return false;
   };
 
+  // Keep the V8 selected-stock rank signal directly below the compact
+  // PORTFOLIO EQUITY OVER TIME — LATEST MODEL card on Model Research.
+  const moveV8RankSignal = () => {
+    const latestModelEquity = document.getElementById('v8-compact-equity-card');
+    if (!latestModelEquity) return false;
+
+    const signal = Array.from(document.querySelectorAll('.card')).find(node => {
+      const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
+      return label === 'V8 5-DAY RELATIVE-RANK SIGNAL' || label === 'V5 5-DAY RELATIVE-RANK SIGNAL';
+    });
+    if (!signal) return false;
+
+    if (latestModelEquity.nextElementSibling !== signal) {
+      latestModelEquity.insertAdjacentElement('afterend', signal);
+    }
+    signal.style.marginTop = '20px';
+    return true;
+  };
+
   removeCompactV4Equity();
-  const compactObserver = new MutationObserver(() => {
+  moveV8RankSignal();
+
+  // Both compact equity cards and the V8 replacement signal are injected by
+  // other dashboard scripts, so watch briefly for their final DOM state and
+  // enforce only these two layout rules.
+  const layoutObserver = new MutationObserver(() => {
     removeCompactV4Equity();
+    moveV8RankSignal();
   });
-  compactObserver.observe(document.documentElement, { childList: true, subtree: true });
-  window.setTimeout(() => compactObserver.disconnect(), 10000);
+  layoutObserver.observe(document.documentElement, { childList: true, subtree: true });
+  window.setTimeout(() => layoutObserver.disconnect(), 12000);
 
   const sections = Array.from(document.querySelectorAll('section.card'));
 
