@@ -111,3 +111,12 @@
   loadHoldoutInteraction();
   setInterval(loadHoldoutInteraction,30000);
 })();
+
+/* Remove superseded V5 dashboard blocks without touching the underlying data or model artifacts. */
+(() => {
+  document.getElementById('v5-shadow-comparison')?.remove();
+  document.querySelectorAll('section.card').forEach(section => {
+    const label = section.querySelector(':scope > .label');
+    if (label?.textContent.trim() === 'V5 FROZEN MODEL') section.remove();
+  });
+})();
