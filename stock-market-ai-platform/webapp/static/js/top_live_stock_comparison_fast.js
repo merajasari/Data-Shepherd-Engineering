@@ -27,7 +27,7 @@
   let todayLoading=false;
   let todayLoadedAt=0;
   let quotes={};
-  let range='90D',mode='growth',zoom=1,pan=1,active=new Set(),geo=null;
+  let range='90D',mode='growth',zoom=1,pan=1,hidden=new Set(),geo=null;
   const days={ALL:99999,'5Y':1827,'3Y':1096,'1Y':366,'90D':90,'30D':30,'2W':14,'1W':7,'2D':2};
   const E=(tag,attrs={})=>{const el=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))el.setAttribute(k,v);svg.appendChild(el);return el;};
 
@@ -84,11 +84,10 @@
   function render(){
     svg.innerHTML='';tip.style.display='none';
     const rank=ranking();
-    rank.forEach(x=>active.add(x.symbol));
     card.querySelectorAll('[data-r]').forEach(b=>b.classList.toggle('on',b.dataset.r===range));
     card.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
-    legend.innerHTML='<b class="muted">LINES</b>'+rank.map((x,i)=>`<button data-s="${x.symbol}" class="${active.has(x.symbol)?'':'off'}"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[i]};margin-right:5px"></i>${i+1}. ${x.symbol} ${x.ret>=0?'+':''}${(x.ret*100).toFixed(2)}%</button>`).join('');
-    const shown=rank.filter(x=>active.has(x.symbol));
+    legend.innerHTML='<b class="muted">LINES</b>'+rank.map((x,i)=>`<button data-s="${x.symbol}" class="${hidden.has(x.symbol)?'off':''}"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[i]};margin-right:5px"></i>${i+1}. ${x.symbol} ${x.ret>=0?'+':''}${(x.ret*100).toFixed(2)}%</button>`).join('');
+    const shown=rank.filter(x=>!hidden.has(x.symbol));
     if(!shown.length){
       const t=E('text',{x:500,y:195,'text-anchor':'middle',fill:'#91a6c2'});
       if(range==='TODAY')t.textContent=todayLoading?'Loading market session…':'No intraday bars are available since market open.';
@@ -183,7 +182,7 @@
       range=b.dataset.r;zoom=1;pan=1;
       if(range==='TODAY'){loadToday();return;}
     }else if(b.dataset.m)mode=b.dataset.m;
-    else if(b.dataset.s){active.has(b.dataset.s)?active.delete(b.dataset.s):active.add(b.dataset.s);}
+    else if(b.dataset.s){hidden.has(b.dataset.s)?hidden.delete(b.dataset.s):hidden.add(b.dataset.s);}
     else if(b.dataset.a){
       if(b.dataset.a==='in')zoom=Math.min(8,zoom*1.5);
       if(b.dataset.a==='out')zoom=Math.max(1,zoom/1.5);
