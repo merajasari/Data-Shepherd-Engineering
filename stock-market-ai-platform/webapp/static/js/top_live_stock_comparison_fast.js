@@ -7,7 +7,7 @@
   const card=document.createElement('div');
   card.id='ds-top-live-comparison';
   card.className='card ds-live-stock-keep';
-  card.innerHTML=`<div class="tlh"><div><div class="label">TOP LIVE STOCK COMPARISON</div><h2>Top 10 Performing Stocks</h2><div class="muted">Historical performance + current live IEX mark.</div></div><div id="tls" class="mode">LOADING</div></div><div class="tlt"><b class="muted">RANGE</b>${['ALL','5Y','3Y','1Y','90D','30D','2W','1W','TODAY'].map(x=>`<button data-r="${x}" class="${x==='90D'?'on':''}">${x}</button>`).join('')}<b class="muted">VIEW</b><button data-m="growth" class="on">NORMALIZED GROWTH</button><button data-m="price">PRICE USD</button></div><div id="tll" class="tlt"><b class="muted">LINES</b></div><div class="tlt"><button data-a="left">◀ EARLIER</button><button data-a="out">− ZOOM OUT</button><span id="tlz" class="muted">FULL RANGE</span><button data-a="in">+ ZOOM IN</button><button data-a="right">LATER ▶</button><button data-a="reset">RESET VIEW</button></div><div class="tlw"><svg id="tlc" viewBox="0 0 1000 390" preserveAspectRatio="none"></svg><div id="tip" class="tli"></div></div><div id="tl-note" class="muted" style="font-size:.72rem;margin-top:8px">One local bulk history request; live prices update separately without blocking the page.</div>`;
+  card.innerHTML=`<div class="tlh"><div><div class="label">TOP LIVE STOCK COMPARISON</div><h2>Top 10 Performing Stocks</h2><div class="muted">Historical performance + current live IEX mark.</div></div><div id="tls" class="mode">LOADING</div></div><div class="tlt"><b class="muted">RANGE</b>${['ALL','5Y','3Y','1Y','90D','30D','2W','1W','2D','TODAY'].map(x=>`<button data-r="${x}" class="${x==='90D'?'on':''}">${x}</button>`).join('')}<b class="muted">VIEW</b><button data-m="growth" class="on">NORMALIZED GROWTH</button><button data-m="price">PRICE USD</button></div><div id="tll" class="tlt"><b class="muted">LINES</b></div><div class="tlt"><button data-a="left">◀ EARLIER</button><button data-a="out">− ZOOM OUT</button><span id="tlz" class="muted">FULL RANGE</span><button data-a="in">+ ZOOM IN</button><button data-a="right">LATER ▶</button><button data-a="reset">RESET VIEW</button></div><div class="tlw"><svg id="tlc" viewBox="0 0 1000 390" preserveAspectRatio="none"></svg><div id="tip" class="tli"></div></div><div id="tl-note" class="muted" style="font-size:.72rem;margin-top:8px">One local bulk history request; live prices update separately without blocking the page.</div>`;
   market.insertAdjacentElement('afterend',card);
 
   const style=document.createElement('style');
@@ -28,8 +28,23 @@
   let todayLoadedAt=0;
   let quotes={};
   let range='90D',mode='growth',zoom=1,pan=1,active=new Set(),geo=null;
-  const days={ALL:99999,'5Y':1827,'3Y':1096,'1Y':366,'90D':90,'30D':30,'2W':14,'1W':7};
+  const days={ALL:99999,'5Y':1827,'3Y':1096,'1Y':366,'90D':90,'30D':30,'2W':14,'1W':7,'2D':2};
   const E=(tag,attrs={})=>{const el=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))el.setAttribute(k,v);svg.appendChild(el);return el;};
+
+  function easternParts(ms){
+    const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(ms));
+    const out={};for(const p of parts)if(p.type!=='literal')out[p.type]=Number(p.value);
+    return out;
+  }
+
+  function marketOpenMs(nowMs=Date.now()){
+    const nowParts=easternParts(nowMs);
+    let guess=Date.UTC(nowParts.year,nowParts.month-1,nowParts.day,9,30,0);
+    const gp=easternParts(guess);
+    const represented=Date.UTC(gp.year,gp.month-1,gp.day,gp.hour,gp.minute,gp.second);
+    const offset=represented-guess;
+    return Date.UTC(nowParts.year,nowParts.month-1,nowParts.day,9,30,0)-offset;
+  }
 
   function historicalCut(rows){
     const end=rows.at(-1)?.t||0;
@@ -45,7 +60,8 @@
 
   function rowsFor(symbol,rows){
     const source=range==='TODAY'?(todayData.get(symbol)||[]):rows;
-    let out=range==='TODAY'?[...source]:historicalCut(rows);
+    const now=Date.now();
+    let out=range==='TODAY'?[...source].filter(x=>x.t>=marketOpenMs(now)&&x.t<=now):historicalCut(rows);
     const live=Number(quotes[symbol]?.reference_price);
     if(out.length&&Number.isFinite(live)){
       const liveTs=Date.parse(quotes[symbol]?.timestamp||'')||Date.now();
@@ -75,10 +91,10 @@
     const shown=rank.filter(x=>active.has(x.symbol));
     if(!shown.length){
       const t=E('text',{x:500,y:195,'text-anchor':'middle',fill:'#91a6c2'});
-      if(range==='TODAY')t.textContent=todayLoading?'Loading last 24 hours…':'No 24-hour intraday bars are available.';
+      if(range==='TODAY')t.textContent=todayLoading?'Loading market session…':'No intraday bars are available since market open.';
       else t.textContent='Loading history…';
       geo=null;
-      stamp.textContent=range==='TODAY'?(todayLoading?'24H · LOADING':'24H'):'LOADING';
+      stamp.textContent=range==='TODAY'?(todayLoading?'TODAY · LOADING':'TODAY'):'LOADING';
       return;
     }
 
@@ -88,9 +104,9 @@
     if(mode==='growth'){mn=Math.min(0,mn);mx=Math.max(0,mx);}
     const sp=Math.max(mx-mn,mode==='growth'?.002:1);mn-=sp*.1;mx+=sp*.1;
     const ts=shown.flatMap(x=>x.rows.map(q=>q.t));
-    const axisNow=Date.now();
-    const t0=range==='TODAY'?axisNow-24*60*60*1000:Math.min(...ts);
-    const t1=range==='TODAY'?axisNow:Math.max(...ts);
+    const now=Date.now();
+    const t0=range==='TODAY'?marketOpenMs(now):Math.min(...ts);
+    const t1=range==='TODAY'?now:Math.max(...ts);
     const td=Math.max(1,t1-t0);
     const X=t=>p.l+(W-p.l-p.r)*(t-t0)/td;
     const Y=v=>p.t+(H-p.t-p.b)*(1-(v-mn)/(mx-mn));
@@ -110,15 +126,15 @@
 
     [t0,t0+td/2,t1].forEach((t,i)=>{
       const label=E('text',{x:X(t),y:H-15,'text-anchor':i===0?'start':i===2?'end':'middle',fill:'#91a6c2','font-size':'11'});
-      label.textContent=range==='TODAY'?new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'});
+      label.textContent=range==='TODAY'?new Date(t).toLocaleString(undefined,{hour:'numeric',minute:'2-digit'}):new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'});
     });
 
     E('line',{id:'cross',y1:p.t,y2:H-p.b,stroke:'#f2f6ff','stroke-dasharray':'5 4',visibility:'hidden'});
     E('circle',{id:'dot',r:5.5,fill:'#fff',stroke:'#07101f','stroke-width':2,visibility:'hidden'});
     geo={W,H,p,t0,td,X,Y,shown,rank};
-    stamp.textContent=`${range==='TODAY'?'24H':range} · LIVE`;
+    stamp.textContent=`${range==='TODAY'?'TODAY':range} · LIVE`;
     card.querySelector('#tlz').textContent=zoom===1?'FULL RANGE':`${zoom.toFixed(1)}× ZOOM`;
-    note.textContent=range==='TODAY'?'TODAY = fixed rolling 24-hour clock window. Actual IEX observations are plotted only where trading data exists; overnight gaps remain blank.':'One local bulk history request; live prices update separately without blocking the page.';
+    note.textContent=range==='TODAY'?'TODAY = current U.S. market session from the 9:30 AM ET open through the latest live IEX mark.':'One local bulk history request; live prices update separately without blocking the page.';
   }
 
   svg.addEventListener('pointermove',e=>{
@@ -157,7 +173,7 @@
       const payload=await response.json();
       todayData=new Map(Object.entries(payload.series||{}).map(([symbol,rows])=>[symbol,rows.map(x=>({t:Date.parse(x.t),price:Number(x.price)})).filter(x=>Number.isFinite(x.t)&&Number.isFinite(x.price)).sort((a,b)=>a.t-b.t)]));
       todayLoadedAt=Date.now();
-    }catch(err){console.warn('[24H INTRADAY]',err);}
+    }catch(err){console.warn('[TODAY INTRADAY]',err);}
     finally{todayLoading=false;render();}
   }
 
