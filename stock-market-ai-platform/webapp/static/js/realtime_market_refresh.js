@@ -53,6 +53,7 @@
 
   function calcTechnicals(rows, livePrice) {
     const ordered = rows.slice().sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const latestCompleted = ordered[ordered.length-1] || {};
     const closes = ordered.map(r => Number(r.close)).filter(Number.isFinite);
     if (Number.isFinite(Number(livePrice))) closes.push(Number(livePrice));
     if (!closes.length) return null;
@@ -62,19 +63,19 @@
     const returns=[];
     for(let i=1;i<closes.length;i++) returns.push(closes[i-1] ? closes[i]/closes[i-1]-1 : 0);
     const volTail=returns.slice(-20);
-    const vol = volTail.length > 1 ? Math.sqrt(volTail.reduce((s,v)=>s+Math.pow(v-(volTail.reduce((a,b)=>a+b,0)/volTail.length),2),0)/(volTail.length-1)) : null;
+    const volMean=volTail.length?volTail.reduce((a,b)=>a+b,0)/volTail.length:0;
+    const vol = volTail.length > 1 ? Math.sqrt(volTail.reduce((s,v)=>s+Math.pow(v-volMean,2),0)/(volTail.length-1)) : null;
     const diffs=[];
     for(let i=1;i<closes.length;i++) diffs.push(closes[i]-closes[i-1]);
     const d14=diffs.slice(-14);
     const avgGain=d14.length ? d14.reduce((s,v)=>s+Math.max(v,0),0)/d14.length : 0;
     const avgLoss=d14.length ? d14.reduce((s,v)=>s+Math.max(-v,0),0)/d14.length : 0;
     const rsi = d14.length < 14 ? null : avgLoss === 0 ? 100 : 100-(100/(1+avgGain/avgLoss));
-    const latestCompleted=ordered[ordered.length-1] || {};
     return {
       rsi_14:rsi,
       sma_20:meanTail(20),
       sma_50:meanTail(50),
-      sma_200:meanTail(200),
+      sma_200:Number(latestCompleted.sma_200),
       volatility_20d:vol,
       volume_ratio:Number(latestCompleted.volume_ratio),
     };
@@ -98,7 +99,7 @@
     });
     let note=section.querySelector('.ds-live-tech-note');
     if(!note){note=document.createElement('div');note.className='ds-live-tech-note muted';note.style.cssText='grid-column:1/-1;font-size:.75rem;margin-top:-6px';section.appendChild(note);}
-    note.textContent=hasLive?'LIVE / PROVISIONAL · RSI, SMAs and volatility include the current IEX reference price. Volume Ratio uses the latest completed session.':'COMPLETED SESSION · Waiting for a current IEX quote.';
+    note.textContent=hasLive?'LIVE / PROVISIONAL · RSI, SMA20, SMA50 and 20D volatility include the current IEX reference price. SMA200 and Volume Ratio remain latest-completed-session values because the live reference feed does not carry enough history/volume to update them honestly.':'COMPLETED SESSION · Waiting for a current IEX quote.';
   }
 
   function renderMarket(symbol, quote) {
