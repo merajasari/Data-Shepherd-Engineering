@@ -75,10 +75,10 @@
     const shown=rank.filter(x=>active.has(x.symbol));
     if(!shown.length){
       const t=E('text',{x:500,y:195,'text-anchor':'middle',fill:'#91a6c2'});
-      if(range==='TODAY')t.textContent=todayLoading?'Loading today’s market session…':'No intraday bars are available yet for today.';
+      if(range==='TODAY')t.textContent=todayLoading?'Loading last 24 hours…':'No 24-hour intraday bars are available.';
       else t.textContent='Loading history…';
       geo=null;
-      stamp.textContent=range==='TODAY'?(todayLoading?'TODAY · LOADING':'TODAY'):'LOADING';
+      stamp.textContent=range==='TODAY'?(todayLoading?'24H · LOADING':'24H'):'LOADING';
       return;
     }
 
@@ -107,15 +107,15 @@
 
     [t0,t0+td/2,t1].forEach((t,i)=>{
       const label=E('text',{x:X(t),y:H-15,'text-anchor':i===0?'start':i===2?'end':'middle',fill:'#91a6c2','font-size':'11'});
-      label.textContent=range==='TODAY'?new Date(t).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'});
+      label.textContent=range==='TODAY'?new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'});
     });
 
     E('line',{id:'cross',y1:p.t,y2:H-p.b,stroke:'#f2f6ff','stroke-dasharray':'5 4',visibility:'hidden'});
     E('circle',{id:'dot',r:5.5,fill:'#fff',stroke:'#07101f','stroke-width':2,visibility:'hidden'});
     geo={W,H,p,t0,td,X,Y,shown,rank};
-    stamp.textContent=`${range} · LIVE`;
+    stamp.textContent=`${range==='TODAY'?'24H':range} · LIVE`;
     card.querySelector('#tlz').textContent=zoom===1?'FULL RANGE':`${zoom.toFixed(1)}× ZOOM`;
-    note.textContent=range==='TODAY'?'TODAY = regular U.S. market session from the first available 5-minute intraday bar through the current live IEX mark.':'One local bulk history request; live prices update separately without blocking the page.';
+    note.textContent=range==='TODAY'?'TODAY = rolling last 24 hours of 5-minute intraday history, including available extended-hours data, with the latest live IEX mark appended.':'One local bulk history request; live prices update separately without blocking the page.';
   }
 
   svg.addEventListener('pointermove',e=>{
@@ -149,12 +149,12 @@
     if(!force&&todayData.size&&Date.now()-todayLoadedAt<60000){render();return;}
     todayLoading=true;render();
     try{
-      const response=await fetch(`/api/local-history-bulk?limit=-10&t=${Date.now()}`,{cache:'no-store'});
+      const response=await fetch(`/api/intraday-24h-top10?t=${Date.now()}`,{cache:'no-store'});
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       const payload=await response.json();
       todayData=new Map(Object.entries(payload.series||{}).map(([symbol,rows])=>[symbol,rows.map(x=>({t:Date.parse(x.t),price:Number(x.price)})).filter(x=>Number.isFinite(x.t)&&Number.isFinite(x.price)).sort((a,b)=>a.t-b.t)]));
       todayLoadedAt=Date.now();
-    }catch(err){console.warn('[TODAY INTRADAY]',err);}
+    }catch(err){console.warn('[24H INTRADAY]',err);}
     finally{todayLoading=false;render();}
   }
 
