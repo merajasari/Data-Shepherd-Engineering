@@ -132,21 +132,6 @@ def get_today_top10_intraday(symbols: list[str]) -> dict:
     series = {}
     if token and candidates:
         with ThreadPoolExecutor(max_workers=5) as pool:
-            futures = [pool.submit(_fetch_24h, symbol, token) for _, symbol, _, _ in candidates]
-            for future in as_completed(futures):
-                try:
-                    symbol, rows = None, None
-                    result = future.result()
-                    # recover symbol from the submitted future by matching is awkward;
-                    # use the candidate order below if this branch is ever reached.
-                    rows = result
-                except Exception as exc:
-                    print(f"[24H INTRADAY WORKER ERROR] {exc}")
-
-        # Re-fetch from the per-symbol cache path in a bounded 10-symbol loop so
-        # symbol association remains explicit and readable.
-        series = {}
-        with ThreadPoolExecutor(max_workers=5) as pool:
             future_map = {pool.submit(_fetch_24h, symbol, token): symbol for _, symbol, _, _ in candidates}
             for future in as_completed(future_map):
                 symbol = future_map[future]
