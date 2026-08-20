@@ -38,13 +38,13 @@ def get_stream_symbols():
 
 
 SYMBOLS = get_stream_symbols()
-# Keep the large V5/101 feed isolated from any legacy IEX stream process.
 ROLLING_24H_PATH = ROOT / (
     "data/live/iex_24h_5m_v5.json" if len(SYMBOLS) >= 50 else "data/live/iex_24h_5m_legacy.json"
 )
 latest_quotes = {}
 rolling_5m = {}
 last_rolling_write = 0.0
+last_disk_mtime = 0.0
 
 
 def utc_now():
@@ -100,6 +100,36 @@ def _prune_rolling(now: datetime):
             rolling_5m.pop(symbol, None)
 
 
+def _normalize_rows(rows):
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    buckets = {}
+    for row in rows or []:
+        try:
+            ts = datetime.fromisoformat(str(row["t"]).replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.astimezone(timezone.utc)
+            price = float(row["price"])
+        except Exception:
+            continue
+        if ts < cutoff or price <= 0:
+            continue
+        bucket = ts.replace(minute=(ts.minute // 5) * 5, second=0, microsecond=0).isoformat()
+        buckets[bucket] = price
+    return [{"t": t, "price": buckets[t]} for t in sorted(buckets)]
+
+
+def _merge_series(external):
+    for symbol, ext_rows in (external or {}).items():
+        symbol = str(symbol).upper()
+        if symbol not in SYMBOLS:
+            continue
+        merged = [*rolling_5m.get(symbol, []), *ext_rows]
+        rows = _normalize_rows(merged)
+        if rows:
+            rolling_5m[symbol] = rows
+
+
 def _record_rolling(symbol: str, price: float):
     now = datetime.now(timezone.utc)
     bucket = _bucket_5m(now)
@@ -111,40 +141,68 @@ def _record_rolling(symbol: str, price: float):
     _prune_rolling(now)
 
 
+def _load_payload(path: Path):
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        series = payload.get("series", {}) or {}
+        if isinstance(series, dict):
+            return {
+                str(symbol).upper(): _normalize_rows(rows)
+                for symbol, rows in series.items()
+                if isinstance(rows, list)
+            }
+    except Exception as exc:
+        print("[ROLLING CACHE LOAD ERROR]", path, exc)
+    return {}
+
+
 def _load_rolling_cache():
-    global rolling_5m
+    global rolling_5m, last_disk_mtime
     candidates = [ROLLING_24H_PATH]
-    # Compatibility with the short-lived generic cache created during development.
     if len(SYMBOLS) >= 50:
         candidates.append(ROOT / "data/live/iex_24h_5m.json")
     for path in candidates:
         if not path.exists():
             continue
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            series = payload.get("series", {}) or {}
-            if isinstance(series, dict):
-                rolling_5m = {
-                    str(symbol).upper(): [
-                        {"t": str(row["t"]), "price": float(row["price"])}
-                        for row in rows
-                        if isinstance(row, dict) and row.get("t") and row.get("price") is not None
-                    ]
-                    for symbol, rows in series.items()
-                    if isinstance(rows, list)
-                }
-                _prune_rolling(datetime.now(timezone.utc))
-                print(f"Loaded rolling 24h cache for {len(rolling_5m)} symbols from {path}")
-                return
-        except Exception as exc:
-            print("[ROLLING CACHE LOAD ERROR]", path, exc)
+        series = _load_payload(path)
+        if series:
+            rolling_5m = series
+            _prune_rolling(datetime.now(timezone.utc))
+            if path == ROLLING_24H_PATH:
+                try:
+                    last_disk_mtime = path.stat().st_mtime
+                except OSError:
+                    pass
+            print(f"Loaded rolling 24h cache for {len(rolling_5m)} symbols from {path}")
+            return
+
+
+def _merge_external_cache_if_newer():
+    """Merge a foreground backfill that was written while this stream is running."""
+    global last_disk_mtime
+    if not ROLLING_24H_PATH.exists():
+        return
+    try:
+        mtime = ROLLING_24H_PATH.stat().st_mtime
+    except OSError:
+        return
+    if mtime <= last_disk_mtime + 1e-6:
+        return
+    external = _load_payload(ROLLING_24H_PATH)
+    if external:
+        before = sum(len(rows) for rows in rolling_5m.values())
+        _merge_series(external)
+        after = sum(len(rows) for rows in rolling_5m.values())
+        print(f"Merged external rolling-cache backfill: {before} -> {after} points")
+    last_disk_mtime = mtime
 
 
 def _write_rolling_cache(force=False):
-    global last_rolling_write
+    global last_rolling_write, last_disk_mtime
     now_mono = time.monotonic()
     if not force and now_mono - last_rolling_write < ROLLING_WRITE_SECONDS:
         return
+    _merge_external_cache_if_newer()
     _atomic_json_write(ROLLING_24H_PATH, {
         "updated_at": utc_now(),
         "window_hours": 24,
@@ -152,6 +210,10 @@ def _write_rolling_cache(force=False):
         "symbol_count": len(rolling_5m),
         "series": rolling_5m,
     })
+    try:
+        last_disk_mtime = ROLLING_24H_PATH.stat().st_mtime
+    except OSError:
+        pass
     last_rolling_write = now_mono
 
 
