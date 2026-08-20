@@ -1,23 +1,12 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
-"""Data Shepherd Engineering presentation layer.
-
-The member dashboard presents the frozen V5 cross-sectional ranking model,
-the separate frozen V4 stock paper-trading monitor, and a read-only Crypto V1
-research simulation view.
-"""
-
-import os
-import sys
+"""Data Shepherd Engineering presentation layer."""
+import os, sys
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
-
-load_dotenv()
-sys.path.append("data-ingestion")
-
+load_dotenv(); sys.path.append("data-ingestion")
 from v5_symbols import get_v5_company_name, get_v5_symbol_options, get_v5_symbols  # noqa: E402
 from webapp.services.account_service import authenticate_account, begin_signup, change_password, complete_account_setup, get_account_setup_context, initialize_account_store, send_verification_email, verify_email_token  # noqa: E402
 from webapp.services.crypto_dashboard_service import get_crypto_dashboard_payload  # noqa: E402
@@ -28,6 +17,7 @@ from webapp.services.crypto_history_service import get_crypto_history_payload  #
 from webapp.services.crypto_history_web_cache_service import get_crypto_history_cache_path, normalize_history_range  # noqa: E402
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.fast_market_history_service import get_recent_prices_local  # noqa: E402
+from webapp.services.bulk_local_history_service import get_bulk_local_history  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
 from webapp.services.paper_trading_service import get_pnl_attribution, get_portfolio_summary  # noqa: E402
 from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
@@ -35,36 +25,21 @@ from webapp.services.v5_shadow_portfolio_service import get_v5_shadow_comparison
 from webapp.services.v5_shadow_history_service import get_v5_shadow_history  # noqa: E402
 from webapp.services.v4_realtime_equity_journal_service import get_v4_realtime_equity_history  # noqa: E402
 from webapp.services.v4_reconstructed_history_service import get_v4_reconstructed_history  # noqa: E402
-
-app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY")
+app=Flask(__name__); app.secret_key=os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key: raise RuntimeError("FLASK_SECRET_KEY is not configured")
-app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
-initialize_account_store()
-
+app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12)); initialize_account_store()
 @app.after_request
 def inject_dashboard_modules(response):
-    if response.mimetype == "text/html" and response.status_code == 200:
+    if response.mimetype=="text/html" and response.status_code==200:
         html=response.get_data(as_text=True); marker="</body>"; scripts=[]
-        if request.path in {"/", "/dashboard", "/crypto"}: scripts.append('<script src="/static/js/signup_button.js" defer></script>')
-        if request.path in {"/dashboard", "/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
-        if request.path == "/dashboard": scripts.extend([
-            '<script src="/static/js/dashboard_layout.js" defer></script>',
-            '<script src="/static/js/v4_equity_chart.js" defer></script>',
-            '<script src="/static/js/v4_pnl_attribution.js" defer></script>',
-            '<script src="/static/js/v5_shadow_comparison.js" defer></script>',
-            '<script src="/static/js/v5_shadow_history_chart.js" defer></script>',
-            '<script src="/static/js/market_history_chart.js" defer></script>',
-            '<script src="/static/js/primary_stock_spotlight.js" defer></script>',
-            '<script src="/static/js/top_live_stock_comparison.js" defer></script>',
-            '<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>',
-        ])
+        if request.path in {"/","/dashboard","/crypto"}: scripts.append('<script src="/static/js/signup_button.js" defer></script>')
+        if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
+        if request.path=="/dashboard": scripts.extend(['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v5_shadow_comparison.js" defer></script>','<script src="/static/js/v5_shadow_history_chart.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>'])
         if marker in html:
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
             response.set_data(html)
     return response
-
 V5_SYMBOLS=get_v5_symbols(); V5_SYMBOL_OPTIONS=get_v5_symbol_options(); DEFAULT_SYMBOL="AAPL"
 def login_required(view):
     @wraps(view)
@@ -73,27 +48,19 @@ def login_required(view):
         if session.get("must_change_password"): return redirect(url_for("change_member_password"))
         return view(*args,**kwargs)
     return wrapped
-
 def valid_legacy_member_credentials(username,password):
-    u=os.environ.get("MEMBER_USERNAME",""); h=os.environ.get("MEMBER_PASSWORD_HASH","")
-    return bool(u and h and username==u and check_password_hash(h,password))
-
+    u=os.environ.get("MEMBER_USERNAME",""); h=os.environ.get("MEMBER_PASSWORD_HASH",""); return bool(u and h and username==u and check_password_hash(h,password))
 def build_stock_dashboard(symbol):
-    market=get_market_summary(symbol); prediction=get_latest_prediction(symbol); live=get_live_quote(symbol)
-    display_price=live["reference_price"] if live["available"] else market["close"]
+    market=get_market_summary(symbol); prediction=get_latest_prediction(symbol); live=get_live_quote(symbol); display_price=live["reference_price"] if live["available"] else market["close"]
     return {"symbol":symbol,"company_name":get_v5_company_name(symbol),"timestamp":market["timestamp"],"close":market["close"],"display_price":display_price,"price_source":"LIVE IEX" if live["available"] else "LATEST EOD","price_change":market["price_change"],"price_change_pct":market["price_change_pct"],"rsi_14":market["rsi_14"],"sma_20":market["sma_20"],"sma_50":market["sma_50"],"sma_200":market["sma_200"],"volatility_20d":market["volatility_20d"],"volume_ratio":market["volume_ratio"],**prediction}
-
 def build_v4_dashboard_payload():
     forward=dict(summarize_journal()); portfolio=dict(get_portfolio_summary()); portfolio["pnl_attribution"]=get_pnl_attribution(); forward["observations"]=forward.get("observation_count",0); portfolio["open_positions"]=portfolio.get("open_position_count",0); portfolio["top_five"]=forward.get("latest_top_five",[])
     starting_cash=float(portfolio.get("starting_cash") or 100000.0); equity=float(portfolio.get("equity") or starting_cash); portfolio["net_change"]=equity-starting_cash; portfolio["net_change_pct"]=(equity/starting_cash-1.0) if starting_cash else 0.0; portfolio["top_five_details"]=[{"symbol":s,"company_name":get_v5_company_name(s)} for s in portfolio["top_five"]]
     reconstructed=list(get_v4_reconstructed_history()); history=list(reconstructed); history.extend(forward.get("equity_history",[])); history.extend(get_v4_realtime_equity_history()); history.sort(key=lambda r:str(r.get("timestamp") or "")); reconstructed_start=reconstructed[0].get("timestamp") if reconstructed else forward.get("start_timestamp")
-    chart_history=[{"timestamp":reconstructed_start,"label":"Start","equity":starting_cash,"synthetic_baseline":True,"history_type":"reconstruction_baseline" if reconstructed else "paper_baseline"}, *[{**r,"label":None,"synthetic_baseline":False} for r in history]]
-    current_timestamp=datetime.now(timezone.utc).isoformat()
+    chart_history=[{"timestamp":reconstructed_start,"label":"Start","equity":starting_cash,"synthetic_baseline":True,"history_type":"reconstruction_baseline" if reconstructed else "paper_baseline"}, *[{**r,"label":None,"synthetic_baseline":False} for r in history]]; current_timestamp=datetime.now(timezone.utc).isoformat()
     if not chart_history or abs(float(chart_history[-1]["equity"])-equity)>1e-9: chart_history.append({"timestamp":current_timestamp,"label":"Current","equity":equity,"synthetic_baseline":False,"current_mark":True})
     elif chart_history: chart_history[-1]={**chart_history[-1],"label":"Current","current_mark":True}
-    forward["chart_history"]=chart_history; forward["reconstructed_observations"]=len(reconstructed); forward["reconstructed_start_timestamp"]=reconstructed_start
-    return {"forward":forward,"portfolio":portfolio}
-
+    forward["chart_history"]=chart_history; forward["reconstructed_observations"]=len(reconstructed); forward["reconstructed_start_timestamp"]=reconstructed_start; return {"forward":forward,"portfolio":portfolio}
 def enrich_ranking_rows(rows): return [{**dict(r),"company_name":get_v5_company_name(r["symbol"])} for r in rows]
 @app.route("/")
 def home(): return render_template("landing.html",authenticated=session.get("authenticated",False),login_error=None)
@@ -127,8 +94,7 @@ def login():
     if valid_legacy_member_credentials(username,password): session.clear();session.permanent=True;session["authenticated"]=True;session["username"]=username;session["legacy_member"]=True;return redirect(url_for("dashboard"))
     account=authenticate_account(username,password)
     if account:
-        session.clear();session.permanent=True;session["authenticated"]=True;session["username"]=account["username"];session["account_id"]=account["id"];session["must_change_password"]=bool(account["must_change_password"])
-        return redirect(url_for("change_member_password" if session["must_change_password"] else "dashboard"))
+        session.clear();session.permanent=True;session["authenticated"]=True;session["username"]=account["username"];session["account_id"]=account["id"];session["must_change_password"]=bool(account["must_change_password"]); return redirect(url_for("change_member_password" if session["must_change_password"] else "dashboard"))
     return render_template("landing.html",authenticated=False,login_error="Invalid username or password."),401
 @app.route("/change-password",methods=["GET","POST"])
 def change_member_password():
@@ -146,15 +112,7 @@ def logout():session.clear();return redirect(url_for("home"))
 def dashboard():
     selected_symbol=request.args.get("symbol",DEFAULT_SYMBOL).upper().strip()
     if selected_symbol not in V5_SYMBOLS:return redirect(url_for("dashboard",symbol=DEFAULT_SYMBOL))
-    live_view=request.args.get("view")=="live"
-    selected=build_stock_dashboard(selected_symbol)
-    # Critical performance rule: never block the first Live Stock Viewer HTML response
-    # on an external Tiingo REST call. Render from local Gold immediately, then let the
-    # existing live-refresh layer hydrate newer EOD/live data after first paint.
-    recent_prices=get_recent_prices_local(selected_symbol,limit=60) if live_view else get_recent_prices(selected_symbol,limit=60)
-    rankings_payload=get_v5_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top5=rankings[:5];top10_rows=[]
-    # The legacy/model Top-10 cards are hidden on Live Stock Viewer, so avoid the
-    # unnecessary feature-file/live-cache loop during that page's initial request.
+    live_view=request.args.get("view")=="live"; selected=build_stock_dashboard(selected_symbol); recent_prices=get_recent_prices_local(selected_symbol,limit=60) if live_view else get_recent_prices(selected_symbol,limit=60); rankings_payload=get_v5_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top5=rankings[:5];top10_rows=[]
     if not live_view:
         for row in rankings[:10]:
             try:
@@ -186,6 +144,11 @@ def api_prices(symbol):
     symbol=symbol.upper().strip()
     if symbol not in V5_SYMBOLS:return jsonify({"error":"unsupported symbol"}),404
     return jsonify(get_recent_prices(symbol,limit=60))
+@app.route("/api/local-history-bulk")
+@login_required
+def api_local_history_bulk():
+    limit=request.args.get("limit",130,type=int) or 130
+    return jsonify({"series":get_bulk_local_history(V5_SYMBOLS,limit=limit)})
 @app.route("/api/live-prices")
 @login_required
 def api_live_prices():return jsonify({"stocks":get_all_live_quotes()})
