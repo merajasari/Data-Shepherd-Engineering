@@ -28,6 +28,7 @@
       await loadScript('/static/js/v8_pnl_visual.js');
       await loadScript('/static/js/v8_leaders.js');
       await loadScript('/static/js/v8_ranking_board.js');
+      await loadScript('/static/js/live_stock_viewer_v8.js');
     } catch (e) {
       console.error('Unable to load one or more V8 dashboard enhancements.', e);
     }
