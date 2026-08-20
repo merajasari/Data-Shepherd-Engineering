@@ -17,9 +17,40 @@ def _events():
         for line in JOURNAL_PATH.read_text().splitlines():
             line = line.strip()
             if line:
-                try: out.append(json.loads(line))
-                except Exception: pass
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    pass
     return out
+
+
+def _event_time(event):
+    event_type = event.get("event_type")
+    if event_type == "EXIT":
+        return event.get("exit_timestamp_utc")
+    if event_type == "ENTRY":
+        return event.get("entry_timestamp_utc")
+    return event.get("decision_timestamp_utc")
+
+
+def _event_history(events):
+    """Return a compact read-only lifecycle view for dashboard visualization."""
+    rows = []
+    for event in events:
+        event_type = event.get("event_type")
+        if event_type not in {"DECISION", "ENTRY", "EXIT"}:
+            continue
+        rows.append({
+            "event_type": event_type,
+            "timestamp_utc": _event_time(event),
+            "decision_timestamp_utc": event.get("decision_timestamp_utc"),
+            "cohort_offset": event.get("cohort_offset"),
+            "symbol_count": len(event.get("symbols", [])),
+            "net_portfolio_return": event.get("net_portfolio_return") if event_type == "EXIT" else None,
+            "spy_return": event.get("spy_return") if event_type == "EXIT" else None,
+            "net_relative_return": event.get("net_relative_return") if event_type == "EXIT" else None,
+        })
+    return sorted(rows, key=lambda row: row.get("timestamp_utc") or "")
 
 
 def _curve(exits):
@@ -45,8 +76,10 @@ def get_v8_holdout_dashboard():
     now = pd.Timestamp.now(tz="UTC")
     status = {}
     if STATUS_PATH.exists():
-        try: status = json.loads(STATUS_PATH.read_text())
-        except Exception: status = {}
+        try:
+            status = json.loads(STATUS_PATH.read_text())
+        except Exception:
+            status = {}
     ev = _events()
     decisions = [e for e in ev if e.get("event_type") == "DECISION"]
     entries = [e for e in ev if e.get("event_type") == "ENTRY"]
@@ -72,6 +105,7 @@ def get_v8_holdout_dashboard():
         "net_relative_hit_rate": (sum(x > 0 for x in rel) / len(rel)) if rel else None,
         "latest_exit": exits[-1] if exits else None,
         "curve": _curve(exits),
+        "event_history": _event_history(ev),
         "brokerage_orders": False,
         "strategy_modified": False,
     }
