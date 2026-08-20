@@ -22,7 +22,7 @@
     </div>
     <div class="tlc-toolbar">
       <strong class="muted">RANGE</strong>
-      <button data-range="ALL">ALL</button><button data-range="5Y">5Y</button><button data-range="3Y">3Y</button><button data-range="1Y">1Y</button><button data-range="90D" class="active">90D</button><button data-range="30D">30D</button>
+      <button data-range="ALL">ALL</button><button data-range="5Y">5Y</button><button data-range="3Y">3Y</button><button data-range="1Y">1Y</button><button data-range="90D" class="active">90D</button><button data-range="30D">30D</button><button data-range="2W">2W</button><button data-range="1W">1W</button><button data-range="TODAY">TODAY</button>
       <strong class="muted tlc-view-label">VIEW</strong>
       <button data-mode="growth" class="active">NORMALIZED GROWTH</button><button data-mode="price">PRICE USD</button>
     </div>
@@ -60,12 +60,31 @@
   let hoverGeometry = null;
   let hoveredSymbol = null;
   const universe=[...document.querySelectorAll('#stock-select option')].map(o=>o.value).filter(Boolean);
-  const days={ALL:3650,'5Y':1827,'3Y':1096,'1Y':366,'90D':90,'30D':30};
+  const days={ALL:3650,'5Y':1827,'3Y':1096,'1Y':366,'90D':90,'30D':30,'2W':14,'1W':7};
 
   const E=(tag,a={})=>{const e=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));svg.appendChild(e);return e;};
   async function fetchSymbol(symbol){try{const r=await fetch(`/api/prices/${encodeURIComponent(symbol)}?t=${Date.now()}`,{cache:'no-store'});if(!r.ok)return null;const rows=(await r.json()).map(x=>({t:Date.parse(x.timestamp||x.session_date),price:Number(x.close)})).filter(x=>Number.isFinite(x.t)&&Number.isFinite(x.price)).sort((a,b)=>a.t-b.t);return[symbol,rows];}catch{return null;}}
   async function load(){if(loading)return;loading=true;stamp.textContent=`LOADING ${range} · BACKGROUND`;series=new Map();let next=0,completed=0;const workers=Array.from({length:4},async()=>{while(next<universe.length){const i=next++,symbol=universe[i],result=await fetchSymbol(symbol);if(result)series.set(result[0],result[1]);completed++;if(completed%8===0){stamp.textContent=`LOADING ${range} · ${completed}/${universe.length}`;render();await new Promise(r=>setTimeout(r,0));}}});await Promise.all(workers);loading=false;render();}
-  function rangeRows(rows){if(!rows.length)return[];const end=rows.at(-1).t,cut=range==='ALL'?-Infinity:end-days[range]*86400000;let r=rows.filter(x=>x.t>=cut);if(zoom>1&&r.length>2){const n=Math.max(2,Math.floor(r.length/zoom)),max=r.length-n,start=Math.round(max*Math.max(0,Math.min(1,pan)));r=r.slice(start,start+n);}return r;}
+
+  function rangeRows(rows){
+    if(!rows.length)return[];
+    let r;
+    if(range==='TODAY'){
+      const now=new Date();
+      const start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+      r=rows.filter(x=>x.t>=start);
+      if(!r.length){
+        const latest=rows.at(-1);
+        r=latest?[latest]:[];
+      }
+    }else{
+      const end=rows.at(-1).t,cut=range==='ALL'?-Infinity:end-days[range]*86400000;
+      r=rows.filter(x=>x.t>=cut);
+    }
+    if(zoom>1&&r.length>2){const n=Math.max(2,Math.floor(r.length/zoom)),max=r.length-n,start=Math.round(max*Math.max(0,Math.min(1,pan)));r=r.slice(start,start+n);}
+    return r;
+  }
+
   function buildRank(){ranked=[...series].map(([symbol,rows])=>{const r=rangeRows(rows);const live=Number(liveQuotes[symbol]?.reference_price);if(r.length&&Number.isFinite(live))r.push({t:Date.now(),price:live,live:true});const ret=r.length>1?r.at(-1).price/r[0].price-1:-Infinity;return{symbol,rows:r,ret};}).filter(x=>x.rows.length>1).sort((a,b)=>b.ret-a.ret).slice(0,10);ranked.forEach(x=>{if(!active.has(x.symbol))active.add(x.symbol);});}
   function nearest(rows,target){if(!rows.length)return null;let best=rows[0],dist=Math.abs(best.t-target);for(let i=1;i<rows.length;i++){const d=Math.abs(rows[i].t-target);if(d<dist){best=rows[i];dist=d;}}return best;}
 
@@ -82,14 +101,14 @@
     card.querySelectorAll('[data-range]').forEach(b=>b.classList.toggle('active',b.dataset.range===range));
     card.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
     lines.innerHTML='<strong class="muted">LINES</strong>'+ranked.map((r,i)=>`<button data-symbol="${r.symbol}" class="${active.has(r.symbol)?'':'off'}"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[i]};margin-right:5px"></i>${i+1}. ${r.symbol} ${(r.ret*100)>=0?'+':''}${(r.ret*100).toFixed(2)}%</button>`).join('');
-    if(!ranked.length){const t=E('text',{x:500,y:195,'text-anchor':'middle',fill:'#91a6c2'});t.textContent=loading?'Loading comparison history in background…':'Waiting for market history…';return;}
+    if(!ranked.length){const t=E('text',{x:500,y:195,'text-anchor':'middle',fill:'#91a6c2'});t.textContent=loading?'Loading comparison history in background…':range==='TODAY'?'Waiting for today’s live market observations…':'Waiting for market history…';return;}
     const shown=ranked.filter(r=>active.has(r.symbol));if(!shown.length)return;
     const W=1000,H=390,p={l:66,r:25,t:20,b:40};
     const vals=shown.flatMap(r=>r.rows.map(x=>mode==='growth'?(x.price/r.rows[0].price-1):x.price));let min=Math.min(...vals),max=Math.max(...vals);if(mode==='growth'){min=Math.min(0,min);max=Math.max(0,max);}let sp=Math.max(max-min,mode==='growth'?.002:1);min-=sp*.1;max+=sp*.1;
     const ts=shown.flatMap(r=>r.rows.map(x=>x.t)),t0=Math.min(...ts),t1=Math.max(...ts),td=Math.max(1,t1-t0),X=t=>p.l+(W-p.l-p.r)*(t-t0)/td,Y=v=>p.t+(H-p.t-p.b)*(1-(v-min)/(max-min));
     for(let i=0;i<5;i++){const v=min+(max-min)*i/4,y=Y(v);E('line',{x1:p.l,y1:y,x2:W-p.r,y2:y,stroke:'rgba(145,166,194,.14)'});const tx=E('text',{x:p.l-7,y:y+4,'text-anchor':'end',fill:'#91a6c2','font-size':'11'});tx.textContent=mode==='growth'?`${v>=0?'+':''}${(v*100).toFixed(1)}%`:`$${v.toFixed(0)}`;}
     shown.forEach(r=>{const i=ranked.indexOf(r),baseWidth=i<3?3:2,pts=r.rows.map(x=>`${X(x.t)},${Y(mode==='growth'?(x.price/r.rows[0].price-1):x.price)}`).join(' ');const path=E('polyline',{points:pts,fill:'none',stroke:colors[i],'stroke-width':baseWidth,'stroke-linejoin':'round','stroke-linecap':'round',opacity:'.94','data-tlc-line':r.symbol});path.dataset.baseWidth=String(baseWidth);});
-    [t0,t0+td/2,t1].forEach((t,i)=>{const tx=E('text',{x:X(t),y:H-13,'text-anchor':i===0?'start':i===2?'end':'middle',fill:'#91a6c2','font-size':'11'});tx.textContent=new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'});});
+    [t0,t0+td/2,t1].forEach((t,i)=>{const tx=E('text',{x:X(t),y:H-13,'text-anchor':i===0?'start':i===2?'end':'middle',fill:'#91a6c2','font-size':'11'});tx.textContent=range==='TODAY'?new Date(t).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'});});
     E('line',{id:'tlc-crosshair',x1:p.l,x2:p.l,y1:p.t,y2:H-p.b,stroke:'#f2f6ff','stroke-width':'1.1','stroke-dasharray':'5 4',opacity:'.75',visibility:'hidden'});
     E('circle',{id:'tlc-hover-dot',cx:p.l,cy:p.t,r:'5.5',fill:'#f2f6ff',stroke:'#07101f','stroke-width':'2',visibility:'hidden'});
     hoverGeometry={W,H,p,t0,t1,td,X,Y,shown};
