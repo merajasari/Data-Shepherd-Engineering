@@ -9,6 +9,7 @@ HOLDOUT_START = pd.Timestamp("2026-09-01T00:00:00Z")
 ROOT = Path("data/model/v8/holdout")
 JOURNAL_PATH = ROOT / "journal.jsonl"
 STATUS_PATH = ROOT / "status.json"
+V8_RANKED_PATH = Path("data/model/v8/phase4/fixed_complementarity_ranked_panel.parquet")
 
 
 def _events():
@@ -53,6 +54,42 @@ def _event_history(events):
     return sorted(rows, key=lambda row: row.get("timestamp_utc") or "")
 
 
+def _latest_v8_top10():
+    """Read the latest eligible pre-holdout DISTANCE_ONLY Top-10 snapshot."""
+    if not V8_RANKED_PATH.exists():
+        return {"timestamp_utc": None, "rows": []}
+    try:
+        panel = pd.read_parquet(
+            V8_RANKED_PATH,
+            columns=["timestamp_utc", "symbol", "score", "score_id", "rank_descending"],
+        )
+        panel["timestamp_utc"] = pd.to_datetime(panel["timestamp_utc"], utc=True, errors="coerce")
+        panel = panel[
+            (panel["score_id"] == "DISTANCE_ONLY")
+            & panel["timestamp_utc"].notna()
+            & (panel["timestamp_utc"] < HOLDOUT_START)
+        ].copy()
+        if panel.empty:
+            return {"timestamp_utc": None, "rows": []}
+        latest_ts = panel["timestamp_utc"].max()
+        latest = (
+            panel[panel["timestamp_utc"] == latest_ts]
+            .sort_values(["rank_descending", "symbol"], ascending=[True, True])
+            .head(10)
+        )
+        rows = []
+        for _, row in latest.iterrows():
+            rows.append({
+                "rank": int(row["rank_descending"]),
+                "symbol": str(row["symbol"]),
+                "score": float(row["score"]),
+                "target_weight": 0.10,
+            })
+        return {"timestamp_utc": latest_ts.isoformat(), "rows": rows}
+    except Exception:
+        return {"timestamp_utc": None, "rows": []}
+
+
 def _curve(exits):
     if not exits:
         return []
@@ -85,6 +122,7 @@ def get_v8_holdout_dashboard():
     entries = [e for e in ev if e.get("event_type") == "ENTRY"]
     exits = [e for e in ev if e.get("event_type") == "EXIT"]
     rel = [float(e["net_relative_return"]) for e in exits if e.get("net_relative_return") is not None]
+    latest_top10 = _latest_v8_top10()
     if now < HOLDOUT_START:
         state = "WAITING_FOR_HOLDOUT"
     elif not exits:
@@ -106,6 +144,9 @@ def get_v8_holdout_dashboard():
         "latest_exit": exits[-1] if exits else None,
         "curve": _curve(exits),
         "event_history": _event_history(ev),
+        "latest_research_top10_timestamp_utc": latest_top10["timestamp_utc"],
+        "latest_research_top10": latest_top10["rows"],
+        "latest_research_top10_note": "Latest eligible frozen-model development snapshot; not forward holdout evidence.",
         "brokerage_orders": False,
         "strategy_modified": False,
     }
