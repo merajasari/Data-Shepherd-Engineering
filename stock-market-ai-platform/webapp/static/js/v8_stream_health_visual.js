@@ -69,4 +69,57 @@
   render(false);
   const observer=new MutationObserver(()=>render(true)); Object.values(original).filter(Boolean).forEach(node=>observer.observe(node,{childList:true,subtree:true,characterData:true}));
   setInterval(updateClock,1000);
+
+  // Replace the legacy V4 portfolio summary with genuine frozen-V8 holdout metrics.
+  const equityCard = document.querySelector('.v4-dashboard .v4-equity-card');
+  const metricGrid = document.querySelector('.v4-dashboard .v4-small-metrics');
+  if (equityCard && metricGrid) {
+    equityCard.innerHTML = `<div class="label">V8 PORTFOLIO EQUITY</div><div class="big" id="v8-summary-equity">$100,000.00</div><div id="v8-summary-gain" class="v4-gain">WAITING FOR FORWARD EVIDENCE</div><div class="muted" id="v8-summary-starting" style="margin-top:6px">$100,000 frozen starting capital · baseline only</div>`;
+    metricGrid.innerHTML = `
+      <div class="metric"><span>V8 TOTAL RETURN SINCE HOLDOUT START</span><strong id="v8-summary-return">—</strong></div>
+      <div class="metric"><span>V8 COMPLETED-COHORT RETURN</span><strong id="v8-summary-forward">—</strong></div>
+      <div class="metric"><span>SPY HOLDOUT RETURN</span><strong id="v8-summary-spy">—</strong></div>
+      <div class="metric"><span>V8 EXCESS RETURN VS SPY</span><strong id="v8-summary-excess">—</strong></div>
+      <div class="metric"><span>V8 MAX DRAWDOWN</span><strong id="v8-summary-drawdown">—</strong></div>
+      <div class="metric"><span>V8 OBSERVATIONS</span><strong id="v8-summary-observations">0</strong></div>`;
+
+    const money = v => '$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    const pct4 = v => `${v>=0?'+':''}${(v*100).toFixed(4)}%`;
+    const maxDrawdown = values => {
+      let peak=-Infinity, worst=0;
+      for(const x of values){ if(!Number.isFinite(x)) continue; peak=Math.max(peak,x); if(peak>0) worst=Math.min(worst,(x/peak)-1); }
+      return worst;
+    };
+    const setSummary = (id,value) => { const n=document.getElementById(id); if(n) n.textContent=value; };
+
+    fetch('/api/v8/holdout',{cache:'no-store'})
+      .then(r=>{if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json();})
+      .then(d=>{
+        const curve=Array.isArray(d.curve)?d.curve:[];
+        const obs=Number(d.completed_cohorts||0);
+        setSummary('v8-summary-observations',String(obs));
+        if(!curve.length){
+          setSummary('v8-summary-gain',String(d.state||'WAITING_FOR_HOLDOUT').replaceAll('_',' '));
+          return;
+        }
+        const latest=curve[curve.length-1];
+        const equity=Number(latest.strategy_normalized);
+        const spyEquity=Number(latest.spy_normalized);
+        if(!Number.isFinite(equity)||!Number.isFinite(spyEquity)) return;
+        const ret=equity/100000-1, spy=spyEquity/100000-1, excess=ret-spy;
+        const dd=maxDrawdown(curve.map(x=>Number(x.strategy_normalized)));
+        setSummary('v8-summary-equity',money(equity));
+        setSummary('v8-summary-gain',`${equity>=100000?'+':''}${money(equity-100000).replace('$','')} (${pct4(ret)})`);
+        setSummary('v8-summary-starting','vs frozen V8 starting equity $100,000.00');
+        setSummary('v8-summary-return',pct4(ret));
+        setSummary('v8-summary-forward',pct4(ret));
+        setSummary('v8-summary-spy',pct4(spy));
+        setSummary('v8-summary-excess',pct4(excess));
+        setSummary('v8-summary-drawdown',pct4(dd));
+      })
+      .catch(err=>{
+        setSummary('v8-summary-gain','V8 HOLDOUT DATA UNAVAILABLE');
+        console.error('[V8 PORTFOLIO SUMMARY]',err);
+      });
+  }
 })();
