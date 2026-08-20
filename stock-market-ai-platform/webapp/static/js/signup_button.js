@@ -48,6 +48,9 @@
       body.ds-live-stock-view .ds-market-section{grid-template-columns:1fr!important}
       body.ds-live-stock-view .ds-model-signal-card{display:none!important}
       body.ds-live-stock-view .market-history-card{display:block!important}
+      body.ds-live-stock-view #v8-holdout-monitor,
+      body.ds-live-stock-view .v8-holdout-monitor,
+      body.ds-live-stock-view [data-v8-holdout-monitor]{display:none!important}
       body.ds-live-stock-view footer{margin-top:24px}
     `;
     document.head.appendChild(style);
@@ -81,7 +84,28 @@
       modelSignal?.classList.add('ds-model-signal-card');
     }
 
+    // The V8 holdout belongs exclusively to Model Research. It is sometimes
+    // injected after the base dashboard has rendered, so hide both its known
+    // root and any matching late-added section while the live viewer is active.
+    const hideV8HoldoutFromLiveViewer = () => {
+      if (!liveStockView) return;
+      const root = document.getElementById('v8-holdout-monitor');
+      if (root) root.style.setProperty('display', 'none', 'important');
+      for (const section of document.querySelectorAll('.shell section')) {
+        const label = section.querySelector('.label')?.textContent?.trim() || '';
+        const heading = section.querySelector('h2,h3')?.textContent?.trim() || '';
+        if (/V8 FROZEN FORWARD HOLDOUT/i.test(`${label} ${heading}`)) {
+          section.style.setProperty('display', 'none', 'important');
+        }
+      }
+    };
+
     document.body.classList.add(liveStockView ? 'ds-live-stock-view' : 'ds-model-research-view');
+    hideV8HoldoutFromLiveViewer();
+    if (liveStockView) {
+      const observer = new MutationObserver(hideV8HoldoutFromLiveViewer);
+      observer.observe(shell, {childList:true, subtree:true});
+    }
 
     if (liveStockView) {
       const brandSubtitle = document.querySelector('.brand .muted');
@@ -97,6 +121,7 @@
     window.addEventListener('DOMContentLoaded', () => {
       const form = document.getElementById('stock-selector-form');
       if (form && liveStockView) form.action = `/dashboard?view=live#primary-stock-view`;
+      hideV8HoldoutFromLiveViewer();
     });
   }
 
