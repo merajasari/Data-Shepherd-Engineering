@@ -88,7 +88,10 @@
     if(mode==='growth'){mn=Math.min(0,mn);mx=Math.max(0,mx);}
     const sp=Math.max(mx-mn,mode==='growth'?.002:1);mn-=sp*.1;mx+=sp*.1;
     const ts=shown.flatMap(x=>x.rows.map(q=>q.t));
-    const t0=Math.min(...ts),t1=Math.max(...ts),td=Math.max(1,t1-t0);
+    const axisNow=Date.now();
+    const t0=range==='TODAY'?axisNow-24*60*60*1000:Math.min(...ts);
+    const t1=range==='TODAY'?axisNow:Math.max(...ts);
+    const td=Math.max(1,t1-t0);
     const X=t=>p.l+(W-p.l-p.r)*(t-t0)/td;
     const Y=v=>p.t+(H-p.t-p.b)*(1-(v-mn)/(mx-mn));
 
@@ -115,7 +118,7 @@
     geo={W,H,p,t0,td,X,Y,shown,rank};
     stamp.textContent=`${range==='TODAY'?'24H':range} · LIVE`;
     card.querySelector('#tlz').textContent=zoom===1?'FULL RANGE':`${zoom.toFixed(1)}× ZOOM`;
-    note.textContent=range==='TODAY'?'TODAY = rolling last 24 hours of 5-minute intraday history, including available extended-hours data, with the latest live IEX mark appended.':'One local bulk history request; live prices update separately without blocking the page.';
+    note.textContent=range==='TODAY'?'TODAY = fixed rolling 24-hour clock window. Actual IEX observations are plotted only where trading data exists; overnight gaps remain blank.':'One local bulk history request; live prices update separately without blocking the page.';
   }
 
   svg.addEventListener('pointermove',e=>{
