@@ -22,8 +22,12 @@ _top_cache = {"fetched": 0.0, "payload": None}
 _symbol_cache: dict[str, dict] = {}
 
 
+def _gold_path(symbol: str) -> Path:
+    return Path(f"data/gold/stocks/{symbol}/{symbol}_prices.parquet")
+
+
 def _latest_local_close(symbol: str):
-    path = Path(f"data/gold/stocks/{symbol}/{symbol}_prices.parquet")
+    path = _gold_path(symbol)
     if not path.exists():
         return None
     try:
@@ -35,6 +39,19 @@ def _latest_local_close(symbol: str):
     except Exception as exc:
         print(f"[24H PRIOR CLOSE ERROR] {symbol}: {exc}")
         return None
+
+
+def _daily_closes(symbol: str) -> list[float]:
+    path = _gold_path(symbol)
+    if not path.exists():
+        return []
+    try:
+        frame = pd.read_parquet(path, columns=["close"]).tail(220)
+        values = pd.to_numeric(frame["close"], errors="coerce").dropna().astype(float).tolist()
+        return [v for v in values if v > 0]
+    except Exception as exc:
+        print(f"[24H SMA HISTORY ERROR] {symbol}: {exc}")
+        return []
 
 
 def _fetch_24h(symbol: str, token: str) -> list[dict]:
@@ -77,6 +94,22 @@ def _fetch_24h(symbol: str, token: str) -> list[dict]:
     return rows
 
 
+def _with_provisional_daily_smas(symbol: str, rows: list[dict]) -> list[dict]:
+    completed = _daily_closes(symbol)
+    if not completed:
+        return [{**row, "sma_20": None, "sma_50": None, "sma_200": None} for row in rows]
+    result = []
+    for row in rows:
+        price = float(row["price"])
+        enriched = dict(row)
+        for n, key in ((20, "sma_20"), (50, "sma_50"), (200, "sma_200")):
+            prior = completed[-(n - 1):] if n > 1 else []
+            values = prior + [price]
+            enriched[key] = sum(values) / len(values) if values else None
+        result.append(enriched)
+    return result
+
+
 def get_symbol_24h_intraday(symbol: str) -> dict:
     symbol = symbol.upper().strip()
     now_mono = time.monotonic()
@@ -86,6 +119,7 @@ def get_symbol_24h_intraday(symbol: str) -> dict:
 
     token = os.getenv("TIINGO_API_KEY")
     rows = _fetch_24h(symbol, token) if token else []
+    rows = _with_provisional_daily_smas(symbol, rows)
     live_state = get_all_live_quotes()
     quote = (live_state.get("quotes", {}) or {}).get(symbol) or {}
     try:
@@ -97,10 +131,7 @@ def get_symbol_24h_intraday(symbol: str) -> dict:
         "symbol": symbol,
         "series": rows,
         "updated_at": live_state.get("updated_at"),
-        "live": {
-            "reference_price": live_price,
-            "timestamp": quote.get("timestamp"),
-        },
+        "live": {"reference_price": live_price, "timestamp": quote.get("timestamp")},
         "source": "TIINGO_INTRADAY_5MIN_PLUS_LIVE_IEX",
     }
     _symbol_cache[symbol] = {"fetched": now_mono, "payload": payload}
