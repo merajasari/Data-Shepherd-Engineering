@@ -29,6 +29,10 @@
   const shell = document.querySelector('.shell');
   const header = shell && shell.querySelector('header');
   const existingTabs = shell && shell.querySelector('.tabs');
+  const params = new URLSearchParams(window.location.search);
+  const liveStockView = window.location.pathname === '/dashboard' && params.get('view') === 'live';
+  const modelResearchView = window.location.pathname === '/dashboard' && !liveStockView;
+
   if (shell && header && !existingTabs && ['/dashboard', '/crypto', '/crypto-visual'].includes(window.location.pathname)) {
     const style = document.createElement('style');
     style.textContent = `
@@ -36,6 +40,15 @@
       .ds-dashboard-tab{padding:12px 18px;border:1px solid #244261;border-radius:999px;text-decoration:none;color:#91a6c2;font-weight:900;letter-spacing:.04em;background:rgba(13,28,49,.85)}
       .ds-dashboard-tab.active{color:#06151d;background:linear-gradient(90deg,#36d8ff,#39e3a1);border-color:transparent}
       .ds-dashboard-tab:hover{border-color:rgba(54,216,255,.55);color:#f2f6ff}
+      body.ds-model-research-view .ds-primary-stock-section{display:none!important}
+      body.ds-model-research-view .ds-market-card{display:none!important}
+      body.ds-model-research-view .ds-market-section{grid-template-columns:1fr!important}
+      body.ds-model-research-view .market-history-card{display:none!important}
+      body.ds-live-stock-view .shell>section:not(.ds-live-stock-keep):not(.market-history-card){display:none!important}
+      body.ds-live-stock-view .ds-market-section{grid-template-columns:1fr!important}
+      body.ds-live-stock-view .ds-model-signal-card{display:none!important}
+      body.ds-live-stock-view .market-history-card{display:block!important}
+      body.ds-live-stock-view footer{margin-top:24px}
     `;
     document.head.appendChild(style);
 
@@ -43,11 +56,48 @@
     nav.className = 'ds-dashboard-tabs';
     nav.setAttribute('aria-label', 'Dashboard sections');
     nav.innerHTML = `
-      <a class="ds-dashboard-tab ${window.location.pathname === '/dashboard' ? 'active' : ''}" href="/dashboard">STOCKS</a>
+      <a class="ds-dashboard-tab ${modelResearchView ? 'active' : ''}" href="/dashboard">MODEL RESEARCH</a>
+      <a class="ds-dashboard-tab ${liveStockView ? 'active' : ''}" href="/dashboard?view=live">LIVE STOCK VIEWER</a>
       <a class="ds-dashboard-tab ${window.location.pathname === '/crypto' ? 'active' : ''}" href="/crypto">CRYPTO</a>
       <a class="ds-dashboard-tab ${window.location.pathname === '/crypto-visual' ? 'active' : ''}" href="/crypto-visual">CRYPTO VISUAL</a>
     `;
     header.insertAdjacentElement('afterend', nav);
+  }
+
+  if (window.location.pathname === '/dashboard') {
+    const selector = Array.from(document.querySelectorAll('section.card')).find(section =>
+      section.querySelector(':scope .label')?.textContent?.trim() === 'PRIMARY STOCK VIEW'
+    );
+    if (selector) selector.classList.add('ds-primary-stock-section', 'ds-live-stock-keep');
+
+    const marketCard = Array.from(document.querySelectorAll('section.grid.grid-2 > .card')).find(card =>
+      card.querySelector(':scope > .label')?.textContent?.trim() === 'MARKET'
+    );
+    if (marketCard) {
+      marketCard.classList.add('ds-market-card');
+      const marketSection = marketCard.parentElement;
+      marketSection?.classList.add('ds-market-section', 'ds-live-stock-keep');
+      const modelSignal = Array.from(marketSection?.children || []).find(card => card !== marketCard);
+      modelSignal?.classList.add('ds-model-signal-card');
+    }
+
+    document.body.classList.add(liveStockView ? 'ds-live-stock-view' : 'ds-model-research-view');
+
+    if (liveStockView) {
+      const brandSubtitle = document.querySelector('.brand .muted');
+      if (brandSubtitle) brandSubtitle.textContent = 'Live Stock Viewer · real-time market data + interactive price history';
+      const selectorLabel = selector?.querySelector('.label');
+      if (selectorLabel) selectorLabel.textContent = 'LIVE STOCK VIEWER';
+      const selectorTitle = selector?.querySelector('h3');
+      if (selectorTitle) selectorTitle.textContent = 'Search and Inspect Live Stocks';
+      const selectorCopy = selector?.querySelector('.muted');
+      if (selectorCopy) selectorCopy.textContent = 'Search by ticker or company name, then inspect live market data and interactive history.';
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('stock-selector-form');
+      if (form && liveStockView) form.action = `/dashboard?view=live#primary-stock-view`;
+    });
   }
 
   // Live Crypto V2 monitor: refresh values in place without reloading the page.
