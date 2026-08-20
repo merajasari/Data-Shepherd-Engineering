@@ -81,6 +81,27 @@
     }).filter(x=>x.rows.length>1).sort((a,b)=>b.ret-a.ret).slice(0,10);
   }
 
+  function dailyChangePct(symbol,currentPrice){
+    const q=quotes[symbol]||{};
+    for(const key of ['daily_change_pct','change_percent','change_pct','percent_change','percentChange']){
+      const v=Number(q[key]);
+      if(Number.isFinite(v))return Math.abs(v)>2?v/100:v;
+    }
+    for(const key of ['previous_close','prev_close','previousClose','prevClose']){
+      const prev=Number(q[key]);
+      if(Number.isFinite(prev)&&prev>0&&Number.isFinite(currentPrice))return currentPrice/prev-1;
+    }
+    const rows=data.get(symbol)||[];
+    if(!rows.length||!Number.isFinite(currentPrice))return null;
+    const currentDay=easternParts(Date.now());
+    let prev=null;
+    for(const row of rows){
+      const d=easternParts(row.t);
+      if(d.year!==currentDay.year||d.month!==currentDay.month||d.day!==currentDay.day)prev=row.price;
+    }
+    return Number.isFinite(prev)&&prev>0?currentPrice/prev-1:null;
+  }
+
   function render(){
     svg.innerHTML='';tip.style.display='none';
     const rank=ranking();
@@ -154,7 +175,9 @@
     svg.querySelectorAll('[data-sym]').forEach(l=>{const on=l.dataset.sym===best.x.symbol;l.setAttribute('opacity',on?1:.16);l.setAttribute('stroke-width',on?5:l.dataset.w);});
     const dot=svg.querySelector('#dot');dot.setAttribute('cx',X(best.q.t));dot.setAttribute('cy',best.y);dot.setAttribute('visibility','visible');
     const ret=best.q.price/best.x.rows[0].price-1;
-    tip.innerHTML=`<b>${best.x.symbol}</b><div class="muted">${names[best.x.symbol]||best.x.symbol}</div><div>Rank: <b>#${rank.indexOf(best.x)+1}</b></div><div>Price: <b>$${best.q.price.toFixed(2)}</b></div><div>Return: <b>${ret>=0?'+':''}${(ret*100).toFixed(2)}%</b></div><div>${new Date(best.q.t).toLocaleString()}${best.q.live?' · LIVE IEX':''}</div>`;
+    const daily=dailyChangePct(best.x.symbol,best.q.price);
+    const dailyText=Number.isFinite(daily)?`${daily>=0?'+':''}${(daily*100).toFixed(2)}%`:'—';
+    tip.innerHTML=`<b>${best.x.symbol}</b><div class="muted">${names[best.x.symbol]||best.x.symbol}</div><div>Rank: <b>#${rank.indexOf(best.x)+1}</b></div><div>Price: <b>$${best.q.price.toFixed(2)}</b></div><div>Daily Change: <b>${dailyText}</b></div><div>Range Return: <b>${ret>=0?'+':''}${(ret*100).toFixed(2)}%</b></div><div>${new Date(best.q.t).toLocaleString()}${best.q.live?' · LIVE IEX':''}</div>`;
     tip.style.display='block';tip.style.left=`${Math.min(rect.width-240,e.clientX-rect.left+12)}px`;tip.style.top=`${Math.max(8,e.clientY-rect.top-20)}px`;
   });
 
