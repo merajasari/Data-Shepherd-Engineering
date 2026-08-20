@@ -174,3 +174,83 @@
   load();
   setInterval(load,30000);
 })();
+
+/* Additive latest-model (frozen V8) equity chart. Inserted above the existing compact V4 chart. */
+(() => {
+  const metrics = document.querySelector('.v4-dashboard .v4-small-metrics');
+  if (!metrics || document.getElementById('v8-compact-equity-card')) return;
+
+  const style = document.createElement('style');
+  style.id = 'v8-compact-equity-style';
+  style.textContent = `
+    .v8-compact-equity{margin-top:20px;padding:18px 16px 16px;border:1px solid var(--border);border-radius:18px;background:rgba(8,20,36,.72);box-shadow:0 14px 34px rgba(0,0,0,.18);min-width:0}
+    .v8-compact-equity-title{color:var(--cyan);font-size:.72rem;font-weight:950;letter-spacing:.15em;text-transform:uppercase}
+    .v8-compact-equity-sub{margin-top:6px;color:var(--muted);font-size:.78rem;line-height:1.4}
+    .v8-compact-equity-legend{display:flex;align-items:center;gap:8px;margin-top:12px;color:#dfe8f6;font-size:.76rem;font-weight:800}
+    .v8-compact-equity-dot{width:10px;height:10px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px rgba(239,197,107,.28)}
+    .v8-compact-equity-wrap{position:relative;height:340px;margin-top:8px}
+    .v8-compact-equity-wrap svg{width:100%;height:100%;display:block;overflow:visible;cursor:crosshair}
+    .v8-compact-equity-tooltip{position:absolute;display:none;pointer-events:none;z-index:20;min-width:190px;padding:11px 12px;border:1px solid #2a5277;border-radius:12px;background:rgba(7,21,39,.97);box-shadow:0 16px 36px rgba(0,0,0,.38);font-size:.75rem;line-height:1.45;color:#f2f6ff}
+    .v8-compact-equity-tooltip strong{display:block;margin-bottom:5px;font-size:.8rem}.v8-compact-equity-tooltip-row{display:flex;justify-content:space-between;gap:16px}.v8-compact-equity-tooltip-name{display:flex;align-items:center;gap:7px}.v8-compact-equity-tooltip-value{font-weight:900}
+    .v8-compact-equity-summary{display:grid;grid-template-columns:1fr;gap:9px;border-top:1px solid rgba(120,155,205,.16);padding-top:13px;margin-top:8px}
+    .v8-compact-equity-summary-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.v8-compact-equity-summary-row span{color:var(--muted);font-size:.66rem;font-weight:900;letter-spacing:.08em}.v8-compact-equity-summary-row strong{font-size:.9rem;text-align:right}
+  `;
+  document.head.appendChild(style);
+
+  const card = document.createElement('div');
+  card.id = 'v8-compact-equity-card';
+  card.className = 'v8-compact-equity';
+  card.innerHTML = `
+    <div class="v8-compact-equity-title">PORTFOLIO EQUITY OVER TIME — LATEST MODEL</div>
+    <div class="v8-compact-equity-sub">Frozen V8 historical strategy equity on the same $100,000 research basis used by Model Performance Comparison.</div>
+    <div class="v8-compact-equity-legend"><span class="v8-compact-equity-dot"></span><span>V8 Frozen</span></div>
+    <div class="v8-compact-equity-wrap">
+      <svg id="v8-compact-equity-chart" viewBox="0 0 420 340" preserveAspectRatio="none" aria-label="V8 frozen portfolio equity over time"></svg>
+      <div id="v8-compact-equity-tooltip" class="v8-compact-equity-tooltip"></div>
+    </div>
+    <div class="v8-compact-equity-summary">
+      <div class="v8-compact-equity-summary-row"><span>STARTING EQUITY</span><strong id="v8-compact-start">—</strong></div>
+      <div class="v8-compact-equity-summary-row"><span>LATEST EQUITY</span><strong id="v8-compact-current">—</strong></div>
+      <div class="v8-compact-equity-summary-row"><span>TOTAL RETURN</span><strong id="v8-compact-change">—</strong></div>
+    </div>`;
+
+  const existingV4 = document.getElementById('v4-compact-equity-card');
+  if (existingV4) existingV4.insertAdjacentElement('beforebegin', card);
+  else metrics.insertAdjacentElement('afterend', card);
+
+  const svg = card.querySelector('#v8-compact-equity-chart');
+  const tooltip = card.querySelector('#v8-compact-equity-tooltip');
+  const ns='http://www.w3.org/2000/svg';
+  const money=v=>'$'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pct=v=>(Number(v)>=0?'+':'')+Number(v||0).toFixed(2)+'%';
+  const make=(tag,attrs={})=>{const n=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v)));svg.appendChild(n);return n;};
+
+  function render(rows){
+    svg.innerHTML=''; tooltip.style.display='none';
+    if(!rows || rows.length<2){const t=make('text',{x:210,y:170,'text-anchor':'middle',fill:'#91a6c2','font-size':12});t.textContent='V8 history unavailable.';return;}
+    const W=420,H=340,p={l:64,r:18,t:22,b:42};
+    const values=rows.map(r=>r.equity); let min=Math.min(...values),max=Math.max(...values); const span=Math.max(max-min,1000); min-=span*.08; max+=span*.08;
+    const x=i=>p.l+(W-p.l-p.r)*(i/Math.max(1,rows.length-1)); const y=v=>p.t+(H-p.t-p.b)*(1-(v-min)/Math.max(.000001,max-min));
+    for(let i=0;i<5;i++){const val=min+(max-min)*i/4,yy=y(val);make('line',{x1:p.l,y1:yy,x2:W-p.r,y2:yy,stroke:'rgba(145,166,194,.15)','stroke-width':1});const t=make('text',{x:p.l-8,y:yy+4,'text-anchor':'end',fill:'#91a6c2','font-size':10});t.textContent='$'+Math.round(val).toLocaleString();}
+    const pts=rows.map((r,i)=>[x(i),y(r.equity)]);make('polyline',{points:pts.map(q=>q.join(',')).join(' '),fill:'none',stroke:'#efc56b','stroke-width':3,'stroke-linecap':'round','stroke-linejoin':'round'});
+    const guide=make('line',{y1:p.t,y2:H-p.b,stroke:'#dfe8f6','stroke-width':1,'stroke-dasharray':'4 4',opacity:.45,visibility:'hidden'});const marker=make('circle',{r:5.5,fill:'#efc56b',stroke:'#07101f','stroke-width':2,visibility:'hidden'});const overlay=make('rect',{x:p.l,y:p.t,width:W-p.l-p.r,height:H-p.t-p.b,fill:'rgba(0,0,0,.001)','pointer-events':'all'});
+    [0,Math.floor((rows.length-1)/2),rows.length-1].forEach((idx,pos)=>{const row=rows[idx],t=make('text',{x:x(idx),y:H-16,'text-anchor':pos===0?'start':pos===2?'end':'middle',fill:'#91a6c2','font-size':9.5});t.textContent=new Date(row.timestamp).toLocaleDateString(undefined,{month:'numeric',day:'numeric',year:'2-digit'});});
+    overlay.addEventListener('pointermove',e=>{const rect=svg.getBoundingClientRect();const mx=(e.clientX-rect.left)/rect.width*W;const idx=Math.max(0,Math.min(rows.length-1,Math.round((mx-p.l)/(W-p.l-p.r)*Math.max(1,rows.length-1))));const row=rows[idx],xx=x(idx),yy=y(row.equity);guide.setAttribute('x1',xx);guide.setAttribute('x2',xx);guide.setAttribute('visibility','visible');marker.setAttribute('cx',xx);marker.setAttribute('cy',yy);marker.setAttribute('visibility','visible');tooltip.innerHTML=`<strong>${new Date(row.timestamp).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</strong><div class="v8-compact-equity-tooltip-row"><span class="v8-compact-equity-tooltip-name"><span class="v8-compact-equity-dot"></span>V8</span><span class="v8-compact-equity-tooltip-value">${money(row.equity)}</span></div>`;tooltip.style.display='block';const host=card.querySelector('.v8-compact-equity-wrap').getBoundingClientRect();tooltip.style.left=Math.min(e.clientX-host.left+10,host.width-205)+'px';tooltip.style.top=Math.max(6,e.clientY-host.top-58)+'px';});
+    overlay.addEventListener('pointerleave',()=>{tooltip.style.display='none';guide.setAttribute('visibility','hidden');marker.setAttribute('visibility','hidden');});
+  }
+
+  async function load(){
+    try{
+      const r=await fetch('/static/generated/stock_model_comparison.json',{cache:'no-store'}); if(!r.ok)throw new Error(`HTTP ${r.status}`); const d=await r.json();
+      const s=(d.series||[]).find(x=>x.model_id==='V8'); if(!s)throw new Error('V8 series missing');
+      const rows=(s.history||[]).map(x=>({timestamp:x.timestamp,equity:Number(x.equity)})).filter(x=>x.timestamp&&Number.isFinite(x.equity)).sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
+      if(rows.length<2)throw new Error('V8 history unavailable');
+      const start=Number(s.starting_capital||rows[0].equity||100000), current=rows.at(-1).equity, totalReturn=Number(s.total_return_pct ?? ((current/start-1)*100));
+      card.querySelector('#v8-compact-start').textContent=money(start);
+      card.querySelector('#v8-compact-current').textContent=money(current);
+      const change=card.querySelector('#v8-compact-change'); change.textContent=pct(totalReturn); change.className=totalReturn<0?'negative':'positive';
+      render(rows);
+    }catch(e){console.error('Compact V8 equity chart failed:',e);svg.innerHTML='';const t=make('text',{x:210,y:170,'text-anchor':'middle',fill:'#91a6c2','font-size':12});t.textContent='V8 portfolio history unavailable.';}
+  }
+  load();
+})();
