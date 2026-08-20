@@ -349,3 +349,68 @@
 
   boot();
 })();
+
+/* Replace the legacy CURRENT V4 TOP FIVE card with the frozen V8 Top-10 snapshot. */
+(() => {
+  const lower = document.querySelector('.v4-dashboard .v4-lower');
+  if (!lower) return;
+  const card = Array.from(lower.querySelectorAll(':scope > .card')).find(section => {
+    const label = section.querySelector(':scope > .label');
+    return label?.textContent.trim() === 'CURRENT V4 TOP FIVE';
+  });
+  if (!card) return;
+
+  const style = document.createElement('style');
+  style.id = 'v8-current-top10-style';
+  style.textContent = `
+    #v8-current-top10 .v8t-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+    #v8-current-top10 .v8t-state{padding:6px 9px;border:1px solid rgba(239,197,107,.28);border-radius:999px;background:rgba(239,197,107,.07);color:var(--gold);font-size:.68rem;font-weight:900}
+    #v8-current-top10 .v8t-note{margin-top:5px;color:var(--muted);font-size:.76rem;line-height:1.45}
+    #v8-current-top10 .v8-list-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid rgba(120,155,205,.15);border-radius:12px;background:rgba(8,20,36,.45)}
+    #v8-current-top10 .v8-rank{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:rgba(239,197,107,.15);color:var(--gold);font-weight:950}
+    #v8-current-top10 .v8-symbol{font-weight:950}.v8t-score{color:var(--muted);font-size:.72rem;margin-top:2px}.v8t-weight{color:var(--green);font-size:.76rem;font-weight:900;text-align:right}
+  `;
+  document.getElementById(style.id)?.remove();
+  document.head.appendChild(style);
+
+  card.id = 'v8-current-top10';
+  card.innerHTML = `
+    <div class="v8t-head">
+      <div><div class="label">CURRENT V8 TOP TEN</div><h3>Frozen DISTANCE_ONLY Ranking</h3></div>
+      <span class="v8t-state" id="v8t-state">LOADING</span>
+    </div>
+    <div class="v8t-note" id="v8t-note">Loading the latest eligible frozen-model snapshot…</div>
+    <div id="v4-top5" class="v4-list">Loading…</div>`;
+
+  const list = card.querySelector('#v4-top5');
+  const state = card.querySelector('#v8t-state');
+  const note = card.querySelector('#v8t-note');
+
+  async function loadTop10(){
+    try{
+      const r = await fetch('/api/v8/holdout',{cache:'no-store'});
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const rows = Array.isArray(d.latest_research_top10) ? d.latest_research_top10 : [];
+      state.textContent = String(d.state || 'FROZEN').replaceAll('_',' ');
+      const ts = d.latest_research_top10_timestamp_utc ? new Date(d.latest_research_top10_timestamp_utc) : null;
+      note.textContent = ts && !Number.isNaN(ts.getTime())
+        ? `Latest eligible frozen-model development snapshot: ${ts.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}. Not forward holdout evidence.`
+        : 'Latest eligible frozen-model development snapshot. Not forward holdout evidence.';
+      list.innerHTML = rows.length ? rows.map(row => `
+        <div class="v8-list-row">
+          <div class="v8-rank">${row.rank}</div>
+          <div><div class="v8-symbol">${row.symbol}</div><div class="v8t-score">DISTANCE_ONLY score ${Number(row.score).toFixed(4)}</div></div>
+          <div class="v8t-weight">10% target</div>
+        </div>`).join('') : '<div class="muted">V8 Top-10 snapshot is unavailable.</div>';
+    }catch(err){
+      state.textContent='DATA UNAVAILABLE';
+      note.textContent='V8 Top-10 snapshot is temporarily unavailable.';
+      list.innerHTML='<div class="muted">Unable to load V8 ranking snapshot.</div>';
+      console.error('V8 Top-10 card failed:',err);
+    }
+  }
+
+  loadTop10();
+  setInterval(loadTop10,30000);
+})();
