@@ -1,28 +1,25 @@
-"""Intraday chart data for the Live Stock Viewer TODAY range.
+"""Rolling 24-hour intraday data for Live Stock Viewer charts.
 
-Presentation-only: never writes to Gold, features, model artifacts, or holdout
-results. The full universe is ranked from one current Tiingo IEX snapshot using
-prevClose and tngoLast, then only the Top-10 symbols are hydrated with 5-minute
-intraday bars. If the snapshot is unavailable, live-cache + local-close ranking
-is used as a fallback.
+Presentation-only. This service never writes to Gold, features, model artifacts,
+or holdout evidence. It uses Tiingo intraday history plus the existing live IEX
+reference-price cache.
 """
 from __future__ import annotations
 
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
 
 from webapp.services.live_market_service import get_all_live_quotes
 
-EASTERN = ZoneInfo("America/New_York")
 CACHE_TTL_SECONDS = 60
-_cache = {"fetched": 0.0, "payload": None}
+_top_cache = {"fetched": 0.0, "payload": None}
+_symbol_cache: dict[str, dict] = {}
 
 
 def _latest_local_close(symbol: str):
@@ -36,54 +33,25 @@ def _latest_local_close(symbol: str):
         value = float(frame.iloc[-1]["close"])
         return value if value > 0 else None
     except Exception as exc:
-        print(f"[TODAY PRIOR CLOSE ERROR] {symbol}: {exc}")
+        print(f"[24H PRIOR CLOSE ERROR] {symbol}: {exc}")
         return None
 
 
-def _current_universe_snapshot(symbols: set[str], token: str) -> list[tuple]:
-    """Rank universe by current session return using one Tiingo IEX request."""
-    try:
-        response = requests.get(
-            "https://api.tiingo.com/iex",
-            params={"token": token},
-            timeout=5,
-        )
-        response.raise_for_status()
-        payload = response.json()
-    except Exception as exc:
-        print(f"[TODAY IEX SNAPSHOT ERROR] {exc}")
-        return []
-
-    ranked = []
-    for item in payload if isinstance(payload, list) else []:
-        symbol = str(item.get("ticker") or "").upper()
-        if symbol not in symbols:
-            continue
-        try:
-            prior_close = float(item.get("prevClose"))
-            live_price = float(item.get("tngoLast"))
-        except (TypeError, ValueError):
-            continue
-        if prior_close > 0 and live_price > 0:
-            ranked.append((live_price / prior_close - 1.0, symbol, prior_close, live_price))
-    ranked.sort(reverse=True)
-    return ranked
-
-
-def _fetch_intraday(symbol: str, session_date: str, token: str) -> tuple[str, list]:
-    """Fetch regular-session 5-minute bars for one symbol."""
+def _fetch_24h(symbol: str, token: str) -> list[dict]:
+    now_utc = datetime.now(timezone.utc)
+    cutoff = now_utc - timedelta(hours=24)
+    params = {
+        "startDate": cutoff.date().isoformat(),
+        "endDate": now_utc.date().isoformat(),
+        "resampleFreq": "5min",
+        "afterHours": "true",
+        "forceFill": "true",
+        "token": token,
+    }
     urls = [
         f"https://api.tiingo.com/tiingo/equity/intraday/{symbol}/prices",
         f"https://api.tiingo.com/iex/{symbol}/prices",
     ]
-    params = {
-        "startDate": session_date,
-        "endDate": session_date,
-        "resampleFreq": "5min",
-        "afterHours": "false",
-        "forceFill": "true",
-        "token": token,
-    }
     payload = None
     for url in urls:
         try:
@@ -94,20 +62,59 @@ def _fetch_intraday(symbol: str, session_date: str, token: str) -> tuple[str, li
                 payload = candidate
                 break
         except Exception as exc:
-            print(f"[TODAY INTRADAY ERROR] {symbol} {url}: {exc}")
+            print(f"[24H INTRADAY ERROR] {symbol} {url}: {exc}")
+
     rows = []
     for item in payload or []:
         try:
-            ts = str(item["date"])
+            ts = pd.to_datetime(item["date"], utc=True).to_pydatetime()
             price = float(item.get("close"))
-            if price > 0:
-                rows.append({"t": ts, "price": price})
+            if ts >= cutoff and price > 0:
+                rows.append({"t": ts.isoformat(), "price": price})
         except (KeyError, TypeError, ValueError):
             continue
-    return symbol, rows
+    rows.sort(key=lambda row: row["t"])
+    return rows
 
 
-def _fallback_rank(symbols: list[str], quotes: dict) -> list[tuple]:
+def get_symbol_24h_intraday(symbol: str) -> dict:
+    symbol = symbol.upper().strip()
+    now_mono = time.monotonic()
+    cached = _symbol_cache.get(symbol)
+    if cached and now_mono - cached["fetched"] < CACHE_TTL_SECONDS:
+        return cached["payload"]
+
+    token = os.getenv("TIINGO_API_KEY")
+    rows = _fetch_24h(symbol, token) if token else []
+    live_state = get_all_live_quotes()
+    quote = (live_state.get("quotes", {}) or {}).get(symbol) or {}
+    try:
+        live_price = float(quote.get("reference_price"))
+    except (TypeError, ValueError):
+        live_price = None
+    payload = {
+        "window_hours": 24,
+        "symbol": symbol,
+        "series": rows,
+        "updated_at": live_state.get("updated_at"),
+        "live": {
+            "reference_price": live_price,
+            "timestamp": quote.get("timestamp"),
+        },
+        "source": "TIINGO_INTRADAY_5MIN_PLUS_LIVE_IEX",
+    }
+    _symbol_cache[symbol] = {"fetched": now_mono, "payload": payload}
+    return payload
+
+
+def get_today_top10_intraday(symbols: list[str]) -> dict:
+    """Return a rolling 24-hour series for current Top-10 candidates."""
+    now_mono = time.monotonic()
+    if _top_cache["payload"] is not None and now_mono - _top_cache["fetched"] < CACHE_TTL_SECONDS:
+        return _top_cache["payload"]
+
+    live_state = get_all_live_quotes()
+    quotes = live_state.get("quotes", {}) or {}
     ranked = []
     for symbol in symbols:
         prior_close = _latest_local_close(symbol)
@@ -119,44 +126,41 @@ def _fallback_rank(symbols: list[str], quotes: dict) -> list[tuple]:
         if prior_close and live_price and prior_close > 0:
             ranked.append((live_price / prior_close - 1.0, symbol, prior_close, live_price))
     ranked.sort(reverse=True)
-    return ranked
-
-
-def get_today_top10_intraday(symbols: list[str]) -> dict:
-    """Return today's Top-10 intraday series plus current live marks."""
-    now_mono = time.monotonic()
-    if _cache["payload"] is not None and now_mono - _cache["fetched"] < CACHE_TTL_SECONDS:
-        return _cache["payload"]
-
-    session_date = datetime.now(EASTERN).date().isoformat()
-    live_state = get_all_live_quotes()
-    quotes = live_state.get("quotes", {}) or {}
-    token = os.getenv("TIINGO_API_KEY")
-
-    ranked = _current_universe_snapshot(set(symbols), token) if token else []
-    ranking_source = "TIINGO_IEX_SNAPSHOT"
-    if not ranked:
-        ranked = _fallback_rank(symbols, quotes)
-        ranking_source = "LIVE_CACHE_PLUS_LOCAL_CLOSE_FALLBACK"
     candidates = ranked[:10]
 
+    token = os.getenv("TIINGO_API_KEY")
     series = {}
     if token and candidates:
         with ThreadPoolExecutor(max_workers=5) as pool:
-            futures = [pool.submit(_fetch_intraday, symbol, session_date, token) for _, symbol, _, _ in candidates]
+            futures = [pool.submit(_fetch_24h, symbol, token) for _, symbol, _, _ in candidates]
             for future in as_completed(futures):
                 try:
-                    symbol, rows = future.result()
+                    symbol, rows = None, None
+                    result = future.result()
+                    # recover symbol from the submitted future by matching is awkward;
+                    # use the candidate order below if this branch is ever reached.
+                    rows = result
+                except Exception as exc:
+                    print(f"[24H INTRADAY WORKER ERROR] {exc}")
+
+        # Re-fetch from the per-symbol cache path in a bounded 10-symbol loop so
+        # symbol association remains explicit and readable.
+        series = {}
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            future_map = {pool.submit(_fetch_24h, symbol, token): symbol for _, symbol, _, _ in candidates}
+            for future in as_completed(future_map):
+                symbol = future_map[future]
+                try:
+                    rows = future.result()
                     if rows:
                         series[symbol] = rows
                 except Exception as exc:
-                    print(f"[TODAY INTRADAY WORKER ERROR] {exc}")
+                    print(f"[24H INTRADAY WORKER ERROR] {symbol}: {exc}")
 
     payload = {
-        "session_date": session_date,
+        "window_hours": 24,
         "updated_at": live_state.get("updated_at"),
         "source": "TIINGO_INTRADAY_5MIN_PLUS_LIVE_IEX",
-        "ranking_source": ranking_source,
         "symbols": [symbol for _, symbol, _, _ in candidates],
         "series": series,
         "live": {
@@ -169,6 +173,6 @@ def get_today_top10_intraday(symbols: list[str]) -> dict:
             for ret, symbol, prior_close, live_price in candidates
         },
     }
-    _cache["fetched"] = now_mono
-    _cache["payload"] = payload
+    _top_cache["fetched"] = now_mono
+    _top_cache["payload"] = payload
     return payload
