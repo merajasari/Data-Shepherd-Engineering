@@ -77,11 +77,12 @@
     const marketCard = Array.from(document.querySelectorAll('section.grid.grid-2 > .card')).find(card =>
       card.querySelector(':scope > .label')?.textContent?.trim() === 'MARKET'
     );
+    let modelSignal = null;
     if (marketCard) {
       marketCard.classList.add('ds-market-card');
       const marketSection = marketCard.parentElement;
       marketSection?.classList.add('ds-market-section', 'ds-live-stock-keep');
-      const modelSignal = Array.from(marketSection?.children || []).find(card => card !== marketCard);
+      modelSignal = Array.from(marketSection?.children || []).find(card => card !== marketCard);
       modelSignal?.classList.add('ds-model-signal-card');
     }
 
@@ -89,6 +90,71 @@
       section.querySelector(':scope > .label')?.textContent?.trim() === 'RECENT MARKET DATA'
     );
     if (recentMarketData) recentMarketData.classList.add('ds-recent-market-data', 'ds-live-stock-keep');
+
+    // Replace the legacy V5 selected-stock signal with the frozen V8 DISTANCE_ONLY
+    // signal, and keep this model-specific card on MODEL RESEARCH only.
+    if (modelResearchView && modelSignal) {
+      const selectedSymbol = document.getElementById('stock-select')?.value || params.get('symbol') || 'AAPL';
+      modelSignal.innerHTML = `
+        <div class="label">V8 5-DAY RELATIVE-RANK SIGNAL</div>
+        <h2 id="v8-model-rank">Loading…</h2>
+        <div id="v8-model-score" class="hero-value">—</div>
+        <div class="muted">Frozen V8 DISTANCE_ONLY cross-sectional ranking score</div>
+        <div class="grid grid-3" style="margin-top:18px">
+          <div class="metric"><span>RANK PERCENTILE</span><strong id="v8-model-percentile">—</strong></div>
+          <div class="metric"><span>TOP 10</span><strong id="v8-model-top10">—</strong></div>
+          <div class="metric"><span>SIGNAL</span><strong id="v8-model-signal">—</strong></div>
+        </div>
+        <div id="v8-model-note" class="muted" style="margin-top:14px;font-size:.76rem;line-height:1.45">Latest eligible frozen-model development snapshot; not forward holdout evidence.</div>`;
+
+      fetch('/api/v8/holdout', {cache:'no-store'})
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then(data => {
+          const rows = Array.isArray(data.latest_research_rankings) ? data.latest_research_rankings : [];
+          const row = rows.find(item => String(item.symbol).toUpperCase() === String(selectedSymbol).toUpperCase());
+          if (!row) throw new Error(`No V8 ranking for ${selectedSymbol}`);
+          const count = rows.length;
+          const rank = Number(row.rank);
+          const score = Number(row.score);
+          const percentile = count > 1 ? ((count - rank) / (count - 1)) * 100 : 100;
+          const top10 = Boolean(row.selected_top10 || rank <= 10);
+
+          const rankEl = modelSignal.querySelector('#v8-model-rank');
+          const scoreEl = modelSignal.querySelector('#v8-model-score');
+          const pctEl = modelSignal.querySelector('#v8-model-percentile');
+          const topEl = modelSignal.querySelector('#v8-model-top10');
+          const signalEl = modelSignal.querySelector('#v8-model-signal');
+          const noteEl = modelSignal.querySelector('#v8-model-note');
+
+          rankEl.textContent = `#${rank} / ${count}`;
+          scoreEl.textContent = Number.isFinite(score) ? score.toFixed(4) : '—';
+          scoreEl.classList.remove('positive','negative');
+          if (Number.isFinite(score)) scoreEl.classList.add(score >= 0 ? 'positive' : 'negative');
+          pctEl.textContent = `${percentile.toFixed(1)}%`;
+          topEl.textContent = top10 ? 'YES' : 'NO';
+          topEl.className = top10 ? 'positive' : '';
+          signalEl.textContent = top10 ? 'TOP-10 SELECTED' : 'RANKED';
+
+          if (data.latest_research_rankings_timestamp_utc) {
+            const dt = new Date(data.latest_research_rankings_timestamp_utc);
+            if (!Number.isNaN(dt.getTime())) {
+              noteEl.textContent = `Frozen V8 DISTANCE_ONLY snapshot from ${dt.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'})}. Score is a ranking signal, not a calibrated probability or guaranteed return.`;
+            }
+          }
+        })
+        .catch(error => {
+          modelSignal.querySelector('#v8-model-rank').textContent = 'V8 data unavailable';
+          modelSignal.querySelector('#v8-model-score').textContent = '—';
+          modelSignal.querySelector('#v8-model-percentile').textContent = '—';
+          modelSignal.querySelector('#v8-model-top10').textContent = '—';
+          modelSignal.querySelector('#v8-model-signal').textContent = '—';
+          modelSignal.querySelector('#v8-model-note').textContent = 'Unable to load the frozen V8 ranking snapshot for this stock.';
+          console.error('[MODEL RESEARCH V8 SIGNAL]', error);
+        });
+    }
 
     // The V8 holdout belongs exclusively to Model Research. It is sometimes
     // injected after the base dashboard has rendered, so hide both its known
@@ -122,6 +188,33 @@
       if (selectorTitle) selectorTitle.textContent = 'Search and Inspect Live Stocks';
       const selectorCopy = selector?.querySelector('.muted');
       if (selectorCopy) selectorCopy.textContent = 'Search by ticker or company name, then inspect live market data and interactive history.';
+
+      // Keep search/dropdown navigation inside LIVE STOCK VIEWER and preserve the
+      // selected ticker. The legacy inline code uses form.submit(), so override
+      // that method as well as the normal submit event.
+      const form = document.getElementById('stock-selector-form');
+      const select = document.getElementById('stock-select');
+      const search = document.getElementById('stock-search');
+      const navigateLive = () => {
+        const symbol = select?.value || 'AAPL';
+        window.location.assign(`/dashboard?view=live&symbol=${encodeURIComponent(symbol)}#primary-stock-view`);
+      };
+      if (form) {
+        form.action = '/dashboard?view=live';
+        form.submit = navigateLive;
+        form.addEventListener('submit', event => {
+          event.preventDefault();
+          navigateLive();
+        }, true);
+      }
+      if (search && select) {
+        search.addEventListener('keydown', event => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            if (select.options.length && !select.options[0].disabled) navigateLive();
+          }
+        }, true);
+      }
     }
 
     window.addEventListener('DOMContentLoaded', () => {
