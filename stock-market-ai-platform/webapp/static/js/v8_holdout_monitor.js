@@ -257,84 +257,95 @@
 
 /* Interactive controls for the frozen V8 model-structure card. */
 (() => {
-  const card = document.getElementById('v8-portfolio-structure');
-  if (!card || document.getElementById('v8-structure-interactive')) return;
-
-  const style = document.createElement('style');
-  style.id = 'v8-structure-interactive-style';
-  style.textContent = `
-    #v8-portfolio-structure .v4-donut{cursor:pointer;transition:transform .18s ease,filter .18s ease}
-    #v8-portfolio-structure .v4-donut:hover{transform:scale(1.035);filter:brightness(1.08)}
-    .v8si-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 12px}.v8si-tab{border:1px solid var(--border);background:rgba(8,20,36,.62);color:var(--muted);border-radius:999px;padding:8px 11px;font-weight:850;cursor:pointer}.v8si-tab.active,.v8si-tab:hover{color:#07101f;background:linear-gradient(90deg,var(--gold),var(--cyan));border-color:transparent}
-    .v8si-panel{padding:13px 14px;border:1px solid rgba(120,155,205,.16);border-radius:14px;background:rgba(7,16,31,.42);min-height:118px}.v8si-title{font-weight:900;margin-bottom:6px}.v8si-copy{color:var(--muted);font-size:.8rem;line-height:1.5}
-    .v8si-positions{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:11px}.v8si-position{padding:8px 5px;border:1px solid rgba(239,197,107,.24);border-radius:10px;background:rgba(239,197,107,.07);text-align:center;cursor:pointer;color:var(--text);font-weight:850}.v8si-position:hover,.v8si-position.active{background:rgba(239,197,107,.18);border-color:rgba(239,197,107,.65)}
-    .v8si-cohorts{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}.v8si-cohort{height:10px;border-radius:999px;background:rgba(54,216,255,.22);overflow:hidden}.v8si-cohort span{display:block;height:100%;background:var(--cyan)}
-    .v8si-live{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}.v8si-live div{padding:9px;border:1px solid rgba(120,155,205,.14);border-radius:10px;background:rgba(8,20,36,.5)}.v8si-live span{display:block;color:var(--muted);font-size:.62rem;font-weight:900;letter-spacing:.07em}.v8si-live strong{display:block;margin-top:3px;font-size:.9rem}
-    @media(max-width:650px){.v8si-positions{grid-template-columns:repeat(2,1fr)}.v8si-live{grid-template-columns:1fr}}
-  `;
-  document.head.appendChild(style);
-
-  const host = document.createElement('div');
-  host.id = 'v8-structure-interactive';
-  host.innerHTML = `
-    <div class="v8si-tabs" role="tablist" aria-label="V8 model structure views">
-      <button type="button" class="v8si-tab active" data-view="allocation">Allocation</button>
-      <button type="button" class="v8si-tab" data-view="execution">Execution</button>
-      <button type="button" class="v8si-tab" data-view="cohorts">Cohorts</button>
-      <button type="button" class="v8si-tab" data-view="holdout">Holdout</button>
-    </div>
-    <div class="v8si-panel" aria-live="polite"></div>`;
-  card.appendChild(host);
-
-  let holdout = null;
-  let selectedPosition = null;
-  const panel = host.querySelector('.v8si-panel');
-  const tabs = Array.from(host.querySelectorAll('.v8si-tab'));
-
-  const views = {
-    allocation: () => `
-      <div class="v8si-title">10 equal-weight positions · 100% invested</div>
-      <div class="v8si-copy">Each selected stock receives exactly 10% target weight. Click any position below to inspect its contract weight.</div>
-      <div class="v8si-positions">${Array.from({length:10},(_,i)=>`<button type="button" class="v8si-position${selectedPosition===i?' active':''}" data-position="${i}">Position ${i+1}<br><span style="color:var(--gold)">10%</span></button>`).join('')}</div>
-      ${selectedPosition!==null?`<div class="v8si-copy" style="margin-top:9px"><strong>Position ${selectedPosition+1}</strong> carries 10% of the basket; all other nine positions carry the same target weight.</div>`:''}`,
-    execution: () => `
-      <div class="v8si-title">Decision → next-open entry → 5-session exit</div>
-      <div class="v8si-copy">V8 ranks the frozen 100-stock universe, selects the top 10, enters at the next session's open, then exits five sessions later. Modeled trading friction is 10 bps per dollar traded.</div>
-      <div class="v8si-live"><div><span>ENTRY</span><strong>Next Open</strong></div><div><span>HOLD</span><strong>5 Sessions</strong></div><div><span>COST</span><strong>10 bps</strong></div></div>`,
-    cohorts: () => `
-      <div class="v8si-title">Five staggered cohort offsets</div>
-      <div class="v8si-copy">The frozen contract uses cohort offsets 0 through 4 so one 5-session holding cycle can mature each session once the process is fully active.</div>
-      <div class="v8si-cohorts">${[0,1,2,3,4].map(i=>`<div title="Cohort offset ${i}" class="v8si-cohort"><span style="width:${20*(i+1)}%"></span></div>`).join('')}</div>
-      <div class="v8si-copy" style="margin-top:9px">Offsets: 0 · 1 · 2 · 3 · 4</div>`,
-    holdout: () => {
-      const d = holdout || {};
-      const state = String(d.state || 'LOADING').replaceAll('_',' ');
-      return `<div class="v8si-title">Formal forward holdout</div>
-        <div class="v8si-copy">The strategy remains frozen while the Sep 1, 2026+ append-only evidence stream accumulates. No pre-boundary observations are counted as holdout evidence.</div>
-        <div class="v8si-live"><div><span>STATE</span><strong>${state}</strong></div><div><span>DECISIONS</span><strong>${d.decisions ?? '—'}</strong></div><div><span>COMPLETED</span><strong>${d.completed_cohorts ?? '—'}</strong></div></div>`;
+  let attempts = 0;
+  const boot = () => {
+    const card = document.getElementById('v8-portfolio-structure');
+    if (!card) {
+      attempts += 1;
+      if (attempts < 150) setTimeout(boot, 100);
+      return;
     }
+    if (document.getElementById('v8-structure-interactive')) return;
+
+    const style = document.createElement('style');
+    style.id = 'v8-structure-interactive-style';
+    style.textContent = `
+      #v8-portfolio-structure .v4-donut{cursor:pointer;transition:transform .18s ease,filter .18s ease}
+      #v8-portfolio-structure .v4-donut:hover{transform:scale(1.035);filter:brightness(1.08)}
+      .v8si-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 12px}.v8si-tab{border:1px solid var(--border);background:rgba(8,20,36,.62);color:var(--muted);border-radius:999px;padding:8px 11px;font-weight:850;cursor:pointer}.v8si-tab.active,.v8si-tab:hover{color:#07101f;background:linear-gradient(90deg,var(--gold),var(--cyan));border-color:transparent}
+      .v8si-panel{padding:13px 14px;border:1px solid rgba(120,155,205,.16);border-radius:14px;background:rgba(7,16,31,.42);min-height:118px}.v8si-title{font-weight:900;margin-bottom:6px}.v8si-copy{color:var(--muted);font-size:.8rem;line-height:1.5}
+      .v8si-positions{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:11px}.v8si-position{padding:8px 5px;border:1px solid rgba(239,197,107,.24);border-radius:10px;background:rgba(239,197,107,.07);text-align:center;cursor:pointer;color:var(--text);font-weight:850}.v8si-position:hover,.v8si-position.active{background:rgba(239,197,107,.18);border-color:rgba(239,197,107,.65)}
+      .v8si-cohorts{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}.v8si-cohort{height:10px;border-radius:999px;background:rgba(54,216,255,.22);overflow:hidden}.v8si-cohort span{display:block;height:100%;background:var(--cyan)}
+      .v8si-live{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}.v8si-live div{padding:9px;border:1px solid rgba(120,155,205,.14);border-radius:10px;background:rgba(8,20,36,.5)}.v8si-live span{display:block;color:var(--muted);font-size:.62rem;font-weight:900;letter-spacing:.07em}.v8si-live strong{display:block;margin-top:3px;font-size:.9rem}
+      @media(max-width:650px){.v8si-positions{grid-template-columns:repeat(2,1fr)}.v8si-live{grid-template-columns:1fr}}
+    `;
+    document.getElementById(style.id)?.remove();
+    document.head.appendChild(style);
+
+    const host = document.createElement('div');
+    host.id = 'v8-structure-interactive';
+    host.innerHTML = `
+      <div class="v8si-tabs" role="tablist" aria-label="V8 model structure views">
+        <button type="button" class="v8si-tab active" data-view="allocation">Allocation</button>
+        <button type="button" class="v8si-tab" data-view="execution">Execution</button>
+        <button type="button" class="v8si-tab" data-view="cohorts">Cohorts</button>
+        <button type="button" class="v8si-tab" data-view="holdout">Holdout</button>
+      </div>
+      <div class="v8si-panel" aria-live="polite"></div>`;
+    card.appendChild(host);
+
+    let holdout = null;
+    let selectedPosition = null;
+    const panel = host.querySelector('.v8si-panel');
+    const tabs = Array.from(host.querySelectorAll('.v8si-tab'));
+
+    const views = {
+      allocation: () => `
+        <div class="v8si-title">10 equal-weight positions · 100% invested</div>
+        <div class="v8si-copy">Each selected stock receives exactly 10% target weight. Click any position below to inspect its contract weight.</div>
+        <div class="v8si-positions">${Array.from({length:10},(_,i)=>`<button type="button" class="v8si-position${selectedPosition===i?' active':''}" data-position="${i}">Position ${i+1}<br><span style="color:var(--gold)">10%</span></button>`).join('')}</div>
+        ${selectedPosition!==null?`<div class="v8si-copy" style="margin-top:9px"><strong>Position ${selectedPosition+1}</strong> carries 10% of the basket; all other nine positions carry the same target weight.</div>`:''}`,
+      execution: () => `
+        <div class="v8si-title">Decision → next-open entry → 5-session exit</div>
+        <div class="v8si-copy">V8 ranks the frozen 100-stock universe, selects the top 10, enters at the next session's open, then exits five sessions later. Modeled trading friction is 10 bps per dollar traded.</div>
+        <div class="v8si-live"><div><span>ENTRY</span><strong>Next Open</strong></div><div><span>HOLD</span><strong>5 Sessions</strong></div><div><span>COST</span><strong>10 bps</strong></div></div>`,
+      cohorts: () => `
+        <div class="v8si-title">Five staggered cohort offsets</div>
+        <div class="v8si-copy">The frozen contract uses cohort offsets 0 through 4 so one 5-session holding cycle can mature each session once the process is fully active.</div>
+        <div class="v8si-cohorts">${[0,1,2,3,4].map(i=>`<div title="Cohort offset ${i}" class="v8si-cohort"><span style="width:${20*(i+1)}%"></span></div>`).join('')}</div>
+        <div class="v8si-copy" style="margin-top:9px">Offsets: 0 · 1 · 2 · 3 · 4</div>`,
+      holdout: () => {
+        const d = holdout || {};
+        const state = String(d.state || 'LOADING').replaceAll('_',' ');
+        return `<div class="v8si-title">Formal forward holdout</div>
+          <div class="v8si-copy">The strategy remains frozen while the Sep 1, 2026+ append-only evidence stream accumulates. No pre-boundary observations are counted as holdout evidence.</div>
+          <div class="v8si-live"><div><span>STATE</span><strong>${state}</strong></div><div><span>DECISIONS</span><strong>${d.decisions ?? '—'}</strong></div><div><span>COMPLETED</span><strong>${d.completed_cohorts ?? '—'}</strong></div></div>`;
+      }
+    };
+
+    function show(view){
+      tabs.forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+      panel.innerHTML = views[view]();
+      panel.querySelectorAll('[data-position]').forEach(btn=>btn.addEventListener('click',()=>{
+        selectedPosition = Number(btn.dataset.position);
+        show('allocation');
+      }));
+    }
+
+    tabs.forEach(btn=>btn.addEventListener('click',()=>show(btn.dataset.view)));
+    card.querySelector('.v4-donut')?.addEventListener('click',()=>{
+      const current = tabs.findIndex(b=>b.classList.contains('active'));
+      const next = tabs[(current+1)%tabs.length];
+      show(next.dataset.view);
+    });
+
+    fetch('/api/v8/holdout',{cache:'no-store'})
+      .then(r=>r.ok?r.json():Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(d=>{holdout=d;if(host.querySelector('.v8si-tab.active')?.dataset.view==='holdout')show('holdout');})
+      .catch(()=>{});
+
+    show('allocation');
   };
 
-  function show(view){
-    tabs.forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-    panel.innerHTML = views[view]();
-    panel.querySelectorAll('[data-position]').forEach(btn=>btn.addEventListener('click',()=>{
-      selectedPosition = Number(btn.dataset.position);
-      show('allocation');
-    }));
-  }
-
-  tabs.forEach(btn=>btn.addEventListener('click',()=>show(btn.dataset.view)));
-  card.querySelector('.v4-donut')?.addEventListener('click',()=>{
-    const current = tabs.findIndex(b=>b.classList.contains('active'));
-    const next = tabs[(current+1)%tabs.length];
-    show(next.dataset.view);
-  });
-
-  fetch('/api/v8/holdout',{cache:'no-store'})
-    .then(r=>r.ok?r.json():Promise.reject(new Error(`HTTP ${r.status}`)))
-    .then(d=>{holdout=d;if(host.querySelector('.v8si-tab.active')?.dataset.view==='holdout')show('holdout');})
-    .catch(()=>{});
-
-  show('allocation');
+  boot();
 })();
