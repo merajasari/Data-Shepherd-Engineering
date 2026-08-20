@@ -1,4 +1,23 @@
 (() => {
+  // Remove only the compact V4 paper-portfolio chart shown beside the dashboard metrics.
+  // Do not touch .v4-chart-card, which is repurposed by v4_equity_chart.js for the
+  // MODEL PERFORMANCE COMPARISON panel.
+  const removeCompactV4Equity = () => {
+    const compact = document.getElementById('v4-compact-equity-card');
+    if (compact) {
+      compact.remove();
+      return true;
+    }
+    return false;
+  };
+
+  removeCompactV4Equity();
+  const compactObserver = new MutationObserver(() => {
+    removeCompactV4Equity();
+  });
+  compactObserver.observe(document.documentElement, { childList: true, subtree: true });
+  window.setTimeout(() => compactObserver.disconnect(), 10000);
+
   const sections = Array.from(document.querySelectorAll('section.card'));
 
   // The full 100-stock V8 ranking board is no longer part of the Model Research UI.
