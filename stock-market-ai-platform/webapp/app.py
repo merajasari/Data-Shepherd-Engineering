@@ -56,6 +56,7 @@ def inject_dashboard_modules(response):
             '<script src="/static/js/market_history_chart.js" defer></script>',
             '<script src="/static/js/primary_stock_spotlight.js" defer></script>',
             '<script src="/static/js/top_live_stock_comparison.js" defer></script>',
+            '<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>',
         ])
         if marker in html:
             for script in scripts:
