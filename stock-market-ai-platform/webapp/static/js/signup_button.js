@@ -44,6 +44,7 @@
       body.ds-model-research-view .ds-market-card{display:none!important}
       body.ds-model-research-view .ds-market-section{grid-template-columns:1fr!important}
       body.ds-model-research-view .market-history-card{display:none!important}
+      body.ds-model-research-view .ds-recent-market-data{display:none!important}
       body.ds-live-stock-view .shell>section:not(.ds-live-stock-keep):not(.market-history-card){display:none!important}
       body.ds-live-stock-view .ds-market-section{grid-template-columns:1fr!important}
       body.ds-live-stock-view .ds-model-signal-card{display:none!important}
@@ -83,6 +84,11 @@
       const modelSignal = Array.from(marketSection?.children || []).find(card => card !== marketCard);
       modelSignal?.classList.add('ds-model-signal-card');
     }
+
+    const recentMarketData = Array.from(document.querySelectorAll('section.card')).find(section =>
+      section.querySelector(':scope > .label')?.textContent?.trim() === 'RECENT MARKET DATA'
+    );
+    if (recentMarketData) recentMarketData.classList.add('ds-recent-market-data', 'ds-live-stock-keep');
 
     // The V8 holdout belongs exclusively to Model Research. It is sometimes
     // injected after the base dashboard has rendered, so hide both its known
