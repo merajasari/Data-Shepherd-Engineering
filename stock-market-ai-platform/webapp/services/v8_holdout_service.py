@@ -54,8 +54,8 @@ def _event_history(events):
     return sorted(rows, key=lambda row: row.get("timestamp_utc") or "")
 
 
-def _latest_v8_top10():
-    """Read the latest eligible pre-holdout DISTANCE_ONLY Top-10 snapshot."""
+def _latest_v8_rankings():
+    """Read the latest eligible pre-holdout DISTANCE_ONLY full ranking snapshot."""
     if not V8_RANKED_PATH.exists():
         return {"timestamp_utc": None, "rows": []}
     try:
@@ -75,15 +75,16 @@ def _latest_v8_top10():
         latest = (
             panel[panel["timestamp_utc"] == latest_ts]
             .sort_values(["rank_descending", "symbol"], ascending=[True, True])
-            .head(10)
         )
         rows = []
         for _, row in latest.iterrows():
+            rank = int(row["rank_descending"])
             rows.append({
-                "rank": int(row["rank_descending"]),
+                "rank": rank,
                 "symbol": str(row["symbol"]),
                 "score": float(row["score"]),
-                "target_weight": 0.10,
+                "selected_top10": rank <= 10,
+                "target_weight": 0.10 if rank <= 10 else 0.0,
             })
         return {"timestamp_utc": latest_ts.isoformat(), "rows": rows}
     except Exception:
@@ -122,7 +123,8 @@ def get_v8_holdout_dashboard():
     entries = [e for e in ev if e.get("event_type") == "ENTRY"]
     exits = [e for e in ev if e.get("event_type") == "EXIT"]
     rel = [float(e["net_relative_return"]) for e in exits if e.get("net_relative_return") is not None]
-    latest_top10 = _latest_v8_top10()
+    latest_rankings = _latest_v8_rankings()
+    latest_top10 = latest_rankings["rows"][:10]
     if now < HOLDOUT_START:
         state = "WAITING_FOR_HOLDOUT"
     elif not exits:
@@ -144,9 +146,12 @@ def get_v8_holdout_dashboard():
         "latest_exit": exits[-1] if exits else None,
         "curve": _curve(exits),
         "event_history": _event_history(ev),
-        "latest_research_top10_timestamp_utc": latest_top10["timestamp_utc"],
-        "latest_research_top10": latest_top10["rows"],
+        "latest_research_top10_timestamp_utc": latest_rankings["timestamp_utc"],
+        "latest_research_top10": latest_top10,
         "latest_research_top10_note": "Latest eligible frozen-model development snapshot; not forward holdout evidence.",
+        "latest_research_rankings_timestamp_utc": latest_rankings["timestamp_utc"],
+        "latest_research_rankings": latest_rankings["rows"],
+        "latest_research_rankings_note": "Latest eligible frozen-model full DISTANCE_ONLY ranking snapshot; not forward holdout evidence.",
         "brokerage_orders": False,
         "strategy_modified": False,
     }
