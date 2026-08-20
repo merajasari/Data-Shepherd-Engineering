@@ -69,6 +69,11 @@
   }
 
   if (window.location.pathname === '/dashboard') {
+    const streamHealthScript = document.createElement('script');
+    streamHealthScript.src = '/static/js/v8_stream_health_visual.js';
+    streamHealthScript.onerror = () => console.error('Unable to load V8 stream health visualization.');
+    document.head.appendChild(streamHealthScript);
+
     const selector = Array.from(document.querySelectorAll('section.card')).find(section =>
       section.querySelector(':scope .label')?.textContent?.trim() === 'PRIMARY STOCK VIEW'
     );
@@ -156,9 +161,6 @@
         });
     }
 
-    // The V8 holdout belongs exclusively to Model Research. It is sometimes
-    // injected after the base dashboard has rendered, so hide both its known
-    // root and any matching late-added section while the live viewer is active.
     const hideV8HoldoutFromLiveViewer = () => {
       if (!liveStockView) return;
       const root = document.getElementById('v8-holdout-monitor');
@@ -189,9 +191,6 @@
       const selectorCopy = selector?.querySelector('.muted');
       if (selectorCopy) selectorCopy.textContent = 'Search by ticker or company name, then inspect live market data and interactive history.';
 
-      // Keep search/dropdown navigation inside LIVE STOCK VIEWER and preserve the
-      // selected ticker. The legacy inline code uses form.submit(), so override
-      // that method as well as the normal submit event.
       const form = document.getElementById('stock-selector-form');
       const select = document.getElementById('stock-select');
       const search = document.getElementById('stock-search');
@@ -224,7 +223,6 @@
     });
   }
 
-  // Live Crypto V2 monitor: refresh values in place without reloading the page.
   if (window.location.pathname === '/crypto') {
     const liveCard = document.querySelector('section.card.live');
     if (!liveCard) return;
