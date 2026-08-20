@@ -1,8 +1,8 @@
 """Local-only bulk history payload for the Live Stock Viewer comparison chart.
 
-No network calls, no model inference, no writes.  Reads only timestamp + close from
-Gold parquet files and keeps a short in-process cache so the comparison chart can
-hydrate in one request without tying up web workers with 100 Tiingo REST calls.
+Positive limits read local Gold only. A negative limit is a deliberate internal
+sentinel used by the TODAY chart to request the presentation-only intraday Top-10
+payload through the existing authenticated bulk-history endpoint.
 """
 from pathlib import Path
 import time
@@ -13,8 +13,13 @@ _CACHE_TTL = 300.0
 
 
 def get_bulk_local_history(symbols, limit=130):
+    raw_limit = int(limit)
+    if raw_limit < 0:
+        from webapp.services.today_intraday_service import get_today_top10_intraday
+        return get_today_top10_intraday(list(symbols)).get("series", {})
+
     now = time.monotonic()
-    limit = max(10, min(int(limit), 1300))
+    limit = max(10, min(raw_limit, 1300))
     if _CACHE["payload"] and _CACHE["limit"] >= limit and now - _CACHE["at"] < _CACHE_TTL:
         return {s: _CACHE["payload"].get(s, [])[-limit:] for s in symbols}
 
@@ -25,7 +30,6 @@ def get_bulk_local_history(symbols, limit=130):
             payload[symbol] = []
             continue
         try:
-            # Column projection is important: do not deserialize the full Gold frame.
             frame = pd.read_parquet(path, columns=["timestamp_utc", "close"])
             frame = frame.tail(limit)
             ts = pd.to_datetime(frame["timestamp_utc"], utc=True, errors="coerce")
