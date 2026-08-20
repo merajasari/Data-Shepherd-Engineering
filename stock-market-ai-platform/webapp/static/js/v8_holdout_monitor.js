@@ -18,57 +18,181 @@
     const pnl = document.getElementById('v4-pnl-attribution');
     if (!pnl) return;
     pnl.id = 'v8-pnl-attribution';
+
+    const style = document.createElement('style');
+    style.id = 'v8-pnl-visual-style';
+    style.textContent = `
+      #v8-pnl-attribution{overflow:hidden}
+      #v8-pnl-attribution .v8pa-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;flex-wrap:wrap}
+      #v8-pnl-attribution .v8pa-state{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(239,197,107,.28);border-radius:999px;background:rgba(239,197,107,.07);color:var(--gold);font-size:.72rem;font-weight:900;letter-spacing:.04em}
+      #v8-pnl-attribution .v8pa-state-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
+      #v8-pnl-attribution .v8pa-summary{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:20px}
+      #v8-pnl-attribution .v8pa-summary .metric{min-width:0}
+      #v8-pnl-attribution .v8pa-summary strong{font-size:1.28rem;white-space:nowrap}
+      #v8-pnl-attribution .v8pa-main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.8fr);gap:18px;margin-top:18px}
+      #v8-pnl-attribution .v8pa-panel{border:1px solid rgba(120,155,205,.16);border-radius:18px;background:rgba(7,16,31,.48);padding:18px;min-width:0}
+      #v8-pnl-attribution .v8pa-panel-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
+      #v8-pnl-attribution .v8pa-panel-title{font-weight:950;font-size:1rem}
+      #v8-pnl-attribution .v8pa-panel-sub{color:var(--muted);font-size:.76rem;line-height:1.45;margin-top:4px}
+      #v8-pnl-attribution .v8pa-empty{min-height:300px;display:grid;place-items:center;text-align:center;padding:28px;border:1px dashed rgba(120,155,205,.22);border-radius:16px;background:linear-gradient(180deg,rgba(54,216,255,.025),rgba(239,197,107,.025))}
+      #v8-pnl-attribution .v8pa-empty-icon{width:74px;height:74px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;border:1px solid rgba(54,216,255,.28);background:rgba(54,216,255,.07);color:var(--cyan);font-size:1.6rem;font-weight:950}
+      #v8-pnl-attribution .v8pa-empty strong{display:block;font-size:1.05rem;margin-bottom:8px}
+      #v8-pnl-attribution .v8pa-empty p{max-width:560px;margin:0;color:var(--muted);font-size:.82rem;line-height:1.55}
+      #v8-pnl-attribution .v8pa-cohorts{display:grid;gap:11px}
+      #v8-pnl-attribution .v8pa-cohort-row{display:grid;grid-template-columns:80px minmax(0,1fr) 90px;gap:10px;align-items:center}
+      #v8-pnl-attribution .v8pa-cohort-name{font-size:.76rem;font-weight:900;color:#dfe8f6}
+      #v8-pnl-attribution .v8pa-track{height:14px;border-radius:999px;background:rgba(120,155,205,.10);position:relative;overflow:hidden}
+      #v8-pnl-attribution .v8pa-zero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(145,166,194,.35)}
+      #v8-pnl-attribution .v8pa-bar{position:absolute;top:2px;bottom:2px;border-radius:999px}
+      #v8-pnl-attribution .v8pa-value{text-align:right;font-size:.76rem;font-weight:900}
+      #v8-pnl-attribution .v8pa-compare{display:grid;gap:12px}
+      #v8-pnl-attribution .v8pa-compare-row{padding:14px;border:1px solid rgba(120,155,205,.14);border-radius:14px;background:rgba(8,20,36,.52)}
+      #v8-pnl-attribution .v8pa-compare-top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+      #v8-pnl-attribution .v8pa-compare-label{font-size:.68rem;color:var(--muted);font-weight:900;letter-spacing:.08em}
+      #v8-pnl-attribution .v8pa-compare-value{font-size:1.15rem;font-weight:950}
+      #v8-pnl-attribution .v8pa-rail{height:8px;border-radius:999px;background:rgba(120,155,205,.11);overflow:hidden;margin-top:10px}
+      #v8-pnl-attribution .v8pa-rail span{display:block;height:100%;border-radius:999px;transition:width .35s ease}
+      #v8-pnl-attribution .v8pa-cost-note{margin-top:12px;padding:12px 13px;border:1px solid rgba(239,197,107,.22);border-radius:13px;background:rgba(239,197,107,.06);color:var(--gold);font-size:.75rem;line-height:1.45}
+      #v8-pnl-attribution .v8pa-contract{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid rgba(120,155,205,.14)}
+      #v8-pnl-attribution .v8pa-contract-label{color:var(--muted);font-size:.65rem;font-weight:900;letter-spacing:.09em;margin-right:3px}
+      #v8-pnl-attribution .v8pa-chip{padding:7px 10px;border-radius:999px;border:1px solid rgba(120,155,205,.17);background:rgba(8,20,36,.48);color:#dfe8f6;font-size:.7rem;font-weight:850}
+      @media(max-width:1100px){#v8-pnl-attribution .v8pa-summary{grid-template-columns:repeat(3,1fr)}#v8-pnl-attribution .v8pa-main{grid-template-columns:1fr}}
+      @media(max-width:650px){#v8-pnl-attribution .v8pa-summary{grid-template-columns:1fr 1fr}#v8-pnl-attribution .v8pa-cohort-row{grid-template-columns:66px minmax(0,1fr) 76px}}
+    `;
+    document.getElementById(style.id)?.remove();
+    document.head.appendChild(style);
+
     pnl.innerHTML = `
-      <div class="v4-pnl-attribution-head">
+      <div class="v8pa-head">
         <div>
           <div class="label">V8 P&amp;L ATTRIBUTION</div>
-          <h3>What is driving the frozen V8 strategy?</h3>
-          <div class="muted">Attributes completed V8 cohort performance to the Top-10 stock basket, SPY-relative market edge, and the frozen 10-bps trading-cost assumption. SPY is benchmark-only — there is no SPY core allocation.</div>
+          <h3>What is driving V8?</h3>
+          <div class="muted">Forward-only attribution for the frozen V8 DISTANCE_ONLY strategy. The visual focus is V8 net return, SPY benchmark return, excess return, and cohort contribution.</div>
         </div>
-        <div><div class="muted" style="font-size:.72rem;font-weight:900;letter-spacing:.08em">COMPLETED COHORTS</div><div id="v8-pnl-completed" class="v4-pnl-total">—</div></div>
+        <div class="v8pa-state"><span class="v8pa-state-dot"></span><span id="v8pa-state">LOADING</span></div>
       </div>
-      <div class="v4-pnl-metrics">
-        <div class="metric"><span>MEAN NET RELATIVE RETURN</span><strong id="v8-pnl-edge">—</strong></div>
-        <div class="metric"><span>NET RELATIVE HIT RATE</span><strong id="v8-pnl-hit">—</strong></div>
-        <div class="metric"><span>DECISIONS</span><strong id="v8-pnl-decisions">—</strong></div>
-        <div class="metric"><span>TRADING COST CONTRACT</span><strong>10 bps</strong></div>
-        <div class="metric"><span>SPY ROLE</span><strong>BENCHMARK</strong></div>
+
+      <div class="v8pa-summary">
+        <div class="metric"><span>V8 NET RETURN</span><strong id="v8pa-v8-return">—</strong></div>
+        <div class="metric"><span>SPY RETURN</span><strong id="v8pa-spy-return">—</strong></div>
+        <div class="metric"><span>EXCESS VS SPY</span><strong id="v8pa-excess">—</strong></div>
+        <div class="metric"><span>EXCESS HIT RATE</span><strong id="v8pa-hit">—</strong></div>
+        <div class="metric"><span>COMPLETED COHORTS</span><strong id="v8pa-completed">0</strong></div>
+        <div class="metric"><span>DECISIONS</span><strong id="v8pa-decisions">0</strong></div>
       </div>
-      <div class="v4-pnl-grid">
-        <div class="v4-pnl-panel">
-          <div class="label">ATTRIBUTION CONTRACT</div>
-          <div class="v4-list" style="margin-top:12px">
-            <div class="v4-list-row"><div class="v4-rank">10</div><div><strong>Equal-Weight Stocks</strong><div class="v4-company">Top 10 names at 10% target weight each</div></div></div>
-            <div class="v4-list-row"><div class="v4-rank">5D</div><div><strong>Holding Horizon</strong><div class="v4-company">Next-open entry and 5-session exit</div></div></div>
-            <div class="v4-list-row"><div class="v4-rank">5</div><div><strong>Staggered Cohorts</strong><div class="v4-company">Offsets 0–4 create overlapping holding cycles</div></div></div>
+
+      <div class="v8pa-main">
+        <div class="v8pa-panel">
+          <div class="v8pa-panel-head">
+            <div><div class="label">COHORT CONTRIBUTION</div><div class="v8pa-panel-title">Where is V8's edge coming from?</div><div class="v8pa-panel-sub">Average net SPY-relative return by frozen cohort offset. Positive bars extend right; negative bars extend left.</div></div>
           </div>
+          <div id="v8pa-contribution"></div>
         </div>
-        <div class="v4-pnl-panel">
-          <div class="label">FORWARD EVIDENCE STATUS</div>
-          <div class="metric" style="margin-top:12px"><span>STATE</span><strong id="v8-pnl-state">LOADING</strong></div>
-          <div class="metric" style="margin-top:10px"><span>HOLDOUT START</span><strong id="v8-pnl-start">SEP 1, 2026</strong></div>
-          <div class="metric" style="margin-top:10px"><span>REAL BROKERAGE ORDERS</span><strong class="positive">NO</strong></div>
-          <div class="v4-pnl-note">Attribution is reported only from genuine completed V8 forward cohorts once they exist. Historical development-era observations are not retroactively counted as holdout P&amp;L. Until Sep 1, 2026+ cohorts mature, the attribution metrics correctly remain empty rather than borrowing V4 or research-period results.</div>
+
+        <div class="v8pa-panel">
+          <div class="v8pa-panel-head">
+            <div><div class="label">V8 VS SPY</div><div class="v8pa-panel-title">Net performance decomposition</div><div class="v8pa-panel-sub">Forward completed-cohort wealth only.</div></div>
+          </div>
+          <div class="v8pa-compare">
+            <div class="v8pa-compare-row"><div class="v8pa-compare-top"><span class="v8pa-compare-label">V8 NET RETURN</span><strong id="v8pa-compare-v8" class="v8pa-compare-value">—</strong></div><div class="v8pa-rail"><span id="v8pa-rail-v8" style="width:0;background:var(--gold)"></span></div></div>
+            <div class="v8pa-compare-row"><div class="v8pa-compare-top"><span class="v8pa-compare-label">SPY BENCHMARK RETURN</span><strong id="v8pa-compare-spy" class="v8pa-compare-value">—</strong></div><div class="v8pa-rail"><span id="v8pa-rail-spy" style="width:0;background:var(--purple)"></span></div></div>
+            <div class="v8pa-compare-row"><div class="v8pa-compare-top"><span class="v8pa-compare-label">EXCESS RETURN</span><strong id="v8pa-compare-excess" class="v8pa-compare-value">—</strong></div><div class="v8pa-rail"><span id="v8pa-rail-excess" style="width:0;background:var(--green)"></span></div></div>
+          </div>
+          <div class="v8pa-cost-note"><strong>Trading-cost model:</strong> 10 bps per dollar traded is already part of the frozen V8 evaluation contract. The current API exposes net completed-cohort returns, not a separate cumulative dollar-cost ledger, so this panel does not invent one.</div>
         </div>
+      </div>
+
+      <div class="v8pa-contract">
+        <span class="v8pa-contract-label">FROZEN V8 CONTRACT</span>
+        <span class="v8pa-chip">DISTANCE_ONLY</span><span class="v8pa-chip">Top 10</span><span class="v8pa-chip">10% each</span><span class="v8pa-chip">Next-open entry</span><span class="v8pa-chip">5-session hold</span><span class="v8pa-chip">Cohorts 0–4</span><span class="v8pa-chip">10 bps</span><span class="v8pa-chip">SPY benchmark only</span><span class="v8pa-chip" id="v8pa-start-chip">Holdout: Sep 1, 2026</span>
       </div>`;
 
-    const fmtPct = v => v == null ? '—' : `${(Number(v) * 100).toFixed(3)}%`;
+    const pct = v => v == null || !Number.isFinite(Number(v)) ? '—' : `${Number(v) >= 0 ? '+' : ''}${(Number(v) * 100).toFixed(3)}%`;
+    const setTone = (el, v) => { el.classList.remove('positive','negative'); if (Number.isFinite(Number(v))) el.classList.add(Number(v) < 0 ? 'negative' : 'positive'); };
+    const literalDate = iso => {
+      const ymd = String(iso || '').slice(0,10);
+      const [y,m,d] = ymd.split('-').map(Number);
+      if (!y || !m || !d) return 'Sep 1, 2026';
+      return new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,d)));
+    };
+
+    function renderEmpty(startDate){
+      pnl.querySelector('#v8pa-contribution').innerHTML = `
+        <div class="v8pa-empty">
+          <div>
+            <div class="v8pa-empty-icon">V8</div>
+            <strong>FORWARD ATTRIBUTION BEGINS AFTER COMPLETED V8 COHORTS</strong>
+            <p>Holdout begins ${startDate}. Once the first 5-session cohort completes, this panel will automatically populate cohort contribution, V8 net return, SPY return, excess return, and hit-rate evidence. No development-period or V4 results are substituted here.</p>
+          </div>
+        </div>`;
+    }
+
+    function renderCohorts(history){
+      const exits = (history || []).filter(x => x.event_type === 'EXIT' && x.net_relative_return != null);
+      if (!exits.length) return false;
+      const groups = Array.from({length:5},(_,offset) => {
+        const rows = exits.filter(x => Number(x.cohort_offset) === offset);
+        const avg = rows.length ? rows.reduce((s,x)=>s+Number(x.net_relative_return||0),0)/rows.length : null;
+        return {offset,avg,count:rows.length};
+      });
+      const maxAbs = Math.max(.000001,...groups.filter(g=>g.avg!=null).map(g=>Math.abs(g.avg)));
+      pnl.querySelector('#v8pa-contribution').innerHTML = `<div class="v8pa-cohorts">${groups.map(g=>{
+        const width = g.avg == null ? 0 : Math.min(50, Math.abs(g.avg)/maxAbs*48);
+        const left = g.avg == null ? 50 : (g.avg >= 0 ? 50 : 50-width);
+        const bg = g.avg == null ? 'var(--muted)' : (g.avg >= 0 ? 'var(--green)' : 'var(--red)');
+        const value = g.avg == null ? '—' : pct(g.avg);
+        return `<div class="v8pa-cohort-row"><div class="v8pa-cohort-name">Cohort ${g.offset}<div class="muted" style="font-size:.62rem">${g.count} exit${g.count===1?'':'s'}</div></div><div class="v8pa-track"><span class="v8pa-zero"></span><span class="v8pa-bar" style="left:${left}%;width:${width}%;background:${bg}"></span></div><div class="v8pa-value ${g.avg!=null?(g.avg<0?'negative':'positive'):''}">${value}</div></div>`;
+      }).join('')}</div>`;
+      return true;
+    }
+
+    function updateRail(id, value, scale){
+      const el = pnl.querySelector(id);
+      if (!el) return;
+      const width = Number.isFinite(Number(value)) && scale > 0 ? Math.min(100, Math.abs(Number(value))/scale*100) : 0;
+      el.style.width = `${width}%`;
+    }
+
     async function refreshV8Pnl(){
       try {
         const r = await fetch('/api/v8/holdout',{cache:'no-store'});
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
-        pnl.querySelector('#v8-pnl-completed').textContent = d.completed_cohorts ?? '—';
-        pnl.querySelector('#v8-pnl-edge').textContent = fmtPct(d.mean_net_relative_return);
-        pnl.querySelector('#v8-pnl-hit').textContent = fmtPct(d.net_relative_hit_rate);
-        pnl.querySelector('#v8-pnl-decisions').textContent = d.decisions ?? '—';
-        pnl.querySelector('#v8-pnl-state').textContent = String(d.state || 'UNKNOWN').replaceAll('_',' ');
-        if (d.holdout_start_utc) pnl.querySelector('#v8-pnl-start').textContent = new Date(d.holdout_start_utc).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+        const startDate = literalDate(d.holdout_start_utc);
+        pnl.querySelector('#v8pa-state').textContent = String(d.state || 'UNKNOWN').replaceAll('_',' ');
+        pnl.querySelector('#v8pa-start-chip').textContent = `Holdout: ${startDate}`;
+        pnl.querySelector('#v8pa-completed').textContent = d.completed_cohorts ?? 0;
+        pnl.querySelector('#v8pa-decisions').textContent = d.decisions ?? 0;
+        pnl.querySelector('#v8pa-hit').textContent = pct(d.net_relative_hit_rate);
+
+        const curve = Array.isArray(d.curve) ? d.curve : [];
+        let v8Return = null, spyReturn = null, excess = null;
+        if (curve.length) {
+          const last = curve[curve.length-1];
+          v8Return = Number(last.strategy_normalized)/100000 - 1;
+          spyReturn = Number(last.spy_normalized)/100000 - 1;
+          excess = v8Return - spyReturn;
+        }
+
+        const ids = [
+          ['#v8pa-v8-return',v8Return],['#v8pa-spy-return',spyReturn],['#v8pa-excess',excess],
+          ['#v8pa-compare-v8',v8Return],['#v8pa-compare-spy',spyReturn],['#v8pa-compare-excess',excess]
+        ];
+        ids.forEach(([sel,val])=>{const el=pnl.querySelector(sel);el.textContent=pct(val);setTone(el,val);});
+
+        const scale = Math.max(.000001, ...[v8Return,spyReturn,excess].filter(v=>Number.isFinite(Number(v))).map(v=>Math.abs(Number(v))));
+        updateRail('#v8pa-rail-v8',v8Return,scale);
+        updateRail('#v8pa-rail-spy',spyReturn,scale);
+        updateRail('#v8pa-rail-excess',excess,scale);
+
+        if (!renderCohorts(d.event_history)) renderEmpty(startDate);
       } catch (e) {
-        pnl.querySelector('#v8-pnl-state').textContent = 'DATA UNAVAILABLE';
+        pnl.querySelector('#v8pa-state').textContent = 'DATA UNAVAILABLE';
+        renderEmpty('Sep 1, 2026');
         console.error('V8 P&L attribution failed:', e);
       }
     }
+
     refreshV8Pnl();
     setInterval(refreshV8Pnl,15000);
   };
