@@ -18,6 +18,7 @@ from webapp.services.crypto_history_web_cache_service import get_crypto_history_
 from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
 from webapp.services.fast_market_history_service import get_recent_prices_local  # noqa: E402
 from webapp.services.bulk_local_history_service import get_bulk_local_history  # noqa: E402
+from webapp.services.today_intraday_service import get_symbol_24h_intraday, get_today_top10_intraday  # noqa: E402
 from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
 from webapp.services.paper_trading_service import get_pnl_attribution, get_portfolio_summary  # noqa: E402
 from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
@@ -149,6 +150,15 @@ def api_prices(symbol):
 def api_local_history_bulk():
     limit=request.args.get("limit",130,type=int) or 130
     return jsonify({"series":get_bulk_local_history(V5_SYMBOLS,limit=limit)})
+@app.route("/api/intraday-24h-top10")
+@login_required
+def api_intraday_24h_top10():return jsonify(get_today_top10_intraday(V5_SYMBOLS))
+@app.route("/api/intraday-24h/<symbol>")
+@login_required
+def api_intraday_24h_symbol(symbol):
+    symbol=symbol.upper().strip()
+    if symbol not in V5_SYMBOLS:return jsonify({"error":"unsupported symbol"}),404
+    return jsonify(get_symbol_24h_intraday(symbol))
 @app.route("/api/live-prices")
 @login_required
 def api_live_prices():return jsonify({"stocks":get_all_live_quotes()})
@@ -169,7 +179,7 @@ def api_v5_shadow():return jsonify(get_v5_shadow_comparison())
 def api_v5_shadow_history():return jsonify(get_v5_shadow_history())
 @app.route("/api/crypto-history")
 @login_required
-def api_crypto_history():return jsonify(get_crypto_history_payload(normalize_history_range(request.args.get("range","ALL"))))
+def api_crypto_history():return jsonify(get_crypto_dashboard_payload(normalize_history_range(request.args.get("range","ALL"))))
 @app.route("/api/crypto-history-file")
 @login_required
 def api_crypto_history_file():
