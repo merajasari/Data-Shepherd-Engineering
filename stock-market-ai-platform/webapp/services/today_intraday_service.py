@@ -1,28 +1,42 @@
 """Intraday chart data for the Live Stock Viewer TODAY range.
 
-This is presentation-only. It never writes to Gold, features, model artifacts,
-or holdout evidence. Top candidates are selected from current live reference
-prices versus the latest completed local close, then only those candidates are
-hydrated from Tiingo's historical intraday endpoint.
+Presentation-only: never writes to Gold, features, model artifacts, or holdout
+results. Candidates are ranked from current live reference prices versus the
+latest completed local close; only those candidates are then hydrated from
+Tiingo intraday history.
 """
-
 from __future__ import annotations
 
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import requests
 
-from webapp.services.bulk_local_history_service import get_bulk_local_history
 from webapp.services.live_market_service import get_all_live_quotes
-
 
 EASTERN = ZoneInfo("America/New_York")
 CACHE_TTL_SECONDS = 60
 _cache = {"fetched": 0.0, "payload": None}
+
+
+def _latest_local_close(symbol: str):
+    path = Path(f"data/gold/stocks/{symbol}/{symbol}_prices.parquet")
+    if not path.exists():
+        return None
+    try:
+        frame = pd.read_parquet(path, columns=["close"]).tail(1)
+        if frame.empty:
+            return None
+        value = float(frame.iloc[-1]["close"])
+        return value if value > 0 else None
+    except Exception as exc:
+        print(f"[TODAY PRIOR CLOSE ERROR] {symbol}: {exc}")
+        return None
 
 
 def _fetch_intraday(symbol: str, session_date: str, token: str) -> tuple[str, list]:
@@ -63,29 +77,18 @@ def _fetch_intraday(symbol: str, session_date: str, token: str) -> tuple[str, li
 
 
 def get_today_top10_intraday(symbols: list[str]) -> dict:
-    """Return today's Top-10 intraday series and current live marks."""
+    """Return today's Top-10 intraday series plus current live marks."""
     now_mono = time.monotonic()
     if _cache["payload"] is not None and now_mono - _cache["fetched"] < CACHE_TTL_SECONDS:
         return _cache["payload"]
 
-    now_et = datetime.now(EASTERN)
-    session_date = now_et.date().isoformat()
+    session_date = datetime.now(EASTERN).date().isoformat()
     live_state = get_all_live_quotes()
     quotes = live_state.get("quotes", {}) or {}
 
-    local = get_bulk_local_history(symbols, limit=3)
     ranked = []
     for symbol in symbols:
-        rows = local.get(symbol) or []
-        if not rows:
-            continue
-        prior_close = None
-        for row in reversed(rows):
-            try:
-                prior_close = float(row["price"])
-                break
-            except (KeyError, TypeError, ValueError):
-                continue
+        prior_close = _latest_local_close(symbol)
         quote = quotes.get(symbol) or {}
         try:
             live_price = float(quote.get("reference_price"))
