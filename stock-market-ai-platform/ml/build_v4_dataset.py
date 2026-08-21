@@ -20,6 +20,7 @@ import pyarrow.parquet as pq
 sys.path.append("data-ingestion")
 
 from symbols import SYMBOLS
+from feature_source import require_feature_dataset
 
 
 OUTPUT_PATH = Path(
@@ -60,10 +61,7 @@ FEATURE_COLUMNS = [
 
 
 def load_symbol(symbol):
-    path = Path(
-        f"data/features/stocks/"
-        f"{symbol}/{symbol}_features.parquet"
-    )
+    path = require_feature_dataset(symbol)
 
     columns = [
         "timestamp_utc",
