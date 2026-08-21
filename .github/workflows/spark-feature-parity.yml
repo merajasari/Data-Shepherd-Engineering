@@ -5,11 +5,13 @@ on:
     branches:
       - feature/paper-trading
     paths:
+      - "stock-market-ai-platform/data-ingestion/feature_pipeline.py"
       - "stock-market-ai-platform/data-ingestion/feature_transform.py"
       - "stock-market-ai-platform/data-ingestion/spark_feature_transform.py"
       - "stock-market-ai-platform/data-ingestion/spark_feature_pipeline.py"
       - "stock-market-ai-platform/data-ingestion/validate_spark_feature_parity.py"
       - "stock-market-ai-platform/data-ingestion/requirements.txt"
+      - "stock-market-ai-platform/tests/test_feature_backend_routing.py"
       - "stock-market-ai-platform/tests/test_feature_transform_targets.py"
       - "stock-market-ai-platform/tests/test_spark_feature_parity.py"
       - "stock-market-ai-platform/tests/test_validate_spark_feature_parity.py"
@@ -48,7 +50,14 @@ jobs:
       - name: Install focused test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy pandas pyarrow pyspark
+          python -m pip install -r data-ingestion/requirements.txt
+
+      - name: Run backend routing tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_feature_backend_routing.py" \
+            -v
 
       - name: Run existing five-day target tests
         run: |
