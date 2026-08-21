@@ -11,6 +11,11 @@ have to wait for the entire 101-symbol universe to finish. Feature datasets and
 frozen production inference are still treated as universe-level artifacts and
 are refreshed only after Bronze is fully current for the target EOD session.
 
+Once the universe-level feature layer is current, the read-only stock model
+comparison artifact is rebuilt only when one of its source artifacts is newer.
+This keeps the dashboard benchmark/calendar current without fitting or modifying
+V4, V5, or the frozen V8 candidate and without writing future-holdout evidence.
+
 This module does not fit models, tune parameters, build research targets, place
 orders, or evaluate the future holdout.
 """
@@ -40,6 +45,13 @@ from gold_pipeline import process_stock as process_gold_stock  # noqa: E402
 REQUEST_LEDGER_PATH = PROJECT_ROOT / "data/live/v5_tiingo_request_ledger.json"
 DEFAULT_HOURLY_REQUEST_LIMIT = 45
 REQUEST_WINDOW = timedelta(hours=1)
+COMPARISON_OUTPUT_PATH = PROJECT_ROOT / "webapp/static/generated/stock_model_comparison.json"
+COMPARISON_STATIC_INPUTS = (
+    PROJECT_ROOT / "data/model/v4/full_history_equity.json",
+    PROJECT_ROOT / "data/model/v5/phase3/portfolio_daily.csv",
+    PROJECT_ROOT / "data/model/v8/phase5/economic_period_results.csv",
+    PROJECT_ROOT / "data/model/v8/phase7/frozen_candidate_spec.json",
+)
 
 
 def _utc_now():
@@ -172,6 +184,31 @@ def refresh_v5_rankings():
     run_command([sys.executable, "-u", "ml/run_v5_inference.py"])
 
 
+def refresh_stock_model_comparison_if_stale():
+    """Rebuild the read-only comparison artifact only when a source changed.
+
+    The SPY feature parquet is intentionally included because it supplies the
+    comparison calendar and benchmark curve. Rebuilding this artifact does not
+    rerun V8 research phases or create holdout evidence; frozen historical model
+    curves remain sourced from their existing development artifacts.
+    """
+    sources = [*COMPARISON_STATIC_INPUTS, feature_path("SPY")]
+    missing = [str(path.relative_to(PROJECT_ROOT)) for path in sources if not path.exists()]
+    if missing:
+        print("Skipping stock model comparison refresh; missing source(s): " + ", ".join(missing))
+        return False
+
+    output_mtime = COMPARISON_OUTPUT_PATH.stat().st_mtime_ns if COMPARISON_OUTPUT_PATH.exists() else -1
+    newest_source_mtime = max(path.stat().st_mtime_ns for path in sources)
+    if output_mtime >= newest_source_mtime:
+        print("Stock model comparison artifact already matches its latest source artifacts.")
+        return False
+
+    print("Stock model comparison artifact is stale; rebuilding read-only dashboard artifact.")
+    run_command([sys.executable, "-u", "-m", "ml.build_stock_model_comparison"])
+    return True
+
+
 def run_data_refresh(
     hourly_request_limit=DEFAULT_HOURLY_REQUEST_LIMIT,
     max_requests=None,
@@ -234,10 +271,12 @@ def run_data_refresh(
                 "Feature refresh did not reach target for: " + ", ".join(stale)
             )
         refresh_v5_rankings()
+        refresh_stock_model_comparison_if_stale()
         return "rebuilt"
 
     print("Features already match the latest completed EOD session.")
     refresh_v5_rankings()
+    refresh_stock_model_comparison_if_stale()
     return "current"
 
 
