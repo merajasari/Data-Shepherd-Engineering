@@ -26,6 +26,33 @@
     });
   };
 
+  const forceLiteralHoldoutDate = holdout => {
+    // Some older V8 visuals format midnight UTC in the browser's Pacific timezone,
+    // which turns 2026-09-01 into Aug 31. Correct only the specific holdout date
+    // leaves/labels, without observing or rescanning the entire dashboard DOM.
+    document.querySelectorAll('.metric strong, text, tspan').forEach(el => {
+      const t = (el.textContent || '').trim();
+      if (t === 'Aug 31, 2026' || t === '8/31/2026' || t === '08/31/2026') {
+        el.textContent = holdout;
+      }
+    });
+
+    const interactionCandidates = Array.from(document.querySelectorAll('section, article, .card, [id*="v8"]')).filter(el =>
+      /V8 HOLDOUT INTERACTION/i.test(el.textContent || '')
+    );
+    const interaction = interactionCandidates.sort((a, b) =>
+      (a.textContent || '').length - (b.textContent || '').length
+    )[0];
+    if (!interaction) return;
+
+    Array.from(interaction.querySelectorAll('.metric')).forEach(metric => {
+      if (metric.querySelector('span')?.textContent?.trim() === 'HOLDOUT START') {
+        const strong = metric.querySelector('strong');
+        if (strong) strong.textContent = holdout;
+      }
+    });
+  };
+
   const fixHoldoutDates = async () => {
     try {
       const r = await fetch('/api/v8/holdout', {cache: 'no-store'});
@@ -42,19 +69,7 @@
         detail.textContent = `Features ${features} · Gold ${gold} · Brokerage orders: NO · Strategy modified: NO`;
       }
 
-      const interaction = Array.from(document.querySelectorAll('section.card, .card')).find(card =>
-        card.querySelector(':scope > .label')?.textContent?.trim() === 'V8 HOLDOUT INTERACTION'
-      );
-      if (interaction) {
-        const metric = Array.from(interaction.querySelectorAll('.metric')).find(x =>
-          x.querySelector('span')?.textContent?.trim() === 'HOLDOUT START'
-        );
-        if (metric?.querySelector('strong')) metric.querySelector('strong').textContent = holdout;
-        interaction.querySelectorAll('text,tspan,span,strong,div').forEach(el => {
-          if (el.children.length) return;
-          if (el.textContent.trim() === 'Aug 31, 2026') el.textContent = holdout;
-        });
-      }
+      forceLiteralHoldoutDate(holdout);
     } catch (e) {
       console.warn('V8 final date polish failed:', e);
     }
@@ -131,9 +146,11 @@
   fixHoldoutDates();
   bootHealth();
   window.setTimeout(fixBranding, 1500);
+  window.setTimeout(fixHoldoutDates, 750);
   window.setTimeout(fixHoldoutDates, 2000);
+  window.setTimeout(fixHoldoutDates, 5000);
 
-  // Keep the final values authoritative after older widgets perform their own refreshes.
+  // Keep final values authoritative after older V8 widgets perform their own refreshes.
   window.setInterval(fixHoldoutDates, 10000);
   window.setInterval(refreshHealth, 15000);
 })();
