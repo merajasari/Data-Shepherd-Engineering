@@ -110,8 +110,18 @@ def transform_to_features_spark(df: DataFrame) -> DataFrame:
     delta = F.col("close") - F.lag("close", 1).over(order)
     result = (
         result
-        .withColumn("_gain", F.greatest(delta, F.lit(0.0)))
-        .withColumn("_loss", -F.least(delta, F.lit(0.0)))
+        .withColumn(
+            "_gain",
+            F.when(delta.isNull(), F.lit(None).cast("double")).otherwise(
+                F.greatest(delta, F.lit(0.0))
+            ),
+        )
+        .withColumn(
+            "_loss",
+            F.when(delta.isNull(), F.lit(None).cast("double")).otherwise(
+                -F.least(delta, F.lit(0.0))
+            ),
+        )
     )
 
     rsi_window = _rolling_window(14)
