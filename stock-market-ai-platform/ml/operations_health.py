@@ -1,8 +1,9 @@
 """Publish read-only operational health for the stock scheduler/dashboard.
 
 This module never mutates research, holdout, portfolio, or brokerage state. It
-summarizes scheduler outcome, rolling Tiingo quota, V8 gate state, V10
-confirmation state, feature freshness, and recent error-log metadata.
+summarizes scheduler outcome, rolling Tiingo quota, EOD data convergence, V8
+gate state, V10 confirmation state, feature freshness, and recent error-log
+metadata.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ OUTPUT = PROJECT_ROOT / "webapp/static/generated/stock_operations_health.json"
 LEDGER = PROJECT_ROOT / "data/live/v5_tiingo_request_ledger.json"
 V8_GUARD = PROJECT_ROOT / "data/model/v8/eod_guard/status.json"
 V10_STATUS = PROJECT_ROOT / "webapp/static/generated/v10_confirmation_status.json"
+CONVERGENCE_STATUS = PROJECT_ROOT / "webapp/static/generated/stock_data_convergence.json"
 ERR_LOG = PROJECT_ROOT / "logs/v5_refresh.err.log"
 FEATURE_ROOT = PROJECT_ROOT / "data/features/stocks"
 EXPECTED_SYMBOLS = 101
@@ -89,6 +91,7 @@ def main():
     used = _active_quota(now)
     v8 = _json(V8_GUARD)
     v10 = _json(V10_STATUS)
+    convergence = _json(CONVERGENCE_STATUS)
     common_latest, feature_files = _feature_common_latest()
     err_size = ERR_LOG.stat().st_size if ERR_LOG.exists() else 0
 
@@ -117,6 +120,14 @@ def main():
             "files_found": feature_files,
             "expected_files": EXPECTED_SYMBOLS,
             "common_latest_utc": common_latest,
+        },
+        "convergence": {
+            "status": convergence.get("status", "UNKNOWN"),
+            "target_session_utc": convergence.get("target_session_utc"),
+            "data_converged": convergence.get("data_converged"),
+            "verification": convergence.get("verification", "UNKNOWN"),
+            "safety_violation": bool(convergence.get("safety_violation")),
+            "layers": convergence.get("layers") or {},
         },
         "v8": {
             "guard_status": v8.get("status", "UNKNOWN"),
@@ -149,6 +160,7 @@ def main():
     print(f"Scheduler: {scheduler_status} | exit={args.pipeline_exit_code}")
     print(f"Tiingo: {used}/{HOURLY_LIMIT} rolling requests")
     print(f"Features: {feature_files}/{EXPECTED_SYMBOLS} | common latest={common_latest}")
+    print(f"Convergence: {payload['convergence']['status']} | verification={payload['convergence']['verification']}")
     print(f"V8 guard: {payload['v8']['guard_status']} | gate={payload['v8']['decision_gate_open']}")
     print(f"V10: {payload['v10']['status']} | decision={payload['v10']['decision']}")
     print(f"Output: {OUTPUT.relative_to(PROJECT_ROOT)}")
