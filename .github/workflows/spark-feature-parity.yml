@@ -10,6 +10,8 @@ on:
       - "stock-market-ai-platform/data-ingestion/spark_feature_transform.py"
       - "stock-market-ai-platform/data-ingestion/spark_feature_pipeline.py"
       - "stock-market-ai-platform/data-ingestion/validate_spark_feature_parity.py"
+      - "stock-market-ai-platform/data-ingestion/validate_spark_feature_outputs.py"
+      - "stock-market-ai-platform/refresh_pipeline.sh"
       - "stock-market-ai-platform/data-ingestion/requirements.txt"
       - "stock-market-ai-platform/ml/build_stock_model_comparison.py"
       - "stock-market-ai-platform/ml/build_v4_dataset.py"
@@ -25,6 +27,8 @@ on:
       - "stock-market-ai-platform/tests/test_feature_transform_targets.py"
       - "stock-market-ai-platform/tests/test_spark_feature_parity.py"
       - "stock-market-ai-platform/tests/test_validate_spark_feature_parity.py"
+      - "stock-market-ai-platform/tests/test_validate_spark_feature_outputs.py"
+      - "stock-market-ai-platform/tests/test_spark_scheduler_gate.py"
       - ".github/workflows/spark-feature-parity.yml"
   workflow_dispatch:
 
@@ -97,4 +101,18 @@ jobs:
           python -m unittest discover \
             -s tests \
             -p "test_validate_spark_feature_parity.py" \
+            -v
+
+      - name: Run materialized Spark output validation tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_validate_spark_feature_outputs.py" \
+            -v
+
+      - name: Run scheduler gate tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_spark_scheduler_gate.py" \
             -v
