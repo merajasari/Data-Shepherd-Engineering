@@ -13,10 +13,9 @@ UID_VALUE="$(id -u)"
 # Invoke frequently, but let Python's persistent rolling quota ledger decide
 # how many Tiingo REST calls are safe right now. After each successful refresh
 # invocation, regenerate the frozen V5 ranking snapshot, run the isolated V5
-# forward evaluator, then enter the guarded V8 EOD orchestrator. The V8
-# orchestrator always runs the fail-closed EOD guard before it can invoke the
-# append-only frozen holdout runner. Before 2026-09-01 the holdout runner writes
-# no forward evidence. No brokerage orders are placed.
+# forward evaluator, enter the guarded V8 EOD orchestrator, then run the V10
+# prospective-confirmation cycle. V10's cycle is cheap when the common feature
+# session has not advanced and never reads its formal 2026-11-02+ holdout.
 INTERVAL_SECONDS=300
 HOURLY_REQUEST_LIMIT=45
 
@@ -34,7 +33,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator &amp;&amp; '$PYTHON' -u -m ml.v10.confirmation_cycle; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -60,5 +59,8 @@ echo "V8 production path: ml.v8.eod_orchestrator"
 echo "V8 decision gate: ml.v8.eod_guard (fail closed)"
 echo "V8 holdout runner: invoked only after the EOD decision gate opens"
 echo "V8 guard output: $PROJECT_DIR/data/model/v8/eod_guard/status.json"
-echo "Holdout safety: no V5/V8 brokerage orders; V8 journal remains empty before 2026-09-01"
+echo "V10 prospective confirmation: ml.v10.confirmation_cycle"
+echo "V10 confirmation optimization: full reconstruction only when common feature session advances"
+echo "V10 dashboard status: $PROJECT_DIR/webapp/static/generated/v10_confirmation_status.json"
+echo "Holdout safety: no brokerage orders; V8 and V10 formal holdouts remain separately gated"
 echo "Logs: $LOG_DIR/v5_refresh.log"
