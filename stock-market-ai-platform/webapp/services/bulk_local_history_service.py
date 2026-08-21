@@ -52,7 +52,9 @@ def get_bulk_local_history(symbols, limit=130):
         return get_today_top10_intraday(list(symbols)).get("series", {})
 
     now = time.monotonic()
-    limit = max(10, min(raw_limit, 1300))
+    # Keep the default payload small for fast page loads, but allow the Live Stock
+    # Viewer to lazy-load the full ~10-year local history when ALL is selected.
+    limit = max(10, min(raw_limit, 2600))
     if _CACHE["payload"] and _CACHE["limit"] >= limit and now - _CACHE["at"] < _CACHE_TTL:
         cached = {s: list(_CACHE["payload"].get(s, [])[-limit:]) for s in symbols}
         return _append_latest_cached_points(cached, symbols)
