@@ -33,6 +33,11 @@ app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSIO
 def inject_dashboard_modules(response):
     if response.mimetype=="text/html" and response.status_code==200:
         html=response.get_data(as_text=True); marker="</body>"; scripts=[]
+        if request.path=="/dashboard" and request.args.get("view")=="live":
+            head_marker="</head>"
+            prelayout='''<style id="ds-live-prelayout-style">html.ds-live-prelayout .card:has(#stock-select){display:none!important}html.ds-live-prelayout .card.ds-live-viewer-card:has(#stock-select){display:block!important}</style><script>document.documentElement.classList.add("ds-live-prelayout")</script>'''
+            if head_marker in html and 'ds-live-prelayout-style' not in html:
+                html=html.replace(head_marker,prelayout+"\n"+head_marker,1)
         if request.path in {"/","/dashboard","/crypto"}: scripts.append('<script src="/static/js/signup_button.js" defer></script>')
         if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
         if request.path=="/dashboard": scripts.extend(['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v5_shadow_comparison.js" defer></script>','<script src="/static/js/v5_shadow_history_chart.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>'])
@@ -179,7 +184,7 @@ def api_v5_shadow():return jsonify(get_v5_shadow_comparison())
 def api_v5_shadow_history():return jsonify(get_v5_shadow_history())
 @app.route("/api/crypto-history")
 @login_required
-def api_crypto_history():return jsonify(get_crypto_history_payload(normalize_history_range(request.args.get("range","ALL"))))
+def api_crypto_history():return jsonify(get_crypto_dashboard_payload(normalize_history_range(request.args.get("range","ALL"))))
 @app.route("/api/crypto-history-file")
 @login_required
 def api_crypto_history_file():
