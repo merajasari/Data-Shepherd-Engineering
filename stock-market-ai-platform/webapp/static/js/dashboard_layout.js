@@ -1,143 +1,65 @@
 (() => {
-  // Move the selected-stock technical indicators (RSI, moving averages,
-  // volatility and volume ratio) out of Model Research and into Live Stock Viewer.
   const technicalIndicators = Array.from(document.querySelectorAll('section.grid.metrics')).find(section => {
     const labels = Array.from(section.querySelectorAll('.metric > span')).map(node => node.textContent.trim());
     return ['RSI 14','SMA 20','SMA 50','SMA 200','20D VOL','VOLUME RATIO'].every(label => labels.includes(label));
   });
-
   if (technicalIndicators) {
     technicalIndicators.classList.add('ds-technical-indicators', 'ds-live-stock-keep');
     technicalIndicators.setAttribute('data-selected-stock-indicators', 'true');
-
     const marketSection = document.querySelector('.ds-market-section');
-    if (marketSection && marketSection.nextElementSibling !== technicalIndicators) {
-      marketSection.insertAdjacentElement('afterend', technicalIndicators);
-    }
+    if (marketSection && marketSection.nextElementSibling !== technicalIndicators) marketSection.insertAdjacentElement('afterend', technicalIndicators);
   }
-
   const technicalStyle = document.createElement('style');
   technicalStyle.id = 'ds-technical-indicators-placement';
-  technicalStyle.textContent = `
-    body.ds-model-research-view .ds-technical-indicators{display:none!important}
-    body.ds-live-stock-view .ds-technical-indicators{display:grid!important}
-    body.ds-live-stock-view .ds-live-comparison-stack{display:grid!important;grid-template-columns:1fr!important;gap:22px!important}
-    body.ds-live-stock-view .ds-live-comparison-stack > .ds-top-live-row,
-    body.ds-live-stock-view .ds-live-comparison-stack > .ds-live-viewer-card{grid-column:1/-1!important;width:100%!important}
-  `;
-  document.getElementById(technicalStyle.id)?.remove();
-  document.head.appendChild(technicalStyle);
+  technicalStyle.textContent = `body.ds-model-research-view .ds-technical-indicators{display:none!important}body.ds-live-stock-view .ds-technical-indicators{display:grid!important}body.ds-live-stock-view .ds-live-comparison-stack{display:grid!important;grid-template-columns:1fr!important;gap:22px!important}body.ds-live-stock-view .ds-live-comparison-stack > .ds-top-live-row,body.ds-live-stock-view .ds-live-comparison-stack > .ds-live-viewer-card{grid-column:1/-1!important;width:100%!important}`;
+  document.getElementById(technicalStyle.id)?.remove(); document.head.appendChild(technicalStyle);
 
-  const removeCompactV4Equity = () => {
-    const compact = document.getElementById('v4-compact-equity-card');
-    if (compact) {
-      compact.remove();
-      return true;
-    }
-    return false;
-  };
-
+  const removeCompactV4Equity = () => { const compact=document.getElementById('v4-compact-equity-card'); if(compact){compact.remove();return true} return false; };
   const moveV8RankSignal = () => {
-    const latestModelEquity = document.getElementById('v8-compact-equity-card');
-    if (!latestModelEquity) return false;
-
-    const signal = Array.from(document.querySelectorAll('.card')).find(node => {
-      const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
-      return label === 'V8 5-DAY RELATIVE-RANK SIGNAL' || label === 'V5 5-DAY RELATIVE-RANK SIGNAL';
-    });
-    if (!signal) return false;
-
-    if (latestModelEquity.nextElementSibling !== signal) {
-      latestModelEquity.insertAdjacentElement('afterend', signal);
-    }
-    signal.style.marginTop = '20px';
-    return true;
+    const latestModelEquity=document.getElementById('v8-compact-equity-card'); if(!latestModelEquity)return false;
+    const signal=Array.from(document.querySelectorAll('.card')).find(node=>{const label=node.querySelector(':scope > .label')?.textContent?.trim()||'';return label==='V8 5-DAY RELATIVE-RANK SIGNAL'||label==='V5 5-DAY RELATIVE-RANK SIGNAL'}); if(!signal)return false;
+    if(latestModelEquity.nextElementSibling!==signal)latestModelEquity.insertAdjacentElement('afterend',signal); signal.style.marginTop='20px'; return true;
   };
-
   const findFullLiveViewer = () => {
-    const heading = Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(node =>
-      node.textContent.trim() === 'Search and Inspect Live Stocks'
-    );
-
-    if (heading) {
-      const panel = heading.closest('.card, section, article');
-      if (panel) return panel;
-    }
-
-    const labeledCandidates = Array.from(document.querySelectorAll('.card, section, article')).filter(node => {
-      const text = node.textContent || '';
-      return /LIVE STOCK VIEWER/i.test(text) &&
-             /Search and Inspect Live Stocks/i.test(text) &&
-             (node.querySelector('input') || node.querySelector('select') || node.querySelector('[role="combobox"]'));
-    });
-
-    return labeledCandidates.sort((a,b) => a.textContent.length - b.textContent.length)[0] || null;
+    const heading=Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(node=>node.textContent.trim()==='Search and Inspect Live Stocks');
+    if(heading){const panel=heading.closest('.card, section, article');if(panel)return panel}
+    const candidates=Array.from(document.querySelectorAll('.card, section, article')).filter(node=>{const text=node.textContent||'';return /LIVE STOCK VIEWER/i.test(text)&&/Search and Inspect Live Stocks/i.test(text)&&(node.querySelector('input')||node.querySelector('select')||node.querySelector('[role="combobox"]'))});
+    return candidates.sort((a,b)=>a.textContent.length-b.textContent.length)[0]||null;
   };
-
-  // Keep the combined Top-10 list + comparison-chart row first, then place the
-  // full LIVE STOCK VIEWER search/selector panel directly below that row.
   const arrangeLiveStockViewer = () => {
-    if (!document.body.classList.contains('ds-live-stock-view')) return false;
-
-    const comparison = document.getElementById('ds-top-live-comparison');
-    if (!comparison) return false;
-
-    const comparisonRow = comparison.closest('.ds-top-live-row') || comparison;
-    const liveViewer = findFullLiveViewer();
-    const cards = Array.from(document.querySelectorAll('.card'));
-    const market = cards.find(node => {
-      const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
-      return label === 'MARKET' || node.classList.contains('ds-market-section');
-    });
-
-    const stack = comparisonRow.parentElement;
-    if (stack) {
-      stack.classList.remove('ds-market-comparison-grid');
-      stack.classList.add('ds-live-comparison-stack');
-    }
-
-    if (liveViewer && stack) {
-      liveViewer.classList.add('ds-live-viewer-card', 'ds-live-stock-keep');
-      if (comparisonRow.nextElementSibling !== liveViewer) {
-        comparisonRow.insertAdjacentElement('afterend', liveViewer);
-      }
-    }
-
-    if (market && market !== liveViewer) market.remove();
-    return Boolean(liveViewer || market);
+    if(!document.body.classList.contains('ds-live-stock-view'))return false;
+    const comparison=document.getElementById('ds-top-live-comparison');if(!comparison)return false;
+    const comparisonRow=comparison.closest('.ds-top-live-row')||comparison;const liveViewer=findFullLiveViewer();
+    const market=Array.from(document.querySelectorAll('.card')).find(node=>{const label=node.querySelector(':scope > .label')?.textContent?.trim()||'';return label==='MARKET'||node.classList.contains('ds-market-section')});
+    const stack=comparisonRow.parentElement;if(stack){stack.classList.remove('ds-market-comparison-grid');stack.classList.add('ds-live-comparison-stack')}
+    if(liveViewer&&stack){liveViewer.classList.add('ds-live-viewer-card','ds-live-stock-keep');if(comparisonRow.nextElementSibling!==liveViewer)comparisonRow.insertAdjacentElement('afterend',liveViewer)}
+    if(market&&market!==liveViewer)market.remove();return Boolean(liveViewer||market);
   };
 
-  removeCompactV4Equity();
-  moveV8RankSignal();
-  arrangeLiveStockViewer();
+  const addV8OperationsDashboard = () => {
+    if(document.getElementById('v8-forward-ops')) return;
+    const anchor=document.getElementById('stock-stream-health-card') || document.querySelector('section.card'); if(!anchor)return;
+    const section=document.createElement('section'); section.className='card'; section.id='v8-forward-ops'; section.style.marginBottom='22px';
+    section.innerHTML=`<div class="label">V8 FORWARD / HOLDOUT OPERATIONS</div><h2>Frozen Strategy Readiness</h2><p class="muted">Operational view of the frozen V8 candidate. Read-only monitoring; no brokerage orders are placed.</p><div class="grid metrics" style="margin-top:18px"><div class="metric"><span>READINESS</span><strong id="v8ops-ready">CHECKING</strong></div><div class="metric"><span>HOLDOUT</span><strong id="v8ops-holdout">—</strong></div><div class="metric"><span>RANKING DATE</span><strong id="v8ops-date">—</strong></div><div class="metric"><span>ELIGIBLE</span><strong id="v8ops-eligible">—</strong></div><div class="metric"><span>JOURNAL EVENTS</span><strong id="v8ops-events">—</strong></div><div class="metric"><span>COMPLETED COHORTS</span><strong id="v8ops-cohorts">—</strong></div></div><div class="grid grid-2" style="margin-top:18px"><div class="metric"><span>CURRENT FROZEN TOP 10</span><div id="v8ops-top10" class="top5" style="margin-top:12px"><span class="muted">Loading…</span></div><div id="v8ops-top10-note" class="muted" style="margin-top:10px;font-size:.82rem"></div></div><div class="metric"><span>FORWARD EVIDENCE</span><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px"><div><div class="muted">Decisions</div><strong id="v8ops-decisions">—</strong></div><div><div class="muted">Entries</div><strong id="v8ops-entries">—</strong></div><div><div class="muted">Rel. Return</div><strong id="v8ops-return">—</strong></div></div><div id="v8ops-sha" class="muted" style="margin-top:14px;font-size:.78rem;word-break:break-all">Frozen SHA: checking…</div></div></div><div id="v8ops-detail" class="muted" style="margin-top:16px">Loading V8 operational state…</div>`;
+    anchor.insertAdjacentElement('afterend',section);
+    const style=document.createElement('style');style.id='v8-forward-ops-style';style.textContent=`#v8-forward-ops .top5 .chip{font-size:.82rem;padding:8px 11px}#v8-forward-ops .v8-ready{color:var(--green)}#v8-forward-ops .v8-bad{color:var(--red)}#v8-forward-ops .v8-wait{color:var(--gold)}@media(max-width:650px){#v8-forward-ops .grid-2{grid-template-columns:1fr!important}}`;document.head.appendChild(style);
+    const fmtDate=v=>v?new Date(v).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'—';
+    const refresh=async()=>{try{const r=await fetch('/api/v8/holdout',{cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);const d=await r.json();
+      const ready=document.getElementById('v8ops-ready');ready.textContent=d.readiness_status||'UNKNOWN';ready.className=d.readiness_status==='READY'?'v8-ready':'v8-bad';
+      document.getElementById('v8ops-holdout').textContent=d.state==='WAITING_FOR_HOLDOUT'?`${d.days_until_holdout}d`:d.state;
+      document.getElementById('v8ops-date').textContent=fmtDate(d.ranking_timestamp_utc||d.latest_research_top10_timestamp_utc);
+      document.getElementById('v8ops-eligible').textContent=d.ranking_eligible_count!=null?`${d.ranking_eligible_count}/100`:'—';
+      document.getElementById('v8ops-events').textContent=d.journal_event_count??0;document.getElementById('v8ops-cohorts').textContent=d.completed_cohorts??0;document.getElementById('v8ops-decisions').textContent=d.decisions??0;document.getElementById('v8ops-entries').textContent=d.entries??0;
+      const rr=document.getElementById('v8ops-return');rr.textContent=d.mean_net_relative_return==null?'Awaiting holdout':`${(100*d.mean_net_relative_return).toFixed(2)}%`;if(d.mean_net_relative_return!=null)rr.className=d.mean_net_relative_return>=0?'positive':'negative';
+      const top=document.getElementById('v8ops-top10');top.innerHTML=(d.latest_research_top10||[]).map((x,i)=>`<span class="chip top">${i+1}. ${x.symbol}</span>`).join('')||'<span class="muted">No ranking snapshot available</span>';document.getElementById('v8ops-top10-note').textContent=d.latest_research_top10_note||'';
+      document.getElementById('v8ops-sha').textContent=`Frozen SHA ${d.frozen_sha_verified?'✓':'⚠'}: ${d.frozen_sha256||'—'}`;
+      const issues=[...(d.readiness_failures||[]),...(d.readiness_warnings||[])];document.getElementById('v8ops-detail').textContent=issues.length?issues.join(' · '):`Features ${fmtDate(d.feature_common_latest_utc)} · Gold ${fmtDate(d.gold_common_latest_utc)} · Brokerage orders: NO · Strategy modified: NO`;
+    }catch(e){const ready=document.getElementById('v8ops-ready');if(ready){ready.textContent='UNAVAILABLE';ready.className='v8-bad'}const detail=document.getElementById('v8ops-detail');if(detail)detail.textContent=`V8 dashboard unavailable: ${e.message}`}};
+    refresh(); window.setInterval(refresh,60000);
+  };
 
-  const layoutObserver = new MutationObserver(() => {
-    removeCompactV4Equity();
-    moveV8RankSignal();
-    arrangeLiveStockViewer();
-  });
-  layoutObserver.observe(document.documentElement, { childList: true, subtree: true });
-  window.setTimeout(() => layoutObserver.disconnect(), 12000);
-
-  const sections = Array.from(document.querySelectorAll('section.card'));
-
-  const rankingBoard = sections.find(section => {
-    const label = section.querySelector('.label')?.textContent?.trim() || '';
-    const heading = section.querySelector('h2,h3')?.textContent?.trim() || '';
-    return /100[- ]STOCK.*(?:V8|V5).*RANKING BOARD/i.test(`${label} ${heading}`) ||
-           /(?:V8|V5).*100[- ]STOCK.*RANKING BOARD/i.test(`${label} ${heading}`);
-  });
-  if (rankingBoard) rankingBoard.remove();
-
-  const remainingSections = Array.from(document.querySelectorAll('section.card'));
-  const recentMarketData = remainingSections.find(section =>
-    section.querySelector('.label')?.textContent?.trim() === 'RECENT MARKET DATA'
-  );
-  const v5Leaders = remainingSections.find(section =>
-    section.querySelector('.label')?.textContent?.trim() === 'V5 LEADERS'
-  );
-
-  if (recentMarketData && v5Leaders) {
-    v5Leaders.parentNode.insertBefore(recentMarketData, v5Leaders);
-  }
+  removeCompactV4Equity(); moveV8RankSignal(); arrangeLiveStockViewer(); addV8OperationsDashboard();
+  const layoutObserver=new MutationObserver(()=>{removeCompactV4Equity();moveV8RankSignal();arrangeLiveStockViewer();addV8OperationsDashboard()});layoutObserver.observe(document.documentElement,{childList:true,subtree:true});window.setTimeout(()=>layoutObserver.disconnect(),12000);
+  const sections=Array.from(document.querySelectorAll('section.card'));const rankingBoard=sections.find(section=>{const label=section.querySelector('.label')?.textContent?.trim()||'';const heading=section.querySelector('h2,h3')?.textContent?.trim()||'';return /100[- ]STOCK.*(?:V8|V5).*RANKING BOARD/i.test(`${label} ${heading}`)||/(?:V8|V5).*100[- ]STOCK.*RANKING BOARD/i.test(`${label} ${heading}`)});if(rankingBoard)rankingBoard.remove();
+  const remainingSections=Array.from(document.querySelectorAll('section.card'));const recentMarketData=remainingSections.find(section=>section.querySelector('.label')?.textContent?.trim()==='RECENT MARKET DATA');const v5Leaders=remainingSections.find(section=>section.querySelector('.label')?.textContent?.trim()==='V5 LEADERS');if(recentMarketData&&v5Leaders)v5Leaders.parentNode.insertBefore(recentMarketData,v5Leaders);
 })();
