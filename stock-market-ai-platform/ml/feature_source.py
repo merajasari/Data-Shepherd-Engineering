@@ -64,18 +64,32 @@ def get_feature_dataset_path(
     return symbol_root / f"{symbol}_features.parquet"
 
 
+def _parquet_files(path: Path):
+    path = Path(path)
+    if path.is_file():
+        return [path] if path.stat().st_size > 0 else []
+    if path.is_dir():
+        return [
+            candidate
+            for candidate in path.glob("*.parquet")
+            if candidate.is_file() and candidate.stat().st_size > 0
+        ]
+    return []
+
+
 def feature_dataset_exists(path: Path) -> bool:
     """Return whether a resolved feature dataset contains readable Parquet."""
 
-    path = Path(path)
-    if path.is_file():
-        return path.stat().st_size > 0
-    if path.is_dir():
-        return any(
-            candidate.is_file() and candidate.stat().st_size > 0
-            for candidate in path.glob("*.parquet")
-        )
-    return False
+    return bool(_parquet_files(path))
+
+
+def feature_dataset_mtime_ns(path: Path) -> int:
+    """Return the newest Parquet-file mtime for a file or Spark dataset."""
+
+    files = _parquet_files(path)
+    if not files:
+        raise FileNotFoundError(f"Feature dataset not found: {path}")
+    return max(candidate.stat().st_mtime_ns for candidate in files)
 
 
 def require_feature_dataset(
