@@ -16,7 +16,6 @@ import pandas as pd
 
 from ml.v8.holdout_runner import (
     EXPECTED_SHA,
-    FEATURE_ROOT,
     HOLDOUT_START,
     _feature_files,
     _load_market,
@@ -113,6 +112,7 @@ def run_readiness_check():
     ranking = None
     eligible_count = 0
     top10 = []
+    top10_details = []
     ranking_timestamp = None
 
     if not failures:
@@ -128,7 +128,18 @@ def run_readiness_check():
             )
             ranking = _rank_for_date(ranking_timestamp, loaded_symbols, frames)
             eligible_count = len(ranking)
-            top10 = ranking.head(10)["symbol"].tolist()
+            top = ranking.head(10)
+            top10 = top["symbol"].tolist()
+            top10_details = [
+                {
+                    "rank": i + 1,
+                    "symbol": str(row.symbol),
+                    "score": float(row.orthogonal_signal),
+                    "selected_top10": True,
+                    "target_weight": 0.10,
+                }
+                for i, row in enumerate(top.itertuples(index=False))
+            ]
             if eligible_count < 80:
                 failures.append("insufficient_rankable_universe")
 
@@ -153,6 +164,7 @@ def run_readiness_check():
             "ranking_timestamp_utc": ranking_timestamp.isoformat() if ranking_timestamp is not None else None,
             "ranking_eligible_count": eligible_count,
             "ranking_top10": top10,
+            "ranking_top10_details": top10_details,
         },
         "failures": sorted(set(failures)),
         "warnings": sorted(set(warnings)),
