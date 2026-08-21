@@ -31,6 +31,12 @@ class V8SiteCutoverTests(unittest.TestCase):
         self.assertIn("ml/run_v8_data_refresh.py", shell)
         self.assertNotIn("ml/train_all.py", shell)
 
+    def test_v8_cli_bootstraps_project_root_before_ml_import(self):
+        source = (PROJECT_ROOT / "ml/run_v8_inference.py").read_text()
+        bootstrap = source.index("sys.path.insert")
+        package_import = source.index("from ml.v8.holdout_runner")
+        self.assertLess(bootstrap, package_import)
+
 
 if __name__ == "__main__":
     unittest.main()
