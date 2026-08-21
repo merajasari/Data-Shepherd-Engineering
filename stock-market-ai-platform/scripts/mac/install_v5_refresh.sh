@@ -15,8 +15,10 @@ UID_VALUE="$(id -u)"
 # how many Tiingo REST calls are safe right now. After each successful refresh
 # invocation, regenerate the frozen V5 ranking snapshot, run the isolated V5
 # forward evaluator, enter the guarded V8 EOD orchestrator, then run the V10
-# prospective-confirmation cycle. A final read-only operations publisher always
-# runs, even when an earlier stage fails, so the dashboard exposes the outcome.
+# prospective-confirmation cycle. A read-only convergence monitor always runs
+# afterward and proves Bronze -> Silver -> Gold -> Features completion against
+# the exact Tiingo target session. The final operations publisher always runs,
+# even when an earlier stage fails, so the dashboard exposes the outcome.
 INTERVAL_SECONDS=300
 HOURLY_REQUEST_LIMIT=45
 
@@ -43,7 +45,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR'; rc=0; { '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator &amp;&amp; '$PYTHON' -u -m ml.v10.confirmation_cycle; } || rc=\$?; '$PYTHON' -u -m ml.operations_health --pipeline-exit-code \$rc || true; exit \$rc; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR'; rc=0; { '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator &amp;&amp; '$PYTHON' -u -m ml.v10.confirmation_cycle; } || rc=\$?; conv_rc=0; '$PYTHON' -u -m ml.data_convergence || conv_rc=\$?; if [[ \$rc -eq 0 &amp;&amp; \$conv_rc -ne 0 ]]; then rc=\$conv_rc; fi; '$PYTHON' -u -m ml.operations_health --pipeline-exit-code \$rc || true; exit \$rc; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -72,6 +74,9 @@ echo "V8 guard output: $PROJECT_DIR/data/model/v8/eod_guard/status.json"
 echo "V10 prospective confirmation: ml.v10.confirmation_cycle"
 echo "V10 confirmation optimization: full reconstruction only when common feature session advances"
 echo "V10 dashboard status: $PROJECT_DIR/webapp/static/generated/v10_confirmation_status.json"
+echo "EOD convergence proof: ml.data_convergence"
+echo "Convergence status: $PROJECT_DIR/webapp/static/generated/stock_data_convergence.json"
+echo "Convergence transitions: $PROJECT_DIR/data/model/operations/data_convergence_events.jsonl"
 echo "Operations health publisher: ml.operations_health"
 echo "Operations dashboard status: $PROJECT_DIR/webapp/static/generated/stock_operations_health.json"
 echo "Stderr archive: $ARCHIVE_DIR"
