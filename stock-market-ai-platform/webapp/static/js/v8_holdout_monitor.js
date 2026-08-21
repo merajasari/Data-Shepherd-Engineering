@@ -32,8 +32,9 @@
       await loadScript('/static/js/v8_dashboard_fixes.js');
       await loadScript('/static/js/v8_dashboard_final_polish.js');
       await loadScript('/static/js/v8_launch_readiness.js');
+      await loadScript('/static/js/v10_confirmation_dashboard.js');
     } catch (e) {
-      console.error('Unable to load one or more V8 dashboard enhancements.', e);
+      console.error('Unable to load one or more V8/V10 dashboard enhancements.', e);
     }
   };
   core.onerror = () => console.error('Unable to load V8 dashboard core.');
