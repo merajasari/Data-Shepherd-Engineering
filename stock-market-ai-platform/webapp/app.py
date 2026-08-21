@@ -149,7 +149,12 @@ def api_dashboard_stock(symbol):
 def api_prices(symbol):
     symbol=symbol.upper().strip()
     if symbol not in V5_SYMBOLS:return jsonify({"error":"unsupported symbol"}),404
-    return jsonify(get_recent_prices(symbol,limit=60))
+    # This endpoint feeds the interactive Market History chart and the live
+    # EOD refresh dispatcher.  Returning only 60 rows caused ALL/5Y/3Y/1Y to
+    # collapse to the same ~90-day window every time the asynchronous refresh
+    # replaced the longer initial page payload.  Use the local gold history so
+    # range controls retain the multi-year data they require without REST I/O.
+    return jsonify(get_recent_prices_local(symbol,limit=2600))
 @app.route("/api/local-history-bulk")
 @login_required
 def api_local_history_bulk():
