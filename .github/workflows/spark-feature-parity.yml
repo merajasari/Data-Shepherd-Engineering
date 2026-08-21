@@ -20,6 +20,13 @@ on:
       - "stock-market-ai-platform/ml/predict.py"
       - "stock-market-ai-platform/ml/run_v5_data_refresh.py"
       - "stock-market-ai-platform/ml/run_v5_inference.py"
+      - "stock-market-ai-platform/ml/run_v8_inference.py"
+      - "stock-market-ai-platform/ml/run_v8_data_refresh.py"
+      - "stock-market-ai-platform/ml/v8/holdout_runner.py"
+      - "stock-market-ai-platform/ml/v8/eod_orchestrator.py"
+      - "stock-market-ai-platform/webapp/app.py"
+      - "stock-market-ai-platform/webapp/services/prediction_service.py"
+      - "stock-market-ai-platform/webapp/templates/index.html"
       - "stock-market-ai-platform/ml/train_model.py"
       - "stock-market-ai-platform/ml/train_model_v3.py"
       - "stock-market-ai-platform/tests/test_feature_backend_routing.py"
@@ -29,6 +36,7 @@ on:
       - "stock-market-ai-platform/tests/test_validate_spark_feature_parity.py"
       - "stock-market-ai-platform/tests/test_validate_spark_feature_outputs.py"
       - "stock-market-ai-platform/tests/test_spark_scheduler_gate.py"
+      - "stock-market-ai-platform/tests/test_v8_production_inference.py"
       - ".github/workflows/spark-feature-parity.yml"
   workflow_dispatch:
 
@@ -116,3 +124,11 @@ jobs:
             -s tests \
             -p "test_spark_scheduler_gate.py" \
             -v
+
+      - name: Run frozen V8 production inference tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_v8_production_inference.py" \
+            -v
+
