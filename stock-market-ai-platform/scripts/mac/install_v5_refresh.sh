@@ -13,9 +13,10 @@ UID_VALUE="$(id -u)"
 # Invoke frequently, but let Python's persistent rolling quota ledger decide
 # how many Tiingo REST calls are safe right now. After each successful refresh
 # invocation, regenerate the frozen V5 ranking snapshot, run the isolated V5
-# forward evaluator, then run the fail-closed V8 EOD guard. The V8 guard does
-# not place orders or write holdout evidence; it only opens the decision gate
-# when the common feature/Gold session and 100-name rankable universe are safe.
+# forward evaluator, then enter the guarded V8 EOD orchestrator. The V8
+# orchestrator always runs the fail-closed EOD guard before it can invoke the
+# append-only frozen holdout runner. Before 2026-09-01 the holdout runner writes
+# no forward evidence. No brokerage orders are placed.
 INTERVAL_SECONDS=300
 HOURLY_REQUEST_LIMIT=45
 
@@ -33,7 +34,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_guard; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -55,7 +56,9 @@ echo "Rolling Tiingo scheduler limit: $HOURLY_REQUEST_LIMIT requests / 60 minute
 echo "Catch-up policy: use all currently available rolling-hour capacity"
 echo "V5 inference: regenerate rankings after each successful refresh invocation"
 echo "V5 forward evaluator: automatic after inference"
-echo "V8 EOD guard: automatic after refresh/inference; fail closed on unsafe common-session state"
+echo "V8 production path: ml.v8.eod_orchestrator"
+echo "V8 decision gate: ml.v8.eod_guard (fail closed)"
+echo "V8 holdout runner: invoked only after the EOD decision gate opens"
 echo "V8 guard output: $PROJECT_DIR/data/model/v8/eod_guard/status.json"
-echo "Holdout safety: no V5/V8 brokerage orders; frozen V8 holdout remains append-only and separately gated"
+echo "Holdout safety: no V5/V8 brokerage orders; V8 journal remains empty before 2026-09-01"
 echo "Logs: $LOG_DIR/v5_refresh.log"
