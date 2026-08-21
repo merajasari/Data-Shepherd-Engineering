@@ -91,6 +91,26 @@ def _read_small_cache() -> tuple[dict[str, list[dict]], str | None, str]:
     return clean, updated_at, source
 
 
+def get_latest_cached_points(symbols: list[str]) -> dict[str, dict]:
+    """Return the newest positive rolling-cache point for each requested symbol."""
+    series, _, _ = _read_small_cache()
+    result: dict[str, dict] = {}
+    for raw_symbol in symbols:
+        symbol = str(raw_symbol).upper().strip()
+        rows = series.get(symbol) or []
+        if not rows:
+            continue
+        row = rows[-1]
+        try:
+            price = float(row.get("price"))
+            ts = datetime.fromisoformat(str(row.get("t")).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if price > 0:
+            result[symbol] = {"t": ts.isoformat(), "price": price, "intraday_cache": True}
+    return result
+
+
 def _append_live(rows: list[dict], symbol: str, quotes: dict) -> list[dict]:
     out = [dict(row) for row in rows]
     quote = quotes.get(symbol) or {}
@@ -140,6 +160,8 @@ def get_symbol_24h_intraday(symbol: str) -> dict:
     try:
         live_price = float(quote.get("reference_price"))
     except (TypeError, ValueError):
+        live_price = None
+    if live_price is not None and live_price <= 0:
         live_price = None
     return {
         "window_hours": 24,
