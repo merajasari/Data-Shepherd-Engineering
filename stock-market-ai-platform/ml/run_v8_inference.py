@@ -69,6 +69,7 @@ def build_v8_rankings() -> dict:
             "volatility_20d and beta_60"
         ),
         "candidate_count": len(rows),
+        "feature_count": 3,
         "benchmark_symbol": "SPY",
         "benchmark_is_investable": False,
         "top_n": 10,
