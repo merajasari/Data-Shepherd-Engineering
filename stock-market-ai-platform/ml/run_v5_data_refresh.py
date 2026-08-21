@@ -30,6 +30,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from feature_source import feature_dataset_exists, get_feature_dataset_path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_INGESTION = PROJECT_ROOT / "data-ingestion"
@@ -128,12 +130,12 @@ class QuotaTrackingTiingoClient:
 
 
 def feature_path(symbol):
-    return PROJECT_ROOT / f"data/features/stocks/{symbol}/{symbol}_features.parquet"
+    return get_feature_dataset_path(symbol, project_root=PROJECT_ROOT)
 
 
 def feature_latest_timestamp_ms(symbol):
     path = feature_path(symbol)
-    if not path.exists() or path.stat().st_size == 0:
+    if not feature_dataset_exists(path):
         return None
     frame = pd.read_parquet(path, columns=["timestamp_utc"])
     if frame.empty:
