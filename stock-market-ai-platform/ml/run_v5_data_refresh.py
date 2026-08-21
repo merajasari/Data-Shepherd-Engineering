@@ -5,9 +5,11 @@ request ledger limits Tiingo REST usage across invocations, so a startup catch-u
 can use the currently available hourly budget immediately and later invocations
 resume only as older requests fall out of the rolling window.
 
-If all 101 V5 data symbols are current, Silver, Gold, and feature datasets are
-rebuilt only when they are behind the completed EOD target.  Once features are
-current, the frozen V5 production inference artifact is refreshed as well.
+Bronze updates are propagated immediately into Silver and Gold for the symbols
+updated in each partial catch-up batch so read-only dashboard history does not
+have to wait for the entire 101-symbol universe to finish. Feature datasets and
+frozen production inference are still treated as universe-level artifacts and
+are refreshed only after Bronze is fully current for the target EOD session.
 
 This module does not fit models, tune parameters, build research targets, place
 orders, or evaluate the future holdout.
@@ -29,8 +31,10 @@ DATA_INGESTION = PROJECT_ROOT / "data-ingestion"
 sys.path.insert(0, str(DATA_INGESTION))
 
 from tiingo_client import TiingoClient  # noqa: E402
-from tiingo_v5_incremental import DEFAULT_MAX_REQUESTS, run_incremental_refresh  # noqa: E402
+from tiingo_v5_incremental import run_incremental_refresh  # noqa: E402
 from v5_symbols import get_v5_data_symbols  # noqa: E402
+from silver_pipeline import process_stock as process_silver_stock  # noqa: E402
+from gold_pipeline import process_stock as process_gold_stock  # noqa: E402
 
 
 REQUEST_LEDGER_PATH = PROJECT_ROOT / "data/live/v5_tiingo_request_ledger.json"
@@ -75,14 +79,12 @@ def _write_request_timestamps(timestamps, path=REQUEST_LEDGER_PATH, updated_at=N
 
 
 def _active_request_timestamps(now=None, path=REQUEST_LEDGER_PATH):
-    """Return ledger requests active in the rolling window without mutating state."""
     now = now or _utc_now()
     cutoff = now - REQUEST_WINDOW
     return [ts for ts in _load_request_timestamps(path) if cutoff < ts <= now]
 
 
 def prune_request_ledger(now=None, path=REQUEST_LEDGER_PATH):
-    """Persist only requests still inside the rolling one-hour quota window."""
     now = now or _utc_now()
     kept = _active_request_timestamps(now=now, path=path)
     _write_request_timestamps(kept, path, updated_at=now)
@@ -97,7 +99,6 @@ def available_request_budget(hourly_limit=DEFAULT_HOURLY_REQUEST_LIMIT, now=None
 
 
 def record_request_attempt(now=None, path=REQUEST_LEDGER_PATH):
-    """Record a Tiingo REST attempt before it is sent, conservatively counting failures."""
     now = now or _utc_now()
     timestamps = _load_request_timestamps(path)
     timestamps.append(now)
@@ -105,8 +106,6 @@ def record_request_attempt(now=None, path=REQUEST_LEDGER_PATH):
 
 
 class QuotaTrackingTiingoClient:
-    """Proxy Tiingo client that persists each REST attempt in the rolling ledger."""
-
     def __init__(self, client=None, ledger_path=REQUEST_LEDGER_PATH):
         self.client = client or TiingoClient()
         self.ledger_path = ledger_path
@@ -156,8 +155,20 @@ def rebuild_data_layers():
     run_command([python, "-u", "data-ingestion/feature_pipeline.py"])
 
 
+def propagate_price_layers(symbols):
+    """Immediately rebuild Silver and Gold only for newly refreshed symbols."""
+    ordered = list(dict.fromkeys(symbols or []))
+    if not ordered:
+        return
+    print(f"Propagating {len(ordered)} refreshed symbol(s) into Silver/Gold.")
+    for symbol in ordered:
+        bronze_dir = PROJECT_ROOT / "data/bronze/stocks" / symbol
+        silver_dir = PROJECT_ROOT / "data/silver/stocks" / symbol
+        process_silver_stock(bronze_dir)
+        process_gold_stock(silver_dir)
+
+
 def refresh_v5_rankings():
-    """Refresh the frozen production ranking artifact; never fit or tune."""
     run_command([sys.executable, "-u", "ml/run_v5_inference.py"])
 
 
@@ -167,7 +178,6 @@ def run_data_refresh(
     ledger_path=REQUEST_LEDGER_PATH,
     client=None,
 ):
-    """Run one quota-aware catch-up cycle using whatever rolling budget is free."""
     available, used = available_request_budget(
         hourly_limit=hourly_request_limit,
         path=ledger_path,
@@ -202,16 +212,21 @@ def run_data_refresh(
     print(f"Rolling budget still available: {remaining_budget}")
     print(f"Bronze complete: {state['complete']}")
 
+    # Make read-only dashboard history fresher immediately, even while the
+    # universe-level Bronze catch-up is still in progress.
+    propagate_price_layers(state.get("updated_symbols", []))
+
     if not state["complete"]:
         print(
-            "Bronze universe is still catching up; the next five-minute invocation "
-            "will continue as soon as rolling Tiingo capacity is available."
+            "Bronze universe is still catching up; updated symbols are already visible "
+            "in Silver/Gold and the next five-minute invocation will continue as soon "
+            "as rolling Tiingo capacity is available."
         )
         return "bronze_partial"
 
     stale = stale_feature_symbols(state["target_timestamp_ms"])
     if stale:
-        print(f"Features behind target for {len(stale)} symbol(s); rebuilding data layers.")
+        print(f"Features behind target for {len(stale)} symbol(s); rebuilding complete data layers.")
         rebuild_data_layers()
         stale = stale_feature_symbols(state["target_timestamp_ms"])
         if stale:
