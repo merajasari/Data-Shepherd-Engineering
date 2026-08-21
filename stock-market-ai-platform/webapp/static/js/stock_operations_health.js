@@ -27,6 +27,12 @@
       if (!anchor || document.getElementById('stock-operations-health')) return;
 
       const layers = d.convergence?.layers || {};
+      const gateOpen = Boolean(d.v8?.decision_gate_open);
+      const decisionState = gateOpen ? 'READY TO RANK' : 'WAITING FOR COMPLETE EOD DATA';
+      const decisionClass = gateOpen ? 'good' : 'warn';
+      const latestConverged = d.features?.common_latest_utc || d.convergence?.common_latest_utc || null;
+      const rankingTs = d.v8?.ranking_timestamp_utc || null;
+
       const card = document.createElement('section');
       card.id = 'stock-operations-health';
       card.className = 'v4-card ops-health-card';
@@ -39,8 +45,11 @@
           #stock-operations-health .ops-value{font-size:18px;font-weight:700;margin-top:4px}
           #stock-operations-health .ops-mini{font-size:10px;opacity:.6;margin-top:2px}
           #stock-operations-health .good{color:#86efac}.warn{color:#fde68a}.bad{color:#fca5a5}
-          #stock-operations-health .ops-note{margin-top:12px;font-size:12px;opacity:.75;line-height:1.5}
-          #stock-operations-health .ops-proof{margin-top:16px;padding:14px;border-radius:12px;background:rgba(255,255,255,.035)}
+          #stock-operations-health .ops-note{margin-top:12px;font-size:12px;opacity:.78;line-height:1.55}
+          #stock-operations-health .ops-proof,#stock-operations-health .ops-decision{margin-top:16px;padding:14px;border-radius:12px;background:rgba(255,255,255,.035)}
+          #stock-operations-health .ops-decision{border:1px solid rgba(255,255,255,.08)}
+          #stock-operations-health .ops-state-title{font-size:15px;font-weight:800;margin-top:4px}
+          #stock-operations-health .ops-separation{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;line-height:1.55;opacity:.72}
         </style>
         <div class="label">PLATFORM OPERATIONS</div>
         <h2>Scheduler & Data Pipeline Health</h2>
@@ -54,6 +63,21 @@
           <div class="ops-cell"><div class="ops-label">V10 Confirmation</div><div class="ops-value ${stateClass(d.v10?.status)}" style="font-size:14px">${esc(d.v10?.status)}</div></div>
           <div class="ops-cell"><div class="ops-label">Real Orders</div><div class="ops-value good">NO</div></div>
         </div>
+
+        <div class="ops-decision">
+          <div class="ops-label">CURRENT PRODUCTION DECISION STATE</div>
+          <div class="ops-state-title ${decisionClass}">${esc(decisionState)}</div>
+          <div class="ops-grid">
+            <div class="ops-cell"><div class="ops-label">EOD Target Being Built</div><div class="ops-value" style="font-size:14px">${esc(fmtTs(d.convergence?.target_session_utc))}</div></div>
+            <div class="ops-cell"><div class="ops-label">Latest Fully Converged Feature Session</div><div class="ops-value" style="font-size:14px">${esc(fmtTs(latestConverged))}</div></div>
+            <div class="ops-cell"><div class="ops-label">Production Ranking Timestamp</div><div class="ops-value" style="font-size:14px">${esc(fmtTs(rankingTs))}</div><div class="ops-mini">blank while gate is closed</div></div>
+            <div class="ops-cell"><div class="ops-label">Decision Gate</div><div class="ops-value ${decisionClass}">${gateOpen ? 'OPEN' : 'CLOSED'}</div></div>
+          </div>
+          <div class="ops-separation">
+            The separate <strong>Frozen V8 development snapshot</strong> elsewhere on this dashboard is historical research/reference evidence. It is not the current production decision. This panel is the authoritative operational state for the EOD target currently being assembled.
+          </div>
+        </div>
+
         <div class="ops-proof">
           <div class="ops-label">EOD CONVERGENCE PROOF</div>
           <div class="ops-grid">
@@ -64,8 +88,8 @@
           </div>
           <div class="ops-note">
             Verification: <strong class="${stateClass(d.convergence?.verification)}">${esc(d.convergence?.verification)}</strong> ·
-            V8 gate ${d.v8?.decision_gate_open ? 'OPEN' : 'CLOSED'} ·
-            feature common latest ${esc(fmtTs(d.features?.common_latest_utc))}.
+            V8 gate ${gateOpen ? 'OPEN' : 'CLOSED'} ·
+            feature common latest ${esc(fmtTs(latestConverged))}.
           </div>
         </div>
         <div class="ops-note">
