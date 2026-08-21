@@ -37,6 +37,7 @@ on:
       - "stock-market-ai-platform/tests/test_validate_spark_feature_outputs.py"
       - "stock-market-ai-platform/tests/test_spark_scheduler_gate.py"
       - "stock-market-ai-platform/tests/test_v8_production_inference.py"
+      - "stock-market-ai-platform/tests/test_v8_site_cutover.py"
       - ".github/workflows/spark-feature-parity.yml"
   workflow_dispatch:
 
@@ -130,5 +131,12 @@ jobs:
           python -m unittest discover \
             -s tests \
             -p "test_v8_production_inference.py" \
+            -v
+
+      - name: Run V8 site cutover tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_v8_site_cutover.py" \
             -v
 
