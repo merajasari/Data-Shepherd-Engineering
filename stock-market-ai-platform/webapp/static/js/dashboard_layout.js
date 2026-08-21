@@ -10,10 +10,6 @@
     technicalIndicators.classList.add('ds-technical-indicators', 'ds-live-stock-keep');
     technicalIndicators.setAttribute('data-selected-stock-indicators', 'true');
 
-    // Keep the indicator strip beside the selected-stock market context on the
-    // Live Stock Viewer. The server-rendered values are tied to the symbol in
-    // /dashboard?view=live&symbol=..., so every search/dropdown selection reloads
-    // this strip with the newly selected stock's values.
     const marketSection = document.querySelector('.ds-market-section');
     if (marketSection && marketSection.nextElementSibling !== technicalIndicators) {
       marketSection.insertAdjacentElement('afterend', technicalIndicators);
@@ -33,8 +29,6 @@
   document.head.appendChild(technicalStyle);
 
   // Remove only the compact V4 paper-portfolio chart shown beside the dashboard metrics.
-  // Do not touch .v4-chart-card, which is repurposed by v4_equity_chart.js for the
-  // MODEL PERFORMANCE COMPARISON panel.
   const removeCompactV4Equity = () => {
     const compact = document.getElementById('v4-compact-equity-card');
     if (compact) {
@@ -63,24 +57,41 @@
     return true;
   };
 
-  // On Live Stock Viewer, keep the stock selector/search card directly below the
+  // Find the full LIVE STOCK VIEWER search/selector panel, not merely a compact
+  // card that happens to carry the same label. The desired panel contains the
+  // "Search and Inspect Live Stocks" heading plus the ticker/company controls.
+  const findFullLiveViewer = () => {
+    const heading = Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(node =>
+      node.textContent.trim() === 'Search and Inspect Live Stocks'
+    );
+
+    if (heading) {
+      const panel = heading.closest('.card, section, article');
+      if (panel) return panel;
+    }
+
+    const labeledCandidates = Array.from(document.querySelectorAll('.card, section, article')).filter(node => {
+      const text = node.textContent || '';
+      return /LIVE STOCK VIEWER/i.test(text) &&
+             /Search and Inspect Live Stocks/i.test(text) &&
+             (node.querySelector('input') || node.querySelector('select') || node.querySelector('[role="combobox"]'));
+    });
+
+    return labeledCandidates.sort((a,b) => a.textContent.length - b.textContent.length)[0] || null;
+  };
+
+  // On Live Stock Viewer, stack the full search/selector panel directly below the
   // Top Live Stock Comparison chart and remove the redundant compact MARKET card.
-  // Wait until the comparison chart has been injected before removing MARKET,
-  // because the comparison renderer uses that card as its initial insertion anchor.
+  // We wait for the comparison renderer because it initially inserts itself using
+  // the MARKET card as an anchor.
   const arrangeLiveStockViewer = () => {
     if (!document.body.classList.contains('ds-live-stock-view')) return false;
 
     const comparison = document.getElementById('ds-top-live-comparison');
     if (!comparison) return false;
 
+    const liveViewer = findFullLiveViewer();
     const cards = Array.from(document.querySelectorAll('.card'));
-    const liveViewer = cards.find(node => {
-      if (node === comparison) return false;
-      const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
-      const heading = node.querySelector(':scope > h1,:scope > h2,:scope > h3')?.textContent?.trim() || '';
-      return label === 'LIVE STOCK VIEWER' || heading === 'LIVE STOCK VIEWER' || /LIVE STOCK VIEWER/i.test(`${label} ${heading}`);
-    });
-
     const market = cards.find(node => {
       const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
       return label === 'MARKET' || node.classList.contains('ds-market-section');
@@ -107,9 +118,6 @@
   moveV8RankSignal();
   arrangeLiveStockViewer();
 
-  // Compact equity cards, the V8 replacement signal, and the live comparison card
-  // are injected by other dashboard scripts, so watch briefly for their final DOM
-  // state and enforce only these layout rules.
   const layoutObserver = new MutationObserver(() => {
     removeCompactV4Equity();
     moveV8RankSignal();
@@ -120,9 +128,6 @@
 
   const sections = Array.from(document.querySelectorAll('section.card'));
 
-  // The full 100-stock V8 ranking board is no longer part of the Model Research UI.
-  // Match both the current V8 label and the legacy V5 label in case another script
-  // upgrades the label after initial render.
   const rankingBoard = sections.find(section => {
     const label = section.querySelector('.label')?.textContent?.trim() || '';
     const heading = section.querySelector('h2,h3')?.textContent?.trim() || '';
