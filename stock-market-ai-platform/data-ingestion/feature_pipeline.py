@@ -62,7 +62,6 @@ def process_stock(stock_dir: Path) -> None:
 
     except Exception as exc:
         print(f"[ERROR] {symbol}: {exc}")
-        raise
 
 
 def run_pandas_pipeline() -> None:
