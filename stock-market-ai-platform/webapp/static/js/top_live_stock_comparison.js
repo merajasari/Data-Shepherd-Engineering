@@ -9,5 +9,13 @@
   s.src='/static/js/top_live_stock_comparison_fast.js';
   s.defer=true;
   s.dataset.dsFastLiveComparison='1';
+  s.addEventListener('load',()=>{
+    if(document.querySelector('script[data-ds-top-live-selection]'))return;
+    const selection=document.createElement('script');
+    selection.src='/static/js/top_live_stock_selection.js';
+    selection.defer=true;
+    selection.dataset.dsTopLiveSelection='1';
+    document.head.appendChild(selection);
+  });
   document.head.appendChild(s);
 })();
