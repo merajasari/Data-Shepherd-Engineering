@@ -14,9 +14,20 @@ set -a
 source .env
 set +a
 
+FEATURE_BACKEND="${FEATURE_BACKEND:-pandas}"
+case "$FEATURE_BACKEND" in
+    pandas|spark) ;;
+    *)
+        echo "Unsupported FEATURE_BACKEND=$FEATURE_BACKEND (expected pandas or spark)" >&2
+        exit 2
+        ;;
+esac
+export FEATURE_BACKEND
+
 echo "==================================================" | tee -a "$LOG_FILE"
 echo "STOCK MARKET AI PLATFORM REFRESH" | tee -a "$LOG_FILE"
 echo "Started: $(date)" | tee -a "$LOG_FILE"
+echo "Feature backend: $FEATURE_BACKEND" | tee -a "$LOG_FILE"
 echo "==================================================" | tee -a "$LOG_FILE"
 
 CURRENT_TIMESTAMP="$(
@@ -149,6 +160,15 @@ echo "[4/5] Feature pipeline" \
 PYTHONPATH=data-ingestion \
 python -u data-ingestion/feature_pipeline.py \
 2>&1 | tee -a "$LOG_FILE"
+
+if [[ "$FEATURE_BACKEND" == "spark" ]]; then
+    echo "[GATE] Validate materialized Spark outputs" \
+    | tee -a "$LOG_FILE"
+
+    PYTHONPATH=data-ingestion \
+    python -u data-ingestion/validate_spark_feature_outputs.py \
+    2>&1 | tee -a "$LOG_FILE"
+fi
 
 echo "[5/5] Train all models" \
 | tee -a "$LOG_FILE"
