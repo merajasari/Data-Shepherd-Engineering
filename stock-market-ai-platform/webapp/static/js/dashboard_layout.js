@@ -25,6 +25,9 @@
   technicalStyle.textContent = `
     body.ds-model-research-view .ds-technical-indicators{display:none!important}
     body.ds-live-stock-view .ds-technical-indicators{display:grid!important}
+    body.ds-live-stock-view .ds-live-comparison-stack{display:grid!important;grid-template-columns:1fr!important;gap:22px!important}
+    body.ds-live-stock-view .ds-live-comparison-stack > #ds-top-live-comparison,
+    body.ds-live-stock-view .ds-live-comparison-stack > .ds-live-viewer-card{grid-column:1/-1!important;width:100%!important}
   `;
   document.getElementById(technicalStyle.id)?.remove();
   document.head.appendChild(technicalStyle);
@@ -60,15 +63,57 @@
     return true;
   };
 
+  // On Live Stock Viewer, keep the stock selector/search card directly below the
+  // Top Live Stock Comparison chart and remove the redundant compact MARKET card.
+  // Wait until the comparison chart has been injected before removing MARKET,
+  // because the comparison renderer uses that card as its initial insertion anchor.
+  const arrangeLiveStockViewer = () => {
+    if (!document.body.classList.contains('ds-live-stock-view')) return false;
+
+    const comparison = document.getElementById('ds-top-live-comparison');
+    if (!comparison) return false;
+
+    const cards = Array.from(document.querySelectorAll('.card'));
+    const liveViewer = cards.find(node => {
+      if (node === comparison) return false;
+      const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
+      const heading = node.querySelector(':scope > h1,:scope > h2,:scope > h3')?.textContent?.trim() || '';
+      return label === 'LIVE STOCK VIEWER' || heading === 'LIVE STOCK VIEWER' || /LIVE STOCK VIEWER/i.test(`${label} ${heading}`);
+    });
+
+    const market = cards.find(node => {
+      const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
+      return label === 'MARKET' || node.classList.contains('ds-market-section');
+    });
+
+    const stack = comparison.parentElement;
+    if (stack) {
+      stack.classList.remove('ds-market-comparison-grid');
+      stack.classList.add('ds-live-comparison-stack');
+    }
+
+    if (liveViewer && stack) {
+      liveViewer.classList.add('ds-live-viewer-card', 'ds-live-stock-keep');
+      if (comparison.nextElementSibling !== liveViewer) {
+        comparison.insertAdjacentElement('afterend', liveViewer);
+      }
+    }
+
+    if (market && market !== liveViewer) market.remove();
+    return Boolean(liveViewer || market);
+  };
+
   removeCompactV4Equity();
   moveV8RankSignal();
+  arrangeLiveStockViewer();
 
-  // Compact equity cards and the V8 replacement signal are injected by other
-  // dashboard scripts, so watch briefly for their final DOM state and enforce
-  // only these layout rules.
+  // Compact equity cards, the V8 replacement signal, and the live comparison card
+  // are injected by other dashboard scripts, so watch briefly for their final DOM
+  // state and enforce only these layout rules.
   const layoutObserver = new MutationObserver(() => {
     removeCompactV4Equity();
     moveV8RankSignal();
+    arrangeLiveStockViewer();
   });
   layoutObserver.observe(document.documentElement, { childList: true, subtree: true });
   window.setTimeout(() => layoutObserver.disconnect(), 12000);
