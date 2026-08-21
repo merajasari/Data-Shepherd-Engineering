@@ -5,6 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PYTHON="$PROJECT_DIR/.venv/bin/python"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
 LOG_DIR="$PROJECT_DIR/logs"
+ARCHIVE_DIR="$LOG_DIR/archive"
 LABEL="com.datashepherd.v5refresh"
 PLIST="$LAUNCH_DIR/$LABEL.plist"
 LOCK_DIR="$LOG_DIR/v5_refresh.lockdir"
@@ -14,17 +15,26 @@ UID_VALUE="$(id -u)"
 # how many Tiingo REST calls are safe right now. After each successful refresh
 # invocation, regenerate the frozen V5 ranking snapshot, run the isolated V5
 # forward evaluator, enter the guarded V8 EOD orchestrator, then run the V10
-# prospective-confirmation cycle. V10's cycle is cheap when the common feature
-# session has not advanced and never reads its formal 2026-11-02+ holdout.
+# prospective-confirmation cycle. A final read-only operations publisher always
+# runs, even when an earlier stage fails, so the dashboard exposes the outcome.
 INTERVAL_SECONDS=300
 HOURLY_REQUEST_LIMIT=45
 
-mkdir -p "$LAUNCH_DIR" "$LOG_DIR"
+mkdir -p "$LAUNCH_DIR" "$LOG_DIR" "$ARCHIVE_DIR"
 
 if [[ ! -x "$PYTHON" ]]; then
   echo "Missing virtualenv Python: $PYTHON" >&2
   exit 1
 fi
+
+# Archive stale stderr at install time so newly generated scheduler errors are
+# easy to distinguish from historical failures. Never delete prior evidence.
+if [[ -s "$LOG_DIR/v5_refresh.err.log" ]]; then
+  STAMP="$(date '+%Y%m%d-%H%M%S')"
+  mv "$LOG_DIR/v5_refresh.err.log" "$ARCHIVE_DIR/v5_refresh.err.$STAMP.log"
+  echo "Archived previous scheduler stderr: $ARCHIVE_DIR/v5_refresh.err.$STAMP.log"
+fi
+: > "$LOG_DIR/v5_refresh.err.log"
 
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -33,7 +43,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator &amp;&amp; '$PYTHON' -u -m ml.v10.confirmation_cycle; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR'; rc=0; { '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5 &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator &amp;&amp; '$PYTHON' -u -m ml.v10.confirmation_cycle; } || rc=\$?; '$PYTHON' -u -m ml.operations_health --pipeline-exit-code \$rc || true; exit \$rc; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -62,5 +72,8 @@ echo "V8 guard output: $PROJECT_DIR/data/model/v8/eod_guard/status.json"
 echo "V10 prospective confirmation: ml.v10.confirmation_cycle"
 echo "V10 confirmation optimization: full reconstruction only when common feature session advances"
 echo "V10 dashboard status: $PROJECT_DIR/webapp/static/generated/v10_confirmation_status.json"
+echo "Operations health publisher: ml.operations_health"
+echo "Operations dashboard status: $PROJECT_DIR/webapp/static/generated/stock_operations_health.json"
+echo "Stderr archive: $ARCHIVE_DIR"
 echo "Holdout safety: no brokerage orders; V8 and V10 formal holdouts remain separately gated"
 echo "Logs: $LOG_DIR/v5_refresh.log"
