@@ -184,7 +184,7 @@ def api_v5_shadow():return jsonify(get_v5_shadow_comparison())
 def api_v5_shadow_history():return jsonify(get_v5_shadow_history())
 @app.route("/api/crypto-history")
 @login_required
-def api_crypto_history():return jsonify(get_crypto_dashboard_payload(normalize_history_range(request.args.get("range","ALL"))))
+def api_crypto_history():return jsonify(get_crypto_history_payload(normalize_history_range(request.args.get("range","ALL"))))
 @app.route("/api/crypto-history-file")
 @login_required
 def api_crypto_history_file():
