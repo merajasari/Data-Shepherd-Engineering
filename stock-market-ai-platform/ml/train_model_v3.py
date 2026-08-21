@@ -19,6 +19,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+from feature_source import require_feature_dataset
+
 
 PREDICTION_THRESHOLD = 0.50
 
@@ -165,9 +167,7 @@ class LogisticRegression:
 def get_paths(symbol: str):
     """Return the feature and model paths for a symbol."""
 
-    feature_file = Path(
-        f"data/features/stocks/{symbol}/{symbol}_features.parquet"
-    )
+    feature_file = require_feature_dataset(symbol)
 
     model_path = Path(
         f"models/{symbol.lower()}_trade_model_v3.pkl"
