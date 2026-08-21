@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from feature_source import feature_dataset_exists, get_feature_dataset_path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RANKINGS_PATH = PROJECT_ROOT / "data/live/v5_latest_rankings.json"
@@ -47,9 +49,9 @@ def main() -> None:
     mismatches = []
     for row in rankings:
         symbol = row["symbol"]
-        path = PROJECT_ROOT / f"data/features/stocks/{symbol}/{symbol}_features.parquet"
-        if not path.exists():
-            mismatches.append(f"{symbol}: feature file missing")
+        path = get_feature_dataset_path(symbol, project_root=PROJECT_ROOT)
+        if not feature_dataset_exists(path):
+            mismatches.append(f"{symbol}: feature dataset missing")
             continue
 
         frame = pd.read_parquet(path, columns=["timestamp_utc", "close"])

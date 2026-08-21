@@ -11,7 +11,17 @@ on:
       - "stock-market-ai-platform/data-ingestion/spark_feature_pipeline.py"
       - "stock-market-ai-platform/data-ingestion/validate_spark_feature_parity.py"
       - "stock-market-ai-platform/data-ingestion/requirements.txt"
+      - "stock-market-ai-platform/ml/build_stock_model_comparison.py"
+      - "stock-market-ai-platform/ml/build_v4_dataset.py"
+      - "stock-market-ai-platform/ml/check_v5_dashboard_integrity.py"
+      - "stock-market-ai-platform/ml/feature_source.py"
+      - "stock-market-ai-platform/ml/predict.py"
+      - "stock-market-ai-platform/ml/run_v5_data_refresh.py"
+      - "stock-market-ai-platform/ml/run_v5_inference.py"
+      - "stock-market-ai-platform/ml/train_model.py"
+      - "stock-market-ai-platform/ml/train_model_v3.py"
       - "stock-market-ai-platform/tests/test_feature_backend_routing.py"
+      - "stock-market-ai-platform/tests/test_feature_source.py"
       - "stock-market-ai-platform/tests/test_feature_transform_targets.py"
       - "stock-market-ai-platform/tests/test_spark_feature_parity.py"
       - "stock-market-ai-platform/tests/test_validate_spark_feature_parity.py"
@@ -57,6 +67,13 @@ jobs:
           python -m unittest discover \
             -s tests \
             -p "test_feature_backend_routing.py" \
+            -v
+
+      - name: Run downstream feature source tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_feature_source.py" \
             -v
 
       - name: Run existing five-day target tests

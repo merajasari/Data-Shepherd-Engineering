@@ -19,12 +19,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from feature_source import require_feature_dataset
+
 STARTING_CAPITAL = 100_000.0
 V4_PATH = Path("data/model/v4/full_history_equity.json")
 V5_PATH = Path("data/model/v5/phase3/portfolio_daily.csv")
 V8_PATH = Path("data/model/v8/phase5/economic_period_results.csv")
 V8_FREEZE_PATH = Path("data/model/v8/phase7/frozen_candidate_spec.json")
-FEATURE_ROOT = Path("data/features/stocks")
 OUTPUT_PATH = Path("webapp/static/generated/stock_model_comparison.json")
 
 V5_COST_BPS = 10.0
@@ -58,10 +59,7 @@ def _series_record(model_id, label, rows, methodology, status):
 
 
 def _discover_spy_path():
-    candidates = sorted((FEATURE_ROOT / "SPY").glob("*.parquet"))
-    if not candidates:
-        raise FileNotFoundError("SPY feature parquet not found under data/features/stocks/SPY")
-    return candidates[0]
+    return require_feature_dataset("SPY")
 
 
 def _spy_frame():

@@ -23,6 +23,8 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+from feature_source import feature_dataset_exists, get_feature_dataset_path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_INGESTION = PROJECT_ROOT / "data-ingestion"
@@ -50,7 +52,7 @@ def _sha256(path: Path) -> str:
 
 
 def _load_manifest(path: Path = FREEZE_MANIFEST_PATH) -> dict:
-    if not path.exists():
+    if not feature_dataset_exists(path):
         raise FileNotFoundError(f"V5 freeze manifest not found: {path}")
     payload = json.loads(path.read_text())
     features = payload.get("feature_columns")
@@ -60,7 +62,7 @@ def _load_manifest(path: Path = FREEZE_MANIFEST_PATH) -> dict:
 
 
 def _feature_path(symbol: str) -> Path:
-    return PROJECT_ROOT / f"data/features/stocks/{symbol}/{symbol}_features.parquet"
+    return get_feature_dataset_path(symbol, project_root=PROJECT_ROOT)
 
 
 def _read_feature_frame(symbol: str, feature_columns: list[str]) -> pd.DataFrame:
