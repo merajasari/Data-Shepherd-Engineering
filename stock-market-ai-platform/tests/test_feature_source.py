@@ -13,6 +13,7 @@ if str(ML_ROOT) not in sys.path:
 
 from feature_source import (
     feature_dataset_exists,
+    feature_dataset_mtime_ns,
     get_feature_backend,
     get_feature_dataset_path,
     require_feature_dataset,
@@ -78,6 +79,18 @@ class FeatureSourceTests(unittest.TestCase):
             self.assertFalse(feature_dataset_exists(spark_path))
             (spark_path / "part-00000.parquet").write_bytes(b"parquet")
             self.assertTrue(feature_dataset_exists(spark_path))
+
+    def test_dataset_mtime_uses_newest_spark_part(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "AAPL"
+            dataset.mkdir()
+            older = dataset / "part-00000.parquet"
+            newer = dataset / "part-00001.parquet"
+            older.write_bytes(b"old")
+            newer.write_bytes(b"new")
+            os.utime(older, ns=(100, 100))
+            os.utime(newer, ns=(200, 200))
+            self.assertEqual(feature_dataset_mtime_ns(dataset), 200)
 
     def test_require_reports_selected_backend(self):
         with tempfile.TemporaryDirectory() as directory:
