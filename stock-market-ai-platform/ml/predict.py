@@ -14,6 +14,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+from feature_source import require_feature_dataset
+
 
 def sigmoid(value):
     """Calculate numerically stable sigmoid probability."""
@@ -32,9 +34,7 @@ def sigmoid(value):
 def get_paths(symbol: str):
     """Return feature and model paths for a symbol."""
 
-    feature_file = Path(
-        f"data/features/stocks/{symbol}/{symbol}_features.parquet"
-    )
+    feature_file = require_feature_dataset(symbol)
 
     model_file = Path(
         f"models/{symbol.lower()}_direction_model.pkl"
