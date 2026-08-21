@@ -129,11 +129,17 @@ def transform_to_features_spark(df: DataFrame) -> DataFrame:
     loss_count = F.count(F.col("_loss")).over(rsi_window)
     avg_gain = F.when(gain_count == 14, F.avg("_gain").over(rsi_window))
     avg_loss = F.when(loss_count == 14, F.avg("_loss").over(rsi_window))
-    relative_strength = avg_gain / avg_loss
+    complete_rsi_window = (gain_count == 14) & (loss_count == 14)
+    rsi_14 = (
+        F.when(~complete_rsi_window, F.lit(None).cast("double"))
+        .when((avg_gain == 0) & (avg_loss == 0), F.lit(None).cast("double"))
+        .when(avg_loss == 0, F.lit(100.0))
+        .otherwise(100 - (100 / (1 + (avg_gain / avg_loss))))
+    )
 
     result = (
         result
-        .withColumn("rsi_14", 100 - (100 / (1 + relative_strength)))
+        .withColumn("rsi_14", rsi_14)
         .withColumn("rsi_centered", (F.col("rsi_14") - 50.0) / 50.0)
         .withColumn(
             "momentum_10d",
