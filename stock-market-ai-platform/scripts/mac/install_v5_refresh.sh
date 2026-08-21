@@ -33,7 +33,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; exec '$PYTHON' -u -m ml.run_paper_cycle_v5; else echo '[SKIP] V5 refresh already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.run_v5_data_refresh --hourly-request-limit $HOURLY_REQUEST_LIMIT &amp;&amp; '$PYTHON' -u -m ml.run_v5_inference &amp;&amp; '$PYTHON' -u -m ml.run_paper_cycle_v5; else echo '[SKIP] V5 refresh already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
