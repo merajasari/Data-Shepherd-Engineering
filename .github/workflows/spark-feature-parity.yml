@@ -1,0 +1,65 @@
+name: Spark feature parity
+
+on:
+  pull_request:
+    branches:
+      - feature/paper-trading
+    paths:
+      - "stock-market-ai-platform/data-ingestion/feature_transform.py"
+      - "stock-market-ai-platform/data-ingestion/spark_feature_transform.py"
+      - "stock-market-ai-platform/data-ingestion/spark_feature_pipeline.py"
+      - "stock-market-ai-platform/data-ingestion/requirements.txt"
+      - "stock-market-ai-platform/tests/test_feature_transform_targets.py"
+      - "stock-market-ai-platform/tests/test_spark_feature_parity.py"
+      - ".github/workflows/spark-feature-parity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: stock-market-ai-platform
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: stock-market-ai-platform/data-ingestion/requirements.txt
+
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas pyarrow pyspark
+
+      - name: Run existing five-day target tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_feature_transform_targets.py" \
+            -v
+
+      - name: Run Spark and Pandas parity tests
+        env:
+          PYSPARK_PYTHON: python
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_spark_feature_parity.py" \
+            -v
