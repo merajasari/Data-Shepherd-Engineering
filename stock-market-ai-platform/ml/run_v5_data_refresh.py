@@ -5,11 +5,13 @@ request ledger limits Tiingo REST usage across invocations, so a startup catch-u
 can use the currently available hourly budget immediately and later invocations
 resume only as older requests fall out of the rolling window.
 
-Bronze updates are propagated immediately into Silver and Gold for the symbols
-updated in each partial catch-up batch so read-only dashboard history does not
-have to wait for the entire 101-symbol universe to finish. Feature datasets and
-frozen production inference are still treated as universe-level artifacts and
-are refreshed only after Bronze is fully current for the target EOD session.
+Bronze updates are propagated immediately into Silver, Gold, and (for the
+production Pandas backend) Features for the symbols updated in each partial
+catch-up batch. This keeps all materialized layers advancing together while the
+V8 fail-closed gate still requires one common 101-symbol feature session before
+any production V8 decision can open. Frozen production inference remains a
+universe-level action and is refreshed only after the complete target session is
+available.
 
 Once the universe-level feature layer is current, the read-only stock model
 comparison artifact is rebuilt only when one of its source artifacts is newer.
@@ -47,6 +49,7 @@ from tiingo_v5_incremental import run_incremental_refresh  # noqa: E402
 from v5_symbols import get_v5_data_symbols  # noqa: E402
 from silver_pipeline import process_stock as process_silver_stock  # noqa: E402
 from gold_pipeline import process_stock as process_gold_stock  # noqa: E402
+from feature_pipeline import process_stock as process_feature_stock  # noqa: E402
 
 
 REQUEST_LEDGER_PATH = PROJECT_ROOT / "data/live/v5_tiingo_request_ledger.json"
@@ -184,16 +187,29 @@ def rebuild_data_layers():
 
 
 def propagate_price_layers(symbols):
-    """Immediately rebuild Silver and Gold only for newly refreshed symbols."""
+    """Immediately rebuild Silver/Gold and safe per-symbol Pandas features."""
     ordered = list(dict.fromkeys(symbols or []))
     if not ordered:
         return
-    print(f"Propagating {len(ordered)} refreshed symbol(s) into Silver/Gold.")
+
+    backend = get_feature_backend()
+    suffix = "/Features" if backend == "pandas" else ""
+    print(f"Propagating {len(ordered)} refreshed symbol(s) into Silver/Gold{suffix}.")
     for symbol in ordered:
         bronze_dir = PROJECT_ROOT / "data/bronze/stocks" / symbol
         silver_dir = PROJECT_ROOT / "data/silver/stocks" / symbol
+        gold_dir = PROJECT_ROOT / "data/gold/stocks" / symbol
         process_silver_stock(bronze_dir)
         process_gold_stock(silver_dir)
+        if backend == "pandas":
+            process_feature_stock(gold_dir)
+
+    if backend != "pandas":
+        print(
+            "Spark feature backend selected; per-symbol incremental feature writes are "
+            "disabled. The isolated Spark feature layer will rebuild/validate after "
+            "the Bronze universe reaches the target session."
+        )
 
 
 def refresh_v5_rankings():
@@ -278,15 +294,16 @@ def run_data_refresh(
     print(f"Rolling budget still available: {remaining_budget}")
     print(f"Bronze complete: {state['complete']}")
 
-    # Make read-only dashboard history fresher immediately, even while the
-    # universe-level Bronze catch-up is still in progress.
+    # Advance all safe materialized layers immediately for refreshed symbols.
+    # The V8 decision gate still requires all 101 feature files to share the
+    # target session, so partial feature propagation cannot open production.
     propagate_price_layers(state.get("updated_symbols", []))
 
     if not state["complete"]:
         print(
-            "Bronze universe is still catching up; updated symbols are already visible "
-            "in Silver/Gold and the next five-minute invocation will continue as soon "
-            "as rolling Tiingo capacity is available."
+            "Bronze universe is still catching up; refreshed symbols are already "
+            "propagated through Silver/Gold and Pandas Features. The V8 gate remains "
+            "closed until all 101 symbols converge on the target session."
         )
         return "bronze_partial"
 
