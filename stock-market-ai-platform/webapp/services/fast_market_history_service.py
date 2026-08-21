@@ -3,11 +3,19 @@
 This deliberately avoids Tiingo REST calls so /dashboard can render immediately.
 The Live Stock Viewer refresh layer can then hydrate newer completed sessions and
 live IEX data asynchronously after the page is interactive.
+
+The interactive market-history chart exposes multi-year ranges.  Keep enough
+local rows available for those controls even when a caller asks for the old
+60-row quick-view limit; otherwise every range longer than ~90 calendar days
+starts at the same ~60-trading-session boundary.
 """
 
 from pathlib import Path
 
 import pandas as pd
+
+
+MIN_LIVE_HISTORY_ROWS = 2600
 
 
 def get_recent_prices_local(symbol: str, limit: int = 60) -> list:
@@ -21,7 +29,14 @@ def get_recent_prices_local(symbol: str, limit: int = 60) -> list:
     else:
         ts = pd.to_datetime(df.get("timestamp"), unit="ms", utc=True, errors="coerce")
     df["_ts"] = ts
-    df = df.dropna(subset=["_ts"]).sort_values("_ts").tail(limit).copy()
+
+    # The Live Stock Viewer offers 1Y/3Y/5Y/ALL controls.  Historically the
+    # dashboard passed limit=60, which meant those buttons could only display
+    # the same ~60 trading sessions (for Aug 2026 that began around May 26).
+    # A single stock parquet is local and small, so keep the full research
+    # history needed by the viewer without introducing any remote API call.
+    effective_limit = max(int(limit or 0), MIN_LIVE_HISTORY_ROWS)
+    df = df.dropna(subset=["_ts"]).sort_values("_ts").tail(effective_limit).copy()
 
     close = pd.to_numeric(df.get("close"), errors="coerce")
     volume = pd.to_numeric(df.get("volume"), errors="coerce")
