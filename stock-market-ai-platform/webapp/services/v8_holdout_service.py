@@ -1,7 +1,15 @@
-"""Read-only V8 frozen holdout dashboard service."""
+"""Read-only V8 frozen holdout dashboard service.
+
+The dashboard hits this endpoint from several independent visual modules. Keep
+all expensive parquet work cached in-process so concurrent page initialization
+does not repeatedly deserialize the same frozen ranking panel.
+"""
 from __future__ import annotations
+
 import json
 from pathlib import Path
+import time
+
 import pandas as pd
 
 EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
@@ -11,6 +19,31 @@ JOURNAL_PATH = ROOT / "journal.jsonl"
 STATUS_PATH = ROOT / "status.json"
 READINESS_PATH = Path("data/model/v8/readiness/status.json")
 V8_RANKED_PATH = Path("data/model/v8/phase4/fixed_complementarity_ranked_panel.parquet")
+
+# A dashboard page currently has multiple independently loaded V8 widgets.  A
+# short response cache collapses those requests into one filesystem pass per
+# Gunicorn worker, while file signatures still invalidate immediately whenever
+# readiness, status, journal, or ranking artifacts change.
+_DASHBOARD_TTL_SECONDS = 10.0
+_dashboard_cache = {"signature": None, "expires_at": 0.0, "payload": None}
+_rankings_cache = {"signature": None, "payload": None}
+
+
+def _file_signature(path: Path):
+    try:
+        stat = path.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return None
+
+
+def _dashboard_signature():
+    return (
+        _file_signature(STATUS_PATH),
+        _file_signature(READINESS_PATH),
+        _file_signature(JOURNAL_PATH),
+        _file_signature(V8_RANKED_PATH),
+    )
 
 
 def _read_json(path):
@@ -37,8 +70,10 @@ def _events():
 
 def _event_time(event):
     event_type = event.get("event_type")
-    if event_type == "EXIT": return event.get("exit_timestamp_utc")
-    if event_type == "ENTRY": return event.get("entry_timestamp_utc")
+    if event_type == "EXIT":
+        return event.get("exit_timestamp_utc")
+    if event_type == "ENTRY":
+        return event.get("entry_timestamp_utc")
     return event.get("decision_timestamp_utc")
 
 
@@ -46,7 +81,8 @@ def _event_history(events):
     rows = []
     for event in events:
         event_type = event.get("event_type")
-        if event_type not in {"DECISION", "ENTRY", "EXIT"}: continue
+        if event_type not in {"DECISION", "ENTRY", "EXIT"}:
+            continue
         rows.append({
             "event_type": event_type,
             "timestamp_utc": _event_time(event),
@@ -61,49 +97,94 @@ def _event_history(events):
 
 
 def _latest_v8_rankings():
-    if not V8_RANKED_PATH.exists(): return {"timestamp_utc": None, "rows": []}
+    signature = _file_signature(V8_RANKED_PATH)
+    if signature is None:
+        return {"timestamp_utc": None, "rows": []}
+
+    if _rankings_cache["signature"] == signature and _rankings_cache["payload"] is not None:
+        return _rankings_cache["payload"]
+
     try:
-        panel = pd.read_parquet(V8_RANKED_PATH, columns=["timestamp_utc", "symbol", "score", "score_id", "rank_descending"])
+        panel = pd.read_parquet(
+            V8_RANKED_PATH,
+            columns=["timestamp_utc", "symbol", "score", "score_id", "rank_descending"],
+        )
         panel["timestamp_utc"] = pd.to_datetime(panel["timestamp_utc"], utc=True, errors="coerce")
-        panel = panel[(panel["score_id"] == "DISTANCE_ONLY") & panel["timestamp_utc"].notna() & (panel["timestamp_utc"] < HOLDOUT_START)].copy()
-        if panel.empty: return {"timestamp_utc": None, "rows": []}
-        latest_ts = panel["timestamp_utc"].max()
-        latest = panel[panel["timestamp_utc"] == latest_ts].sort_values(["rank_descending", "symbol"], ascending=[True, True])
-        rows = []
-        for _, row in latest.iterrows():
-            rank = int(row["rank_descending"])
-            rows.append({"rank": rank, "symbol": str(row["symbol"]), "score": float(row["score"]), "selected_top10": rank <= 10, "target_weight": 0.10 if rank <= 10 else 0.0})
-        return {"timestamp_utc": latest_ts.isoformat(), "rows": rows}
+        panel = panel[
+            (panel["score_id"] == "DISTANCE_ONLY")
+            & panel["timestamp_utc"].notna()
+            & (panel["timestamp_utc"] < HOLDOUT_START)
+        ].copy()
+        if panel.empty:
+            payload = {"timestamp_utc": None, "rows": []}
+        else:
+            latest_ts = panel["timestamp_utc"].max()
+            latest = panel[panel["timestamp_utc"] == latest_ts].sort_values(
+                ["rank_descending", "symbol"], ascending=[True, True]
+            )
+            rows = []
+            for _, row in latest.iterrows():
+                rank = int(row["rank_descending"])
+                rows.append({
+                    "rank": rank,
+                    "symbol": str(row["symbol"]),
+                    "score": float(row["score"]),
+                    "selected_top10": rank <= 10,
+                    "target_weight": 0.10 if rank <= 10 else 0.0,
+                })
+            payload = {"timestamp_utc": latest_ts.isoformat(), "rows": rows}
+
+        _rankings_cache["signature"] = signature
+        _rankings_cache["payload"] = payload
+        return payload
     except Exception:
         return {"timestamp_utc": None, "rows": []}
 
 
 def _curve(exits):
-    if not exits: return []
+    if not exits:
+        return []
     by_cohort = {i: {"strategy": 1.0, "spy": 1.0} for i in range(5)}
     points = []
-    for e in sorted(exits, key=lambda x: x.get("exit_timestamp_utc", "")):
-        c = int(e["cohort_offset"])
-        by_cohort[c]["strategy"] *= 1.0 + float(e["net_portfolio_return"])
-        by_cohort[c]["spy"] *= 1.0 + float(e["spy_return"])
-        active = [v for v in by_cohort.values() if v["strategy"] != 1.0 or v["spy"] != 1.0]
-        points.append({"timestamp_utc": e["exit_timestamp_utc"], "strategy_normalized": 100000.0 * sum(v["strategy"] for v in active) / len(active), "spy_normalized": 100000.0 * sum(v["spy"] for v in active) / len(active)})
+    for event in sorted(exits, key=lambda x: x.get("exit_timestamp_utc", "")):
+        cohort = int(event["cohort_offset"])
+        by_cohort[cohort]["strategy"] *= 1.0 + float(event["net_portfolio_return"])
+        by_cohort[cohort]["spy"] *= 1.0 + float(event["spy_return"])
+        active = [
+            value for value in by_cohort.values()
+            if value["strategy"] != 1.0 or value["spy"] != 1.0
+        ]
+        points.append({
+            "timestamp_utc": event["exit_timestamp_utc"],
+            "strategy_normalized": 100000.0 * sum(v["strategy"] for v in active) / len(active),
+            "spy_normalized": 100000.0 * sum(v["spy"] for v in active) / len(active),
+        })
     return points
 
 
 def get_v8_holdout_dashboard():
+    signature = _dashboard_signature()
+    now_monotonic = time.monotonic()
+    if (
+        _dashboard_cache["payload"] is not None
+        and _dashboard_cache["signature"] == signature
+        and now_monotonic < _dashboard_cache["expires_at"]
+    ):
+        return _dashboard_cache["payload"]
+
     now = pd.Timestamp.now(tz="UTC")
     status = _read_json(STATUS_PATH)
     readiness = _read_json(READINESS_PATH)
-    ev = _events()
-    decisions = [e for e in ev if e.get("event_type") == "DECISION"]
-    entries = [e for e in ev if e.get("event_type") == "ENTRY"]
-    exits = [e for e in ev if e.get("event_type") == "EXIT"]
+    events = _events()
+    decisions = [e for e in events if e.get("event_type") == "DECISION"]
+    entries = [e for e in events if e.get("event_type") == "ENTRY"]
+    exits = [e for e in events if e.get("event_type") == "EXIT"]
     rel = [float(e["net_relative_return"]) for e in exits if e.get("net_relative_return") is not None]
     latest_rankings = _latest_v8_rankings()
     checks = readiness.get("checks") or {}
     rehearsal_details = checks.get("ranking_top10_details") or []
     rehearsal_symbols = checks.get("ranking_top10") or []
+
     if rehearsal_details:
         latest_top10 = rehearsal_details[:10]
     elif rehearsal_symbols:
@@ -121,11 +202,14 @@ def get_v8_holdout_dashboard():
     else:
         latest_top10 = latest_rankings["rows"][:10]
 
-    if now < HOLDOUT_START: state = "WAITING_FOR_HOLDOUT"
-    elif not exits: state = status.get("status", "ACTIVE_WAITING_FOR_COMPLETED_COHORT")
-    else: state = "ACTIVE"
+    if now < HOLDOUT_START:
+        state = "WAITING_FOR_HOLDOUT"
+    elif not exits:
+        state = status.get("status", "ACTIVE_WAITING_FOR_COMPLETED_COHORT")
+    else:
+        state = "ACTIVE"
 
-    return {
+    payload = {
         "candidate_id": "V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
         "frozen_sha256": EXPECTED_SHA,
         "frozen_sha_verified": readiness.get("frozen_sha256") == EXPECTED_SHA and bool(checks.get("frozen_contract_verified")),
@@ -141,7 +225,7 @@ def get_v8_holdout_dashboard():
         "ranking_timestamp_utc": checks.get("ranking_timestamp_utc"),
         "ranking_eligible_count": checks.get("ranking_eligible_count"),
         "journal_path": str(JOURNAL_PATH),
-        "journal_event_count": len(ev),
+        "journal_event_count": len(events),
         "decisions": len(decisions),
         "entries": len(entries),
         "completed_cohorts": len(exits),
@@ -149,7 +233,7 @@ def get_v8_holdout_dashboard():
         "net_relative_hit_rate": (sum(x > 0 for x in rel) / len(rel)) if rel else None,
         "latest_exit": exits[-1] if exits else None,
         "curve": _curve(exits),
-        "event_history": _event_history(ev),
+        "event_history": _event_history(events),
         "latest_research_top10_timestamp_utc": checks.get("ranking_timestamp_utc") or latest_rankings["timestamp_utc"],
         "latest_research_top10": latest_top10,
         "latest_research_top10_note": "Latest frozen-model readiness rehearsal; not forward holdout evidence." if (rehearsal_details or rehearsal_symbols) else "Latest eligible frozen-model development snapshot; not forward holdout evidence.",
@@ -158,3 +242,8 @@ def get_v8_holdout_dashboard():
         "brokerage_orders": False,
         "strategy_modified": False,
     }
+
+    _dashboard_cache["signature"] = signature
+    _dashboard_cache["expires_at"] = time.monotonic() + _DASHBOARD_TTL_SECONDS
+    _dashboard_cache["payload"] = payload
+    return payload
