@@ -40,7 +40,7 @@
   let payload=null, series={}, active=new Set(ORDER), range='3Y', mode='equity', zoomLevel=1, panOffset=1, pinned=false;
   const money=v=>'$'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct=v=>(Number(v)>=0?'+':'')+Number(v||0).toFixed(2)+'%';
-  const date=t=>new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  const date=t=>new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
   const dateTime=t=>new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
   const el=(tag,a={})=>{const n=document.createElementNS(ns,tag);Object.entries(a).forEach(([k,v])=>n.setAttribute(k,String(v)));return n;};
   const set=(id,v)=>{const n=card.querySelector('#'+id);if(n)n.textContent=v;};
