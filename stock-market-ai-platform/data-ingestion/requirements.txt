@@ -1,8 +1,9 @@
 flask
 gunicorn
 numpy
-pandas
+pandas<3
 pyarrow
 python-dotenv
 requests
 websocket-client
+pyspark

@@ -19,6 +19,7 @@ data/bronze/
 data/silver/
 data/gold/
 data/features/
+data/features_spark/
 
 # Legacy generated data location
 data-ingestion/data/
