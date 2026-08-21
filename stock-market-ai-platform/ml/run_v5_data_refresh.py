@@ -30,7 +30,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from feature_source import feature_dataset_exists, get_feature_dataset_path
+from feature_source import (
+    feature_dataset_exists,
+    feature_dataset_mtime_ns,
+    get_feature_backend,
+    get_feature_dataset_path,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -167,6 +172,15 @@ def rebuild_data_layers():
     run_command([python, "-u", "data-ingestion/silver_pipeline.py"])
     run_command([python, "-u", "data-ingestion/gold_pipeline.py"])
     run_command([python, "-u", "data-ingestion/feature_pipeline.py"])
+    if get_feature_backend() == "spark":
+        print("Spark backend selected; validating materialized outputs before downstream work.")
+        run_command(
+            [
+                python,
+                "-u",
+                "data-ingestion/validate_spark_feature_outputs.py",
+            ]
+        )
 
 
 def propagate_price_layers(symbols):
@@ -195,13 +209,26 @@ def refresh_stock_model_comparison_if_stale():
     curves remain sourced from their existing development artifacts.
     """
     sources = [*COMPARISON_STATIC_INPUTS, feature_path("SPY")]
-    missing = [str(path.relative_to(PROJECT_ROOT)) for path in sources if not path.exists()]
+    missing = [
+        str(path.relative_to(PROJECT_ROOT))
+        for path in sources
+        if not (
+            feature_dataset_exists(path)
+            if path == sources[-1]
+            else path.exists()
+        )
+    ]
     if missing:
         print("Skipping stock model comparison refresh; missing source(s): " + ", ".join(missing))
         return False
 
     output_mtime = COMPARISON_OUTPUT_PATH.stat().st_mtime_ns if COMPARISON_OUTPUT_PATH.exists() else -1
-    newest_source_mtime = max(path.stat().st_mtime_ns for path in sources)
+    newest_source_mtime = max(
+        [
+            *(path.stat().st_mtime_ns for path in COMPARISON_STATIC_INPUTS),
+            feature_dataset_mtime_ns(sources[-1]),
+        ]
+    )
     if output_mtime >= newest_source_mtime:
         print("Stock model comparison artifact already matches its latest source artifacts.")
         return False
