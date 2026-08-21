@@ -15,11 +15,9 @@
   );
 
   const normalizeLayout = () => {
-    // Keep the richer V8 Leaders card and remove the older duplicate Top-10 card.
     const duplicate = document.getElementById('v8-current-top10');
     if (duplicate) duplicate.remove();
 
-    // The legacy V4 shell is now populated entirely with V8 forward-holdout metrics.
     const dashboard = document.querySelector('.v4-dashboard');
     if (dashboard) {
       const label = dashboard.querySelector(':scope > .label');
@@ -125,14 +123,19 @@
     }
   };
 
+  // Avoid a page-wide MutationObserver during startup. Several dashboard modules
+  // build large sections dynamically; observing the whole DOM caused this small
+  // cleanup function to rescan the page hundreds of times while it was loading.
   normalizeLayout();
-  updateV8Dates();
-  refreshStreamHealth();
+  window.setTimeout(normalizeLayout, 250);
+  window.setTimeout(normalizeLayout, 1000);
+  window.setTimeout(normalizeLayout, 3000);
 
-  const observer = new MutationObserver(() => normalizeLayout());
-  observer.observe(document.documentElement, {childList: true, subtree: true});
-  window.setTimeout(() => observer.disconnect(), 12000);
+  // Defer secondary telemetry until the first paint. Core dashboard sections can
+  // become interactive before these read-only status requests start.
+  window.setTimeout(updateV8Dates, 300);
+  window.setTimeout(refreshStreamHealth, 500);
 
   window.setInterval(updateV8Dates, 60000);
-  window.setInterval(refreshStreamHealth, 10000);
+  window.setInterval(refreshStreamHealth, 15000);
 })();
