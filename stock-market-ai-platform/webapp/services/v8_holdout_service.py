@@ -101,12 +101,30 @@ def get_v8_holdout_dashboard():
     exits = [e for e in ev if e.get("event_type") == "EXIT"]
     rel = [float(e["net_relative_return"]) for e in exits if e.get("net_relative_return") is not None]
     latest_rankings = _latest_v8_rankings()
-    rehearsal_top10 = (readiness.get("checks") or {}).get("ranking_top10") or []
-    latest_top10 = [{"rank": i + 1, "symbol": symbol, "selected_top10": True, "target_weight": 0.10} for i, symbol in enumerate(rehearsal_top10)] if rehearsal_top10 else latest_rankings["rows"][:10]
+    checks = readiness.get("checks") or {}
+    rehearsal_details = checks.get("ranking_top10_details") or []
+    rehearsal_symbols = checks.get("ranking_top10") or []
+    if rehearsal_details:
+        latest_top10 = rehearsal_details[:10]
+    elif rehearsal_symbols:
+        score_by_symbol = {row["symbol"]: row.get("score") for row in latest_rankings["rows"]}
+        latest_top10 = [
+            {
+                "rank": i + 1,
+                "symbol": symbol,
+                "score": score_by_symbol.get(symbol),
+                "selected_top10": True,
+                "target_weight": 0.10,
+            }
+            for i, symbol in enumerate(rehearsal_symbols[:10])
+        ]
+    else:
+        latest_top10 = latest_rankings["rows"][:10]
+
     if now < HOLDOUT_START: state = "WAITING_FOR_HOLDOUT"
     elif not exits: state = status.get("status", "ACTIVE_WAITING_FOR_COMPLETED_COHORT")
     else: state = "ACTIVE"
-    checks = readiness.get("checks") or {}
+
     return {
         "candidate_id": "V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
         "frozen_sha256": EXPECTED_SHA,
@@ -134,7 +152,7 @@ def get_v8_holdout_dashboard():
         "event_history": _event_history(ev),
         "latest_research_top10_timestamp_utc": checks.get("ranking_timestamp_utc") or latest_rankings["timestamp_utc"],
         "latest_research_top10": latest_top10,
-        "latest_research_top10_note": "Latest frozen-model readiness rehearsal; not forward holdout evidence." if rehearsal_top10 else "Latest eligible frozen-model development snapshot; not forward holdout evidence.",
+        "latest_research_top10_note": "Latest frozen-model readiness rehearsal; not forward holdout evidence." if (rehearsal_details or rehearsal_symbols) else "Latest eligible frozen-model development snapshot; not forward holdout evidence.",
         "latest_research_rankings_timestamp_utc": latest_rankings["timestamp_utc"],
         "latest_research_rankings": latest_rankings["rows"],
         "brokerage_orders": False,
