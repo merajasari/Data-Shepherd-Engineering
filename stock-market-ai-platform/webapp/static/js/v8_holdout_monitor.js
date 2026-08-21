@@ -31,6 +31,7 @@
       await loadScript('/static/js/v8_contract_cleanup.js');
       await loadScript('/static/js/v8_dashboard_fixes.js');
       await loadScript('/static/js/v8_dashboard_final_polish.js');
+      await loadScript('/static/js/v8_launch_readiness.js');
     } catch (e) {
       console.error('Unable to load one or more V8 dashboard enhancements.', e);
     }
