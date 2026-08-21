@@ -5,6 +5,13 @@ brokerage orders. It validates the frozen contract, confirms the 100-stock
 universe plus SPY feature inputs exist, checks cross-sectional feature-date
 alignment, and proves the latest common completed session can be ranked by the
 same frozen V8 logic used by the holdout runner.
+
+Gold may advance symbol-by-symbol while the Tiingo EOD refresh is still catching
+up. That partial Gold progress must not make the frozen V8 universe look stale as
+long as the complete, aligned feature universe is current through the latest
+Gold date shared by all required symbols. V8 decisions are universe-level, so
+readiness is evaluated against common-session coverage rather than the newest
+individual Gold file.
 """
 from __future__ import annotations
 
@@ -100,14 +107,27 @@ def run_readiness_check():
     if missing_gold:
         warnings.append("missing_gold_files")
 
+    # Gold is intentionally propagated symbol-by-symbol during an incremental
+    # Tiingo catch-up, while feature generation waits for the whole 101-symbol
+    # universe. Therefore individual Gold files may be one session ahead of the
+    # aligned feature universe for a short period. That is expected and must not
+    # fail V8 readiness. Fail only when the complete feature universe is behind
+    # the latest session that *all* required Gold symbols share.
     feature_behind_gold = sorted(
         s for s in required
         if feature_latest.get(s) is not None
         and gold_latest.get(s) is not None
         and feature_latest[s] < gold_latest[s]
     )
-    if feature_behind_gold:
-        failures.append("features_behind_gold")
+    gold_ahead_partial = bool(feature_behind_gold)
+    if (
+        feature_common_latest is not None
+        and gold_common_latest is not None
+        and feature_common_latest < gold_common_latest
+    ):
+        failures.append("features_behind_common_gold")
+    elif gold_ahead_partial:
+        warnings.append("partial_gold_ahead_of_features")
 
     ranking = None
     eligible_count = 0
@@ -122,6 +142,9 @@ def run_readiness_check():
         elif not trading_dates:
             failures.append("missing_spy_trading_calendar")
         else:
+            # Rank on the latest session available across the complete feature
+            # universe. This is the only safe timestamp for a cross-sectional
+            # decision while an EOD refresh is partially propagated in Gold.
             ranking_timestamp = min(
                 frame.index[frame["close"].notna()].max()
                 for frame in frames.values()
@@ -161,6 +184,7 @@ def run_readiness_check():
             "gold_max_latest_utc": gold_max_latest.isoformat() if gold_max_latest is not None else None,
             "missing_gold_symbols": missing_gold,
             "feature_symbols_behind_gold": feature_behind_gold,
+            "partial_gold_ahead_of_features": gold_ahead_partial,
             "ranking_timestamp_utc": ranking_timestamp.isoformat() if ranking_timestamp is not None else None,
             "ranking_eligible_count": eligible_count,
             "ranking_top10": top10,
@@ -192,6 +216,7 @@ def main():
         print(f"Universe: {checks.get('universe_size')}/100 stocks + SPY")
         print(f"Feature common latest: {checks.get('feature_common_latest_utc')}")
         print(f"Gold common latest:    {checks.get('gold_common_latest_utc')}")
+        print(f"Gold max latest:       {checks.get('gold_max_latest_utc')}")
         print(f"Ranking timestamp:     {checks.get('ranking_timestamp_utc')}")
         print(f"Eligible names:        {checks.get('ranking_eligible_count')}")
         if checks.get("ranking_top10"):
