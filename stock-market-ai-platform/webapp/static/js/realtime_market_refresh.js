@@ -26,3 +26,13 @@
   function start(){clearInterval(liveTimer);clearInterval(eodTimer);refreshStocks();refreshStockHealth();refreshCrypto();refreshCompleted();liveTimer=setInterval(()=>{if(document.visibilityState==='visible'){refreshStocks();refreshStockHealth();refreshCrypto();}},LIVE_REFRESH_MS);eodTimer=setInterval(()=>{if(document.visibilityState==='visible')refreshCompleted();},EOD_REFRESH_MS);}
   document.addEventListener('visibilitychange',()=>document.visibilityState==='visible'?start():(clearInterval(liveTimer),clearInterval(eodTimer)));document.addEventListener('DOMContentLoaded',()=>requestAnimationFrame(()=>requestAnimationFrame(start)));
 })();
+
+// Crypto forward-model monitor uses a separate 60-second cadence. Load it only
+// on the Crypto page so the existing 2-second market ticker loop stays lean.
+if (location.pathname === '/crypto' && !document.querySelector('script[data-crypto-forward-monitor]')) {
+  const script = document.createElement('script');
+  script.src = '/static/js/crypto_forward_monitor.js';
+  script.defer = true;
+  script.dataset.cryptoForwardMonitor = '1';
+  document.head.appendChild(script);
+}
