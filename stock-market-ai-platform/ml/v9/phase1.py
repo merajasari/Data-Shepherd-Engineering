@@ -114,7 +114,7 @@ def _read_symbol(path: Path, symbol: str):
     vol20 = r1.rolling(20, min_periods=20).std(ddof=0)
     downside20 = r1.clip(upper=0).rolling(20, min_periods=20).std(ddof=0)
     positive_fraction20 = r1.gt(0).astype(float).rolling(20, min_periods=20).mean()
-    sign_consistency20 = r1.sign().rolling(20, min_periods=20).mean()
+    sign_consistency20 = np.sign(r1).rolling(20, min_periods=20).mean()
     v5 = x["volume"].rolling(5, min_periods=5).mean()
     v20 = x["volume"].rolling(20, min_periods=20).mean()
     prev_close = x["close"].shift(1)
