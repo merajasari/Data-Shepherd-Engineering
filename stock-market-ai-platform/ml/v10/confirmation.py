@@ -3,25 +3,6 @@
 Locks the Phase-4 primary challenger without changing it and evaluates only
 future, post-development decisions. The confirmation window is separate from
 V10's untouched formal holdout beginning 2026-11-02 UTC.
-
-Confirmation contract (predeclared before observations):
-* rule: switch_on_negative_spy20
-* baseline: v8_distance_only
-* decision-time switch: use the fixed V9 defensive 50/50 rank blend only when
-  SPY trailing 20-session return is negative; otherwise use V8 distance-only
-* Top 10, equal weight, next-session open, 5-session hold, cohorts 0..4
-* 10 bps per dollar traded, SPY benchmark only
-* confirmation decisions begin 2026-08-24 UTC
-* confirmation exits must be strictly before 2026-11-02 UTC
-* pass criteria:
-    1) overall mean net relative-return improvement versus V8 > 0
-    2) negative-SPY mean net relative-return improvement versus V8 > 0
-    3) positive-SPY non-inferiority versus V8 within 0.00025 per 5-session period
-* no threshold/lookback/blend/Top-N/holding/cost tuning
-* no brokerage orders and no production mutation
-
-The module is intentionally read-only with respect to V8/V10 production. It
-writes only V10 confirmation artifacts.
 """
 from __future__ import annotations
 
@@ -34,12 +15,10 @@ import numpy as np
 import pandas as pd
 
 from ml.v10.config import FUTURE_HOLDOUT_START_UTC
-from ml.v10.phase3 import (
-    BASELINE,
-    PRIMARY,
-    _build_periods,
-)
+from ml.v10.phase3 import V8_ID, SWITCH_NEG, _build_periods
 
+BASELINE = V8_ID
+PRIMARY = SWITCH_NEG
 CONFIRMATION_START_UTC = pd.Timestamp("2026-08-24T00:00:00Z")
 POSITIVE_REGIME_NONINFERIORITY_TOLERANCE = 0.00025
 OUTPUT_ROOT = Path("data/model/v10/confirmation")
@@ -159,8 +138,6 @@ def main():
     criteria_observable = len(neg) > 0 and len(pos) > 0
     passed = criterion_overall and criterion_negative and criterion_positive and criteria_observable
 
-    # Confirmation is only final once all possible pre-holdout exits have had a
-    # chance to complete. Before then the state remains accumulating evidence.
     latest_exit = results.exit_timestamp_utc.max()
     final_window_reached = bool(latest_exit >= pd.Timestamp("2026-10-30T00:00:00Z"))
     decision = "PASS" if passed and final_window_reached else ("FAIL" if final_window_reached else "PENDING")
