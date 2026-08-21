@@ -17,6 +17,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from ml.feature_source import (
+    feature_dataset_exists,
+    get_feature_dataset_path,
+    get_feature_root,
+)
+
 EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 HOLDOUT_START = pd.Timestamp("2026-09-01T00:00:00Z")
 TOP_N = 10
@@ -28,7 +34,6 @@ FREEZE_ROOT = ROOT / "phase7"
 SPEC_PATH = FREEZE_ROOT / "frozen_candidate_spec.json"
 LOCK_PATH = FREEZE_ROOT / "frozen_candidate.sha256"
 PHASE1_PANEL = ROOT / "phase1" / "orthogonal_signal_panel.parquet"
-FEATURE_ROOT = Path("data/features/stocks")
 HOLDOUT_ROOT = ROOT / "holdout"
 JOURNAL_PATH = HOLDOUT_ROOT / "journal.jsonl"
 STATUS_PATH = HOLDOUT_ROOT / "status.json"
@@ -61,9 +66,17 @@ def _verify_freeze():
 
 
 def _feature_files():
+    """Resolve V8 inputs through the shared Pandas/Spark backend contract."""
+    root = get_feature_root(project_root=Path("."))
+    if not root.is_dir():
+        return {}
+
     out = {}
-    for p in sorted(FEATURE_ROOT.glob("*/*.parquet")):
-        out.setdefault(p.parent.name.upper(), p)
+    for symbol_root in sorted(path for path in root.iterdir() if path.is_dir()):
+        symbol = symbol_root.name.upper()
+        path = get_feature_dataset_path(symbol, project_root=Path("."))
+        if feature_dataset_exists(path):
+            out[symbol] = path
     return out
 
 
