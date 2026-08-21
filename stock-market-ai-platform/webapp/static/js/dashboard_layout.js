@@ -22,13 +22,12 @@
     body.ds-model-research-view .ds-technical-indicators{display:none!important}
     body.ds-live-stock-view .ds-technical-indicators{display:grid!important}
     body.ds-live-stock-view .ds-live-comparison-stack{display:grid!important;grid-template-columns:1fr!important;gap:22px!important}
-    body.ds-live-stock-view .ds-live-comparison-stack > #ds-top-live-comparison,
+    body.ds-live-stock-view .ds-live-comparison-stack > .ds-top-live-row,
     body.ds-live-stock-view .ds-live-comparison-stack > .ds-live-viewer-card{grid-column:1/-1!important;width:100%!important}
   `;
   document.getElementById(technicalStyle.id)?.remove();
   document.head.appendChild(technicalStyle);
 
-  // Remove only the compact V4 paper-portfolio chart shown beside the dashboard metrics.
   const removeCompactV4Equity = () => {
     const compact = document.getElementById('v4-compact-equity-card');
     if (compact) {
@@ -38,8 +37,6 @@
     return false;
   };
 
-  // Keep the V8 selected-stock rank signal directly below the compact
-  // PORTFOLIO EQUITY OVER TIME — LATEST MODEL card on Model Research.
   const moveV8RankSignal = () => {
     const latestModelEquity = document.getElementById('v8-compact-equity-card');
     if (!latestModelEquity) return false;
@@ -57,9 +54,6 @@
     return true;
   };
 
-  // Find the full LIVE STOCK VIEWER search/selector panel, not merely a compact
-  // card that happens to carry the same label. The desired panel contains the
-  // "Search and Inspect Live Stocks" heading plus the ticker/company controls.
   const findFullLiveViewer = () => {
     const heading = Array.from(document.querySelectorAll('h1,h2,h3,h4')).find(node =>
       node.textContent.trim() === 'Search and Inspect Live Stocks'
@@ -80,16 +74,15 @@
     return labeledCandidates.sort((a,b) => a.textContent.length - b.textContent.length)[0] || null;
   };
 
-  // On Live Stock Viewer, stack the full search/selector panel directly below the
-  // Top Live Stock Comparison chart and remove the redundant compact MARKET card.
-  // We wait for the comparison renderer because it initially inserts itself using
-  // the MARKET card as an anchor.
+  // Keep the combined Top-10 list + comparison-chart row first, then place the
+  // full LIVE STOCK VIEWER search/selector panel directly below that row.
   const arrangeLiveStockViewer = () => {
     if (!document.body.classList.contains('ds-live-stock-view')) return false;
 
     const comparison = document.getElementById('ds-top-live-comparison');
     if (!comparison) return false;
 
+    const comparisonRow = comparison.closest('.ds-top-live-row') || comparison;
     const liveViewer = findFullLiveViewer();
     const cards = Array.from(document.querySelectorAll('.card'));
     const market = cards.find(node => {
@@ -97,7 +90,7 @@
       return label === 'MARKET' || node.classList.contains('ds-market-section');
     });
 
-    const stack = comparison.parentElement;
+    const stack = comparisonRow.parentElement;
     if (stack) {
       stack.classList.remove('ds-market-comparison-grid');
       stack.classList.add('ds-live-comparison-stack');
@@ -105,8 +98,8 @@
 
     if (liveViewer && stack) {
       liveViewer.classList.add('ds-live-viewer-card', 'ds-live-stock-keep');
-      if (comparison.nextElementSibling !== liveViewer) {
-        comparison.insertAdjacentElement('afterend', liveViewer);
+      if (comparisonRow.nextElementSibling !== liveViewer) {
+        comparisonRow.insertAdjacentElement('afterend', liveViewer);
       }
     }
 
