@@ -170,10 +170,13 @@ if [[ "$FEATURE_BACKEND" == "spark" ]]; then
     2>&1 | tee -a "$LOG_FILE"
 fi
 
-echo "[5/5] Train all models" \
+echo "[5/5] Frozen V8 production ranking and EOD guard" \
 | tee -a "$LOG_FILE"
 
-python -u ml/train_all.py \
+python -u ml/run_v8_inference.py \
+2>&1 | tee -a "$LOG_FILE"
+
+python -u -m ml.v8.eod_orchestrator \
 2>&1 | tee -a "$LOG_FILE"
 
 echo "==================================================" \
