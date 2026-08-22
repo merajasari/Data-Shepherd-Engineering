@@ -17,7 +17,6 @@ from ml.v9.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
 from ml.v9.phase2 import _build_score_panel
 from ml.v9.phase3 import (
     PHASE1_PANEL,
-    _annualized_stats,
     _load_execution_data,
 )
 from ml.v9.tuning_registry import (
@@ -91,6 +90,59 @@ def _load_development_inputs():
     symbols = scores["symbol"].astype(str).unique().tolist()
     opens, trading_dates, date_to_idx = _load_execution_data(symbols)
     return scores, opens, trading_dates, date_to_idx
+
+
+def _annualized_stats(returns, holding_sessions):
+    values = (
+        pd.Series(returns, dtype=float)
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna()
+    )
+    if values.empty:
+        return {
+            "cagr": np.nan,
+            "sharpe": np.nan,
+            "sortino": np.nan,
+            "max_drawdown": np.nan,
+            "calmar": np.nan,
+        }
+    periods_per_year = 252.0 / holding_sessions
+    wealth_curve = (1.0 + values).cumprod()
+    terminal_wealth = float(wealth_curve.iloc[-1])
+    years = len(values) / periods_per_year
+    cagr = (
+        float(terminal_wealth ** (1.0 / years) - 1.0)
+        if terminal_wealth > 0 and years > 0
+        else np.nan
+    )
+    volatility = float(values.std(ddof=0) * np.sqrt(periods_per_year))
+    annualized_mean = float(values.mean() * periods_per_year)
+    sharpe = annualized_mean / volatility if volatility > 0 else np.nan
+    downside = values[values < 0]
+    downside_deviation = (
+        float(np.sqrt((downside ** 2).mean()) * np.sqrt(periods_per_year))
+        if len(downside)
+        else np.nan
+    )
+    sortino = (
+        annualized_mean / downside_deviation
+        if np.isfinite(downside_deviation) and downside_deviation > 0
+        else np.nan
+    )
+    drawdown = wealth_curve / wealth_curve.cummax() - 1.0
+    max_drawdown = float(drawdown.min())
+    calmar = (
+        cagr / abs(max_drawdown)
+        if np.isfinite(cagr) and max_drawdown < 0
+        else np.nan
+    )
+    return {
+        "cagr": cagr,
+        "sharpe": float(sharpe),
+        "sortino": float(sortino),
+        "max_drawdown": max_drawdown,
+        "calmar": float(calmar),
+    }
 
 
 def _transition_notional(previous_symbols, new_symbols, top_n):
@@ -201,7 +253,7 @@ def _simulate_candidate_fold(candidate, fold, scores, opens, trading_dates, date
 
     cohort_rows = []
     for _, group in periods.groupby("cohort_offset", sort=True):
-        stats = _annualized_stats(group["net_portfolio_return"])
+        stats = _annualized_stats(group["net_portfolio_return"], hold)
         cohort_rows.append(
             {
                 **stats,
