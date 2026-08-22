@@ -10,6 +10,14 @@ v6 = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(v6)
 
+# Keep immutable references to the original V6 renderers before monkey-patching.
+# Without these, the richer wrappers call themselves recursively after assignment.
+_old_diagram = v6.diagram
+_old_gate = v6.gate
+_old_fail = v6.fail
+_old_hold = v6.hold
+_old_site = v6.site
+
 # Requested: narration 25% faster than V6 (182 -> 228 wpm).
 def voice(text, path):
     try:
@@ -26,13 +34,10 @@ def pulse(t, phase=0.0):
 
 
 def add_hud(im, t, label="LIVE ENGINEERING SYSTEM"):
-    """Add restrained cinematic motion so technical scenes feel alive, not like slides."""
     d = v6.ImageDraw.Draw(im)
-    # top status rail
     d.rounded_rectangle((1450, 42, 1840, 112), 18, fill=(7, 22, 39), outline=v6.BORDER, width=2)
     d.ellipse((1480, 67, 1498, 85), fill=v6.GREEN)
     d.text((1512, 59), label, font=v6.font(17, True), fill=v6.MUTED)
-    # animated telemetry rail
     x0, y0, x1 = 110, 1000, 1810
     d.line((x0, y0, x1, y0), fill=(24, 57, 82), width=2)
     for i in range(12):
@@ -52,29 +57,25 @@ def data_particles(im, t, y=590, start=350, end=1570, count=16, col=None):
 
 
 def richer_diagram(kind, t):
-    im = v6.diagram(kind, t)
+    im = _old_diagram(kind, t)
     d = v6.ImageDraw.Draw(im)
     if kind == "pipeline":
         data_particles(im, t, 590, 350, 1490, 20, v6.CYAN)
-        # moving mini market trace
         pts=[]
         for i in range(150):
-            x=170+i*5; y=300-int(22*math.sin(i*.17+t*5)-10*math.sin(i*.043))
-            pts.append((x,y))
+            x=170+i*5; y=300-int(22*math.sin(i*.17+t*5)-10*math.sin(i*.043)); pts.append((x,y))
         d.line(pts, fill=v6.GREEN, width=3)
         d.text((170,235), "LIVE MARKET INGEST", font=v6.font(17,True), fill=v6.MUTED)
         for i,n in enumerate(["RAW","CLEAN","CURATED","FEATURE"]):
             x=1050+i*185; h=int(35+70*pulse(t,i*.8)); d.rectangle((x,330-h,x+95,330),fill=(10,45+10*i,67+10*i)); d.text((x,345),n,font=v6.font(13,True),fill=v6.MUTED)
     elif kind == "spark":
-        # fan-out/fan-in Spark workers
         cx, cy = 920, 310
         for i in range(7):
-            a=(i/7)*2*math.pi+t*.6; x=int(cx+250*math.cos(a)); y=int(cy+70*math.sin(a));
+            a=(i/7)*2*math.pi+t*.6; x=int(cx+250*math.cos(a)); y=int(cy+70*math.sin(a))
             d.line((cx,cy,x,y),fill=v6.BORDER,width=2); d.ellipse((x-13,y-13,x+13,y+13),fill=v6.GREEN if i<=int(t*7) else v6.BORDER)
         d.rounded_rectangle((cx-90,cy-35,cx+90,cy+35),15,fill=v6.PANEL,outline=v6.CYAN,width=3); d.text((cx-58,cy-13),"SPARK",font=v6.font(20,True),fill=v6.TEXT)
         data_particles(im,t,590,350,1490,22,v6.GREEN)
     elif kind == "v9":
-        # candidate ranking strip visibly converges toward locked winner
         d.text((210,245),"CANDIDATE SCOREBOARD",font=v6.font(19,True),fill=v6.MUTED)
         for i in range(9):
             y=285+i*25; score=.35+.055*i+.03*math.sin(t*4+i); w=int(score*440)
@@ -90,7 +91,6 @@ def richer_diagram(kind, t):
                 d.rounded_rectangle((x,y,x+20,y+20),5,fill=v6.GREEN if active else v6.BORDER)
         d.text((210,470),f"{min(54,int(t*55)):02d} / 54 EVALUATED",font=v6.font(20,True),fill=v6.CYAN)
     elif kind == "v10":
-        # regime monitor above challenger gates
         labels=[("TREND",.76),("VOL",.48),("BREADTH",.63),("LIQUIDITY",.84)]
         for i,(lab,val) in enumerate(labels):
             x=220+i*330; d.text((x,255),lab,font=v6.font(15,True),fill=v6.MUTED); d.rounded_rectangle((x,290,x+260,315),10,fill=(9,27,45)); d.rounded_rectangle((x,290,x+int(260*val*pulse(t*.25,i*.3)),315),10,fill=v6.CYAN if i<2 else v6.GREEN)
@@ -99,8 +99,7 @@ v6.diagram = richer_diagram
 
 
 def richer_gate(t):
-    im=v6.gate(t); d=v6.ImageDraw.Draw(im)
-    # validation rows stream into the pass state
+    im=_old_gate(t); d=v6.ImageDraw.Draw(im)
     for i in range(8):
         y=250+i*35; done=t>(i+1)/10
         d.text((120,y),f"feature_contract_{i+1:02d}",font=v6.font(14),fill=v6.MUTED)
@@ -110,8 +109,7 @@ v6.gate=richer_gate
 
 
 def richer_fail(t):
-    im=v6.fail(t); d=v6.ImageDraw.Draw(im)
-    # evidence card makes the failure scene informative rather than decorative
+    im=_old_fail(t); d=v6.ImageDraw.Draw(im)
     d.rounded_rectangle((1515,315,1810,760),24,fill=(22,6,12),outline=(105,30,42),width=3)
     d.text((1550,350),"CONFIRMATION",font=v6.font(18,True),fill=v6.MUTED)
     for i,(lab,status) in enumerate([("WINNER LOCKED","YES"),("GATE PASSED","NO"),("RUNNER-UP SWAP","NO"),("V8 STATUS","FROZEN")]):
@@ -121,21 +119,18 @@ v6.fail=richer_fail
 
 
 def richer_hold(t):
-    im=v6.hold(t); d=v6.ImageDraw.Draw(im)
-    # moving research packets stop at boundary
+    im=_old_hold(t); d=v6.ImageDraw.Draw(im)
     sep=1100
     for i in range(9):
         u=(t*1.3+i/9)%1; x=int(190+u*(sep-220)); y=535+(i%3)*28
         d.ellipse((x-6,y-6,x+6,y+6),fill=v6.GREEN)
-    # lock symbol on forbidden future
     d.rounded_rectangle((1390,330,1550,470),24,fill=(7,15,25),outline=v6.RED,width=4)
     d.arc((1430,345,1510,425),180,360,fill=v6.RED,width=7); d.rectangle((1425,390,1515,455),fill=(25,5,10),outline=v6.RED,width=4)
     d.text((1457,407),"X",font=v6.font(24,True),fill=v6.RED)
     return add_hud(im,t,"HOLDOUT PROTECTED")
 v6.hold=richer_hold
 
-# Add HUD to real-platform scenes while preserving actual website imagery.
-_old_site=v6.site
+
 def richer_site(path,t,a,b):
     im=_old_site(path,t,a,b)
     d=v6.ImageDraw.Draw(im)
@@ -144,7 +139,7 @@ def richer_site(path,t,a,b):
     return im
 v6.site=richer_site
 
-# Render using the proven V6 pipeline, then publish as V7.
+
 def main():
     old=v6.OUT/'data_shepherd_showcase_v6_16x9.mp4'
     new=v6.OUT/'data_shepherd_showcase_v7_16x9.mp4'
