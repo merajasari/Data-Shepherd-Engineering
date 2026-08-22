@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
 load_dotenv(); sys.path.append("data-ingestion")
-from v5_symbols import get_v5_company_name, get_v5_symbol_options, get_v5_symbols  # noqa: E402
+from v5_symbols import get_v5_company_name, get_v5_sector, get_v5_symbol_options, get_v5_symbols  # noqa: E402
 from webapp.services.account_service import authenticate_account, begin_signup, change_password, complete_account_setup, get_account_setup_context, initialize_account_store, send_verification_email, verify_email_token  # noqa: E402
 from webapp.services.crypto_dashboard_service import get_crypto_dashboard_payload  # noqa: E402
 from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
@@ -19,7 +19,7 @@ from webapp.services.market_service import get_market_summary, get_recent_prices
 from webapp.services.fast_market_history_service import get_recent_prices_local  # noqa: E402
 from webapp.services.bulk_local_history_service import get_bulk_local_history  # noqa: E402
 from webapp.services.today_intraday_service import get_symbol_24h_intraday, get_today_top10_intraday  # noqa: E402
-from webapp.services.prediction_service import get_latest_prediction, get_v5_rankings  # noqa: E402
+from webapp.services.prediction_service import get_latest_prediction, get_v8_rankings  # noqa: E402
 from webapp.services.paper_trading_service import get_pnl_attribution, get_portfolio_summary  # noqa: E402
 from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
 from webapp.services.v5_shadow_portfolio_service import get_v5_shadow_comparison  # noqa: E402
@@ -40,7 +40,7 @@ def inject_dashboard_modules(response):
                 html=html.replace(head_marker,prelayout+"\n"+head_marker,1)
         if request.path in {"/","/dashboard","/crypto"}: scripts.append('<script src="/static/js/signup_button.js" defer></script>')
         if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
-        if request.path=="/dashboard": scripts.extend(['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v5_shadow_comparison.js" defer></script>','<script src="/static/js/v5_shadow_history_chart.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>'])
+        if request.path=="/dashboard": scripts.extend(['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>'])
         if marker in html:
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
@@ -67,7 +67,7 @@ def build_v4_dashboard_payload():
     if not chart_history or abs(float(chart_history[-1]["equity"])-equity)>1e-9: chart_history.append({"timestamp":current_timestamp,"label":"Current","equity":equity,"synthetic_baseline":False,"current_mark":True})
     elif chart_history: chart_history[-1]={**chart_history[-1],"label":"Current","current_mark":True}
     forward["chart_history"]=chart_history; forward["reconstructed_observations"]=len(reconstructed); forward["reconstructed_start_timestamp"]=reconstructed_start; return {"forward":forward,"portfolio":portfolio}
-def enrich_ranking_rows(rows): return [{**dict(r),"company_name":get_v5_company_name(r["symbol"])} for r in rows]
+def enrich_ranking_rows(rows): return [{**dict(r),"company_name":get_v5_company_name(r["symbol"]),"sector":get_v5_sector(r["symbol"])} for r in rows]
 @app.route("/")
 def home(): return render_template("landing.html",authenticated=session.get("authenticated",False),login_error=None)
 @app.route("/signup",methods=["GET","POST"])
@@ -118,13 +118,13 @@ def logout():session.clear();return redirect(url_for("home"))
 def dashboard():
     selected_symbol=request.args.get("symbol",DEFAULT_SYMBOL).upper().strip()
     if selected_symbol not in V5_SYMBOLS:return redirect(url_for("dashboard",symbol=DEFAULT_SYMBOL))
-    live_view=request.args.get("view")=="live"; selected=build_stock_dashboard(selected_symbol); recent_prices=get_recent_prices_local(selected_symbol,limit=60) if live_view else get_recent_prices(selected_symbol,limit=60); rankings_payload=get_v5_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top5=rankings[:5];top10_rows=[]
+    live_view=request.args.get("view")=="live"; selected=build_stock_dashboard(selected_symbol); recent_prices=get_recent_prices_local(selected_symbol,limit=60) if live_view else get_recent_prices(selected_symbol,limit=60); rankings_payload=get_v8_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top10=rankings[:10];top10_rows=[]
     if not live_view:
         for row in rankings[:10]:
             try:
                 market=get_market_summary(row["symbol"]);live=get_live_quote(row["symbol"]);row=dict(row);row["display_price"]=live["reference_price"] if live["available"] else market["close"];row["eod_change_pct"]=market["price_change_pct"];row["rsi_14"]=market["rsi_14"];top10_rows.append(row)
-            except Exception as exc:print(f"[V5 TOP10 ERROR] {row['symbol']}: {exc}")
-    return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top5=top5,top10_rows=top10_rows,v5_symbols=V5_SYMBOL_OPTIONS,v5=rankings_payload)
+            except Exception as exc:print(f"[V8 TOP10 ERROR] {row['symbol']}: {exc}")
+    return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top10=top10,top10_rows=top10_rows,stock_symbols=V5_SYMBOL_OPTIONS,v8=rankings_payload)
 @app.route("/crypto")
 @login_required
 def crypto_dashboard():return render_template("crypto.html",crypto=get_crypto_dashboard_payload())
@@ -134,10 +134,14 @@ def crypto_visual_dashboard():return render_template("crypto_visual.html",crypto
 @app.route("/api/crypto-v1")
 @login_required
 def api_crypto_v1():return jsonify(get_crypto_dashboard_payload())
+@app.route("/api/v8-rankings")
+@login_required
+def api_v8_rankings():
+    payload=dict(get_v8_rankings());payload["rankings"]=enrich_ranking_rows(payload["rankings"]);return jsonify(payload)
 @app.route("/api/v5-rankings")
 @login_required
-def api_v5_rankings():
-    payload=dict(get_v5_rankings());payload["rankings"]=enrich_ranking_rows(payload["rankings"]);return jsonify(payload)
+def api_v5_rankings_compatibility():
+    return api_v8_rankings()
 @app.route("/api/dashboard-stock/<symbol>")
 @login_required
 def api_dashboard_stock(symbol):

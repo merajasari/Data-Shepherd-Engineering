@@ -1,4 +1,4 @@
-"""Keep the Stock V5 data layers current without model fitting.
+"""Compatibility scheduler implementation for the Stock V8 production path.
 
 The Mac runtime may invoke this module every five minutes. A persistent rolling
 request ledger limits Tiingo REST usage across invocations, so a startup catch-up
@@ -212,8 +212,10 @@ def propagate_price_layers(symbols):
         )
 
 
-def refresh_v5_rankings():
-    run_command([sys.executable, "-u", "ml/run_v5_inference.py"])
+def refresh_v8_production():
+    """Publish V8 rankings, then run the frozen fail-closed EOD orchestrator."""
+    run_command([sys.executable, "-u", "ml/run_v8_inference.py"])
+    run_command([sys.executable, "-u", "-m", "ml.v8.eod_orchestrator"])
 
 
 def refresh_stock_model_comparison_if_stale():
@@ -270,7 +272,7 @@ def run_data_refresh(
             raise ValueError("max_requests must be at least 1 when provided")
         available = min(available, max_requests)
 
-    print("V5 DATA REFRESH")
+    print("V8 DATA REFRESH")
     print(f"Rolling 60m Tiingo usage before run: {used}/{hourly_request_limit}")
     print(f"Available request budget now: {available}")
 
@@ -316,12 +318,12 @@ def run_data_refresh(
             raise RuntimeError(
                 "Feature refresh did not reach target for: " + ", ".join(stale)
             )
-        refresh_v5_rankings()
+        refresh_v8_production()
         refresh_stock_model_comparison_if_stale()
         return "rebuilt"
 
     print("Features already match the latest completed EOD session.")
-    refresh_v5_rankings()
+    refresh_v8_production()
     refresh_stock_model_comparison_if_stale()
     return "current"
 
