@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from webapp.services.site_ai_service import (
@@ -31,14 +32,14 @@ class SiteAIServiceTests(unittest.TestCase):
         self.assertEqual(_extract_output_text(payload), "A useful answer.")
 
     def test_client_uses_text_content_not_html(self):
-        source = open("webapp/static/js/site_ai_assistant.js", encoding="utf-8").read()
+        source = Path("webapp/static/js/site_ai_assistant.js").read_text(encoding="utf-8")
         self.assertIn("node.textContent = content", source)
         self.assertNotIn("node.innerHTML = content", source)
         self.assertIn('location.pathname.startsWith(prefix)', source)
         self.assertIn('path: "/account", visible_text: ""', source)
 
     def test_global_injection_and_endpoint_are_registered(self):
-        source = open("webapp/app.py", encoding="utf-8").read()
+        source = Path("webapp/app.py").read_text(encoding="utf-8")
         self.assertIn("/static/js/site_ai_assistant.js", source)
         self.assertIn("/static/css/site_ai_assistant.css", source)
         self.assertIn('@app.post("/api/site-assistant")', source)
