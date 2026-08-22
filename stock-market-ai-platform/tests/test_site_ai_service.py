@@ -34,6 +34,8 @@ class SiteAIServiceTests(unittest.TestCase):
         source = open("webapp/static/js/site_ai_assistant.js", encoding="utf-8").read()
         self.assertIn("node.textContent = content", source)
         self.assertNotIn("node.innerHTML = content", source)
+        self.assertIn('location.pathname.startsWith(prefix)', source)
+        self.assertIn('path: "/account", visible_text: ""', source)
 
     def test_global_injection_and_endpoint_are_registered(self):
         source = open("webapp/app.py", encoding="utf-8").read()
