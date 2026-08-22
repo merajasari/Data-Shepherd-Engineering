@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from feature_source import require_feature_dataset
+from ml.feature_source import require_feature_dataset
 
 STARTING_CAPITAL = 100_000.0
 V4_PATH = Path("data/model/v4/full_history_equity.json")
