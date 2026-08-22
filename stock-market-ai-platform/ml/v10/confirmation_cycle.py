@@ -11,13 +11,14 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ml.v10.confirmation import CONTRACT_PATH, STATUS_PATH, main as run_confirmation
+from ml.v10.confirmation import CONTRACT_PATH, HISTORY_PATH, STATUS_PATH, main as run_confirmation
 
 READINESS_STATUS = Path("data/model/v8/readiness/status.json")
 CYCLE_STATE = Path("data/model/v10/confirmation/cycle_state.json")
 PUBLIC_DIR = Path("webapp/static/generated")
 PUBLIC_STATUS = PUBLIC_DIR / "v10_confirmation_status.json"
 PUBLIC_CONTRACT = PUBLIC_DIR / "v10_confirmation_contract.json"
+PUBLIC_HISTORY = PUBLIC_DIR / "v10_confirmation_history.json"
 
 
 def _read_json(path: Path):
@@ -40,6 +41,8 @@ def _publish():
         shutil.copyfile(STATUS_PATH, PUBLIC_STATUS)
     if CONTRACT_PATH.exists():
         shutil.copyfile(CONTRACT_PATH, PUBLIC_CONTRACT)
+    if HISTORY_PATH.exists():
+        shutil.copyfile(HISTORY_PATH, PUBLIC_HISTORY)
 
 
 def main():
@@ -67,6 +70,7 @@ def main():
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
         "status_path": str(STATUS_PATH),
         "public_status_path": str(PUBLIC_STATUS),
+        "public_history_path": str(PUBLIC_HISTORY),
         "production_modified": False,
         "brokerage_orders": False,
     }, indent=2) + "\n")
