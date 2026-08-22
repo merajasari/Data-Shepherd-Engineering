@@ -18,9 +18,9 @@
         <div class="ds-ai-message ds-ai-assistant">Hi! Ask me how this page works, what the numbers mean, or how Data Shepherd handles its research and holdouts.</div>
       </div>
       <div class="ds-ai-suggestions">
-        <button type="button">Explain this page</button>
-        <button type="button">What does this data mean?</button>
-        <button type="button">How are holdouts protected?</button>
+        <button type="button">Explain page</button>
+        <button type="button">Explain the data</button>
+        <button type="button">Holdout safeguards</button>
       </div>
       <form id="ds-ai-form">
         <label class="ds-ai-sr-only" for="ds-ai-input">Ask a question</label>
