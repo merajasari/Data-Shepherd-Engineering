@@ -1,6 +1,6 @@
-"""Stock V9 Phase 1: complementary signal discovery beyond frozen V8.
+"""Stock V10 Phase 1: complementary signal discovery beyond frozen V8.
 
-V9 is a new research track. It does not modify, retune, or rescue V8.
+V10 is a new research track. It does not modify, retune, or rescue V8.
 
 Hypothesis
 ----------
@@ -23,7 +23,7 @@ Scientific contract
   candidate freeze, production state mutation, or brokerage orders.
 * V8 frozen artifacts and the V8 Sep-2026 forward holdout are never modified or
   scored by this module.
-* V9 reserves its own untouched future holdout beginning 2026-10-01 UTC.
+* V10 reserves its own untouched future holdout beginning 2026-10-01 UTC.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ml.v9.config import (
+from ml.v10.config import (
     BENCHMARK_SYMBOL,
     FUTURE_HOLDOUT_START_UTC,
     RESEARCH_VERSION,
@@ -43,7 +43,7 @@ from ml.v9.config import (
 
 PHASE = 1
 FEATURE_ROOT = Path("data/features/stocks")
-OUTPUT_ROOT = Path("data/model/v9/phase1")
+OUTPUT_ROOT = Path("data/model/v10/source_panel")
 PANEL_PATH = OUTPUT_ROOT / "complementary_signal_panel.parquet"
 DAILY_IC_PATH = OUTPUT_ROOT / "daily_orthogonal_ic.parquet"
 SUMMARY_PATH = OUTPUT_ROOT / "signal_summary.csv"
@@ -267,12 +267,12 @@ def main():
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
-    print("STOCK V9 PHASE 1")
+    print("STOCK V10 SOURCE PANEL")
     print("=" * 104)
     print("Complementary signal discovery beyond frozen V8")
     print(f"Candidates: {manifest['candidate_count']} | Rows: {manifest['panel_rows']:,}")
     print(f"Dates: {manifest['date_range']['start']} -> {manifest['date_range']['end']}")
-    print(f"V9 untouched holdout begins: {manifest['v9_future_holdout_start_utc']}")
+    print(f"V10 untouched holdout begins: {manifest['v9_future_holdout_start_utc']}")
     print()
     print("===== SIGNAL SUMMARY =====")
     print(summary.to_string(index=False))

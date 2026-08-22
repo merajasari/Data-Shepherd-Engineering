@@ -1,4 +1,4 @@
-"""Purged walk-forward evaluator for V9 risk-controlled tuning Cycle 2."""
+"""Purged walk-forward evaluator for V10 risk-controlled tuning Cycle 2."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -8,13 +8,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ml.v9.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
-from ml.v9.phase3 import _discover_feature_files
-from ml.v9.tuning_evaluator import (
+from ml.v10.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
+from ml.v10.phase3 import _discover_feature_files
+from ml.v10.auto_tuning_evaluator import (
     _annualized_stats,
     _load_development_inputs,
 )
-from ml.v9.tuning_cycle2_registry import (
+from ml.v10.auto_tuning_cycle2_registry import (
     CYCLE_ID,
     MANDATORY_CONFIRMATION_GATES,
     OBJECTIVE_ID,
@@ -22,7 +22,7 @@ from ml.v9.tuning_cycle2_registry import (
     build_candidate_registry,
 )
 
-OUTPUT_ROOT = Path("data/model/v9/tuning_cycle2/evaluation")
+OUTPUT_ROOT = Path("data/model/v10/auto_tuning/cycle2/evaluation")
 FOLD_METRICS_PATH = OUTPUT_ROOT / "fold_metrics.csv"
 LEADERBOARD_PATH = OUTPUT_ROOT / "leaderboard.csv"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
@@ -406,8 +406,8 @@ def main():
         ),
         "candidate_confirmed": False,
         "candidate_promoted": False,
-        "v9_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
-        "v9_future_holdout_scored": False,
+        "v10_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
+        "v10_future_holdout_scored": False,
         "v8_modified": False,
         "v8_holdout_scored": False,
         "production_modified": False,
@@ -415,7 +415,7 @@ def main():
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
-    print("STOCK V9 RISK-CONTROLLED TUNING CYCLE 2")
+    print("STOCK V10 RISK-CONTROLLED TUNING CYCLE 2")
     print("=" * 96)
     print(f"Candidates evaluated: {len(registry)}")
     print(f"Preliminary gate eligible: {len(eligible)}")

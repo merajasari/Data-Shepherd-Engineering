@@ -9,10 +9,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ml.v9 import tuning_cycle2_evaluator as module
+from ml.v10 import auto_tuning_cycle2_evaluator as module
 
 
-class V9TuningCycle2EvaluatorTests(unittest.TestCase):
+class V10TuningCycle2EvaluatorTests(unittest.TestCase):
     def test_folds_use_twenty_session_purge(self):
         dates = pd.bdate_range("2016-01-01", periods=2000, tz="UTC")
         folds = module.make_folds(dates)

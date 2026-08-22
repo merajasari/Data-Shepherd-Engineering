@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
 """Data Shepherd Engineering showcase V10.
 
-Refines V9 with:
+V10 includes the retained V9 presentation polish:
 - more human British-female narration using sentence-by-sentence pace variation
 - calmer default pace (~194 wpm average)
 - a redesigned phone screen showing live charts instead of "built on my phone"
 - a clearer, evidence-led failed-confirmation scene with no giant red box
-- preserves all prior founder, product, Spark, V9/V10 research, and holdout visuals
+- preserves the retained founder, product, Spark, V10 research, and holdout visuals
 """
 from __future__ import annotations
 import importlib.util, math, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SPEC = importlib.util.spec_from_file_location("dsv9", HERE / "generate_datashepherd_video_v9.py")
-v9 = importlib.util.module_from_spec(SPEC)
+SPEC = importlib.util.spec_from_file_location("dsv8", HERE / "generate_datashepherd_video_v8.py")
+v8 = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
-SPEC.loader.exec_module(v9)
-v8 = v9.v8
-v7 = v9.v7
-v6 = v9.v6
+SPEC.loader.exec_module(v8)
+v7 = v8.v7
+v6 = v8.v6
 
 
 def choose_voice() -> str:
@@ -123,8 +122,8 @@ def _draw_phone_dashboard(im, t):
     d.line((x0+26,y0+200,x1-26,y0+200),fill=(30,55,77),width=1)
     # Mini model bars
     d.text((x0+28,y0+220),"MODEL SIGNALS",font=v6.font(11,True),fill=v6.MUTED)
-    vals=[.82,.64,.73]
-    labs=['V8','V9','V10']
+    vals=[.82,.73]
+    labs=['V8','V10']
     for i,(lab,val) in enumerate(zip(labs,vals)):
         yy=y0+250+i*25; d.text((x0+28,yy),lab,font=v6.font(10,True),fill=v6.TEXT)
         d.rounded_rectangle((x0+65,yy+2,x1-28,yy+12),5,fill=(20,43,62))
@@ -194,9 +193,9 @@ for i, scene in enumerate(v6.SC):
 
 
 def main():
-    old = v6.OUT / "data_shepherd_showcase_v9_16x9.mp4"
+    old = v6.OUT / "data_shepherd_showcase_v8_16x9.mp4"
     new = v6.OUT / "data_shepherd_showcase_v10_16x9.mp4"
-    v9.main()
+    v8.main()
     if old.exists():
         shutil.move(str(old), str(new))
     print(f"\nV10 DONE: {new}\nopen \"{new}\"")

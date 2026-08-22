@@ -9,10 +9,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ml.v9 import tuning_registry as module
+from ml.v10 import auto_tuning_registry as module
 
 
-class V9TuningRegistryTests(unittest.TestCase):
+class V10TuningRegistryTests(unittest.TestCase):
     def test_registry_is_deterministic_unique_and_bounded(self):
         first = module.build_candidate_registry()
         second = module.build_candidate_registry()
@@ -71,7 +71,7 @@ class V9TuningRegistryTests(unittest.TestCase):
 
             self.assertEqual(written, rows)
             self.assertEqual(manifest["candidate_count"], 27)
-            self.assertFalse(manifest["v9_future_holdout_scored"])
+            self.assertFalse(manifest["v10_future_holdout_scored"])
             self.assertFalse(manifest["v8_modified"])
             self.assertFalse(manifest["candidate_promoted"])
             self.assertFalse(manifest["production_modified"])

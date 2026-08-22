@@ -1,4 +1,4 @@
-"""V9 automatic-tuning Cycle 2: predeclared risk-controlled search space.
+"""V10 automatic-tuning Cycle 2: predeclared risk-controlled search space.
 
 Cycle 1 is closed with NOT_CONFIRMED. Cycle 2 does not modify its results or
 relax its gates. This registry explores broader diversification and simple
@@ -12,10 +12,10 @@ from itertools import product
 import json
 from pathlib import Path
 
-from ml.v9.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
+from ml.v10.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
 
-CYCLE_ID = "V9_RISK_CONTROLLED_CYCLE_2"
-OUTPUT_ROOT = Path("data/model/v9/tuning_cycle2")
+CYCLE_ID = "V10_RISK_CONTROLLED_CYCLE_2"
+OUTPUT_ROOT = Path("data/model/v10/auto_tuning/cycle2")
 REGISTRY_PATH = OUTPUT_ROOT / "candidate_registry.jsonl"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
 
@@ -52,7 +52,7 @@ def _canonical_json(payload: dict) -> str:
 
 def _candidate_id(config: dict) -> str:
     digest = hashlib.sha256(_canonical_json(config).encode("utf-8")).hexdigest()
-    return f"V9C2_{digest[:16].upper()}"
+    return f"V10C2_{digest[:16].upper()}"
 
 
 def build_candidate_registry() -> list[dict]:
@@ -146,8 +146,8 @@ def write_registry(
         "mandatory_confirmation_gates": MANDATORY_CONFIRMATION_GATES,
         "cycle1_status": "NOT_CONFIRMED_CLOSED",
         "cycle1_runner_up_considered": False,
-        "v9_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
-        "v9_future_holdout_scored": False,
+        "v10_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
+        "v10_future_holdout_scored": False,
         "v8_modified": False,
         "v8_holdout_scored": False,
         "candidate_evaluated": False,
@@ -165,7 +165,7 @@ def write_registry(
 def main():
     rows = build_candidate_registry()
     manifest = write_registry(rows)
-    print("STOCK V9 AUTOMATIC TUNING CYCLE 2")
+    print("STOCK V10 AUTOMATIC TUNING CYCLE 2")
     print("=" * 96)
     print(f"Candidates registered: {manifest['candidate_count']}")
     print(f"Registry SHA: {manifest['registry_sha256']}")

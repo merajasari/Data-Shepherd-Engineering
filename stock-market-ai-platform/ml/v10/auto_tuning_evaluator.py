@@ -13,20 +13,20 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ml.v9.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
-from ml.v9.phase2 import _build_score_panel
-from ml.v9.phase3 import (
+from ml.v10.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
+from ml.v10.phase3 import _build_score_panel
+from ml.v10.phase3 import (
     PHASE1_PANEL,
     _load_execution_data,
 )
-from ml.v9.tuning_registry import (
+from ml.v10.auto_tuning_registry import (
     HOLD_SESSION_VALUES,
     OBJECTIVE_ID,
     PRIMARY_COST_BPS,
     build_candidate_registry,
 )
 
-OUTPUT_ROOT = Path("data/model/v9/tuning/evaluation")
+OUTPUT_ROOT = Path("data/model/v10/auto_tuning/cycle1/evaluation")
 FOLD_METRICS_PATH = OUTPUT_ROOT / "fold_metrics.csv"
 LEADERBOARD_PATH = OUTPUT_ROOT / "leaderboard.csv"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
@@ -76,16 +76,16 @@ def make_folds(decision_dates) -> list[dict]:
 
 def _load_development_inputs():
     if not PHASE1_PANEL.exists():
-        raise FileNotFoundError(f"Missing {PHASE1_PANEL}; run V9 Phase 1 first")
+        raise FileNotFoundError(f"Missing {PHASE1_PANEL}; run V10 Phase 1 first")
     panel = pd.read_parquet(PHASE1_PANEL).copy()
     panel["timestamp_utc"] = pd.to_datetime(panel["timestamp_utc"], utc=True)
     if panel["timestamp_utc"].max() >= FUTURE_HOLDOUT_START_UTC:
-        raise RuntimeError("V9 Phase-1 panel reaches the future holdout boundary")
+        raise RuntimeError("V10 Phase-1 panel reaches the future holdout boundary")
 
     scores = _build_score_panel(panel)
     scores["timestamp_utc"] = pd.to_datetime(scores["timestamp_utc"], utc=True)
     if scores["timestamp_utc"].max() >= FUTURE_HOLDOUT_START_UTC:
-        raise RuntimeError("Score panel reaches the V9 future holdout boundary")
+        raise RuntimeError("Score panel reaches the V10 future holdout boundary")
 
     symbols = scores["symbol"].astype(str).unique().tolist()
     opens, trading_dates, date_to_idx = _load_execution_data(symbols)
@@ -390,8 +390,8 @@ def main():
         "best_development_objective_score": float(best["objective_score"]),
         "challenger_registered": False,
         "candidate_promoted": False,
-        "v9_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
-        "v9_future_holdout_scored": False,
+        "v10_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
+        "v10_future_holdout_scored": False,
         "v8_modified": False,
         "v8_holdout_scored": False,
         "production_modified": False,
@@ -399,7 +399,7 @@ def main():
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
-    print("STOCK V9 PURGED WALK-FORWARD TUNING")
+    print("STOCK V10 PURGED WALK-FORWARD TUNING")
     print("=" * 96)
     print(f"Candidates evaluated: {len(registry)}")
     print(f"Folds per candidate: {FOLD_COUNT} | purge: {PURGE_SESSIONS} sessions")

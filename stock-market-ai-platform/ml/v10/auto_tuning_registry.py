@@ -1,7 +1,7 @@
-"""V9 automatic-tuning candidate registry.
+"""V10 automatic-tuning candidate registry.
 
 This module defines a bounded, deterministic development-only search space.
-It does not evaluate the V9 future holdout, change frozen V8, promote a
+It does not evaluate the V10 future holdout, change frozen V8, promote a
 candidate, mutate production state, or place brokerage orders.
 """
 from __future__ import annotations
@@ -12,9 +12,9 @@ from itertools import product
 import json
 from pathlib import Path
 
-from ml.v9.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
+from ml.v10.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
 
-OUTPUT_ROOT = Path("data/model/v9/tuning")
+OUTPUT_ROOT = Path("data/model/v10/auto_tuning/cycle1")
 REGISTRY_PATH = OUTPUT_ROOT / "candidate_registry.jsonl"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
 
@@ -37,7 +37,7 @@ def _canonical_json(payload: dict) -> str:
 
 def _candidate_id(config: dict) -> str:
     digest = hashlib.sha256(_canonical_json(config).encode("utf-8")).hexdigest()
-    return f"V9TUNE_{digest[:16].upper()}"
+    return f"V10TUNE_{digest[:16].upper()}"
 
 
 def build_candidate_registry() -> list[dict]:
@@ -113,8 +113,8 @@ def write_registry(
             "cost_tuned": False,
         },
         "objective_id": OBJECTIVE_ID,
-        "v9_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
-        "v9_future_holdout_scored": False,
+        "v10_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
+        "v10_future_holdout_scored": False,
         "v8_modified": False,
         "v8_holdout_scored": False,
         "candidate_evaluated": False,
@@ -131,7 +131,7 @@ def write_registry(
 def main():
     rows = build_candidate_registry()
     manifest = write_registry(rows)
-    print("STOCK V9 AUTOMATIC TUNING REGISTRY")
+    print("STOCK V10 AUTOMATIC TUNING REGISTRY")
     print("=" * 88)
     print(f"Candidates registered: {manifest['candidate_count']}")
     print(f"Registry SHA: {manifest['registry_sha256']}")

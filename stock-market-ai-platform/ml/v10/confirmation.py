@@ -38,7 +38,7 @@ CONTRACT = {
     "baseline": BASELINE,
     "confirmation_start_utc": CONFIRMATION_START_UTC.isoformat(),
     "formal_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
-    "switch_rule": "use fixed V9 defensive 50/50 rank blend iff SPY trailing 20-session return < 0; else V8 distance-only",
+    "switch_rule": "use V10 defensive 50/50 rank blend inherited from the archived V9 research lineage iff SPY trailing 20-session return < 0; else V8 distance-only",
     "top_n": 10,
     "equal_weight": True,
     "entry": "next_session_open",

@@ -8,10 +8,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ml.v9 import tuning_cycle2_registry as module
+from ml.v10 import auto_tuning_cycle2_registry as module
 
 
-class V9TuningCycle2RegistryTests(unittest.TestCase):
+class V10TuningCycle2RegistryTests(unittest.TestCase):
     def test_registry_is_deterministic_unique_and_complete(self):
         first = module.build_candidate_registry()
         second = module.build_candidate_registry()
@@ -88,7 +88,7 @@ class V9TuningCycle2RegistryTests(unittest.TestCase):
                 payload["cycle1_status"],
                 "NOT_CONFIRMED_CLOSED",
             )
-            self.assertFalse(payload["v9_future_holdout_scored"])
+            self.assertFalse(payload["v10_future_holdout_scored"])
             self.assertFalse(payload["production_modified"])
 
             registry.write_text("tampered\n")

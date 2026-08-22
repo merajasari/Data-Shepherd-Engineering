@@ -1,8 +1,8 @@
-"""Confirm the fixed V9 development winner without reopening selection.
+"""Confirm the fixed tuning Cycle 1 development winner retained in V10 without reopening selection.
 
 The winner ID and confirmation rules are fixed in code before confirmation
 outputs are inspected. Failure does not select the runner-up. This module never
-accesses the V9 future holdout, promotes a candidate, changes production, or
+accesses the V10 future holdout, promotes a candidate, changes production, or
 places brokerage orders.
 """
 from __future__ import annotations
@@ -14,16 +14,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ml.v9.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
-from ml.v9.tuning_evaluator import (
+from ml.v10.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
+from ml.v10.auto_tuning_evaluator import (
     LEADERBOARD_PATH,
     _annualized_stats,
     _load_development_inputs,
     _transition_notional,
 )
-from ml.v9.tuning_registry import build_candidate_registry
+from ml.v10.auto_tuning_registry import build_candidate_registry
 
-WINNER_ID = "V9TUNE_4548D4C7828AB971"
+WINNER_ID = "V10TUNE_BD153FBB894759D9"
 EXPECTED_CONFIG = {
     "score_id": "downside_vol_ratio_20",
     "top_n": 5,
@@ -32,7 +32,7 @@ EXPECTED_CONFIG = {
 COST_STRESS_BPS = (10, 20, 30)
 PRIMARY_COST_BPS = 10
 
-OUTPUT_ROOT = Path("data/model/v9/tuning/confirmation")
+OUTPUT_ROOT = Path("data/model/v10/auto_tuning/cycle1/confirmation")
 PERIODS_PATH = OUTPUT_ROOT / "winner_periods.csv"
 COST_PATH = OUTPUT_ROOT / "cost_stress.csv"
 YEAR_PATH = OUTPUT_ROOT / "year_stability.csv"
@@ -52,7 +52,7 @@ def _winner():
         if row["candidate_id"] == WINNER_ID
     ]
     if len(matches) != 1:
-        raise RuntimeError("Fixed V9 development winner is missing from registry")
+        raise RuntimeError("Fixed V10 Cycle-1 development winner is missing from registry")
     winner = matches[0]
     for key, expected in EXPECTED_CONFIG.items():
         if winner["config"].get(key) != expected:
@@ -141,7 +141,7 @@ def _simulate_periods(winner, scores, opens, trading_dates, date_to_idx):
     if periods.empty:
         raise RuntimeError("Fixed winner produced no confirmation periods")
     if pd.to_datetime(periods["exit_timestamp_utc"], utc=True).max() >= FUTURE_HOLDOUT_START_UTC:
-        raise RuntimeError("Confirmation periods reach the V9 future holdout")
+        raise RuntimeError("Confirmation periods reach the V10 future holdout")
     return periods
 
 
@@ -288,8 +288,8 @@ def confirmation_decision(leaderboard, costs, years, regimes):
         "challenger_registered": False,
         "runner_up_considered": False,
         "candidate_promoted": False,
-        "v9_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
-        "v9_future_holdout_scored": False,
+        "v10_future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
+        "v10_future_holdout_scored": False,
         "v8_modified": False,
         "v8_holdout_scored": False,
         "production_modified": False,
@@ -325,7 +325,7 @@ def main():
         json.dumps(decision, indent=2, sort_keys=True) + "\n"
     )
 
-    print("STOCK V9 FIXED-WINNER CONFIRMATION")
+    print("STOCK V10 FIXED-WINNER CONFIRMATION")
     print("=" * 96)
     print(f"Candidate: {WINNER_ID}")
     print(f"Status: {decision['status']}")
