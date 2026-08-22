@@ -31,6 +31,17 @@ class V8SiteCutoverTests(unittest.TestCase):
         self.assertIn("ml/run_v8_data_refresh.py", shell)
         self.assertNotIn("ml/train_all.py", shell)
 
+    def test_module_comparison_uses_package_qualified_feature_source(self):
+        source = (PROJECT_ROOT / "ml/build_stock_model_comparison.py").read_text()
+        self.assertIn(
+            "from ml.feature_source import require_feature_dataset",
+            source,
+        )
+        self.assertNotIn(
+            "from feature_source import require_feature_dataset",
+            source,
+        )
+
     def test_v8_cli_bootstraps_project_root_before_ml_import(self):
         source = (PROJECT_ROOT / "ml/run_v8_inference.py").read_text()
         bootstrap = source.index("sys.path.insert")
