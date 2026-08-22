@@ -69,6 +69,27 @@ class V8ProductionInferenceTests(unittest.TestCase):
         self.assertEqual(payload["rankings"][0]["target_weight"], 0.10)
         self.assertEqual(payload["rankings"][10]["target_weight"], 0.0)
 
+    def test_mixed_feature_sessions_fail_closed(self):
+        ts, symbols, frames, ranking = self.market()
+        frames[symbols[-1]].index = pd.DatetimeIndex(
+            [pd.Timestamp("2026-08-20T00:00:00Z")]
+        )
+        with patch.object(
+            module,
+            "_verify_freeze",
+            return_value={"candidate_id": "V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS"},
+        ), patch.object(
+            module,
+            "_load_market",
+            return_value=(symbols, frames, [ts], {ts: 0}),
+        ), patch.object(
+            module,
+            "_rank_for_date",
+            return_value=ranking,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "feature sessions are not aligned"):
+                module.build_v8_rankings()
+
     def test_atomic_writer_round_trips_payload(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "v8.json"
