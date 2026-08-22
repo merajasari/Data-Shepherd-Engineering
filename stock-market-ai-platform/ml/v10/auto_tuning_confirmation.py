@@ -1,4 +1,4 @@
-"""Confirm the fixed V9 development winner without reopening selection.
+"""Confirm the fixed tuning Cycle 1 development winner retained in V10 without reopening selection.
 
 The winner ID and confirmation rules are fixed in code before confirmation
 outputs are inspected. Failure does not select the runner-up. This module never
@@ -23,7 +23,7 @@ from ml.v10.auto_tuning_evaluator import (
 )
 from ml.v10.auto_tuning_registry import build_candidate_registry
 
-WINNER_ID = "V10TUNE_4548D4C7828AB971"
+WINNER_ID = "V10TUNE_BD153FBB894759D9"
 EXPECTED_CONFIG = {
     "score_id": "downside_vol_ratio_20",
     "top_n": 5,
@@ -52,7 +52,7 @@ def _winner():
         if row["candidate_id"] == WINNER_ID
     ]
     if len(matches) != 1:
-        raise RuntimeError("Fixed V9 development winner is missing from registry")
+        raise RuntimeError("Fixed V10 Cycle-1 development winner is missing from registry")
     winner = matches[0]
     for key, expected in EXPECTED_CONFIG.items():
         if winner["config"].get(key) != expected:
