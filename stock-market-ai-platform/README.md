@@ -383,3 +383,29 @@ Generated model/data artifacts should not be committed unless explicitly intende
 5. Add forward-performance visualizations only after genuine future-evaluation observations exist.
 6. Research ALT constituent-level turnover/costs in a new research version without changing the V2 Phase 5 freeze.
 7. Continue stock-model work without changing frozen benchmarks.
+
+
+## Site-wide Shepherd AI assistant
+
+Every rendered HTML page can include a floating, page-aware assistant. The browser sends only
+the current page title, path, visible text, the user's question, and a short in-panel conversation
+history to the same-origin Flask endpoint. Password input values and arbitrary server files are
+not included.
+
+Server configuration:
+
+```bash
+OPENAI_API_KEY=your-server-side-key
+SITE_AI_MODEL=gpt-4.1-mini
+```
+
+Keep `OPENAI_API_KEY` in the local server environment or uncommitted `.env`; never expose it
+in JavaScript or commit it. The endpoint applies payload and per-user/IP rate limits, renders
+answers as plain text, and instructs the model to distinguish development, shadow/paper, and
+untouched holdout evidence. It does not place orders or provide personalized financial advice.
+
+Verification:
+
+```bash
+python -m unittest tests.test_site_ai_service
+```
