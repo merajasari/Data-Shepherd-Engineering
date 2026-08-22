@@ -1,6 +1,9 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
+from webapp.services.site_ai_service import SiteAIConfigurationError, SiteAIProviderError, ask_site_ai
 """Data Shepherd Engineering presentation layer."""
 import os, sys
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from dotenv import load_dotenv
@@ -28,11 +31,23 @@ from webapp.services.v4_realtime_equity_journal_service import get_v4_realtime_e
 from webapp.services.v4_reconstructed_history_service import get_v4_reconstructed_history  # noqa: E402
 app=Flask(__name__); app.secret_key=os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key: raise RuntimeError("FLASK_SECRET_KEY is not configured")
-app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12)); initialize_account_store()
+app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12),MAX_CONTENT_LENGTH=64*1024); initialize_account_store()
+SITE_AI_RATE_LIMIT=12
+SITE_AI_RATE_WINDOW_SECONDS=60
+_site_ai_requests=defaultdict(deque)
+def _site_ai_rate_allowed():
+    key=str(session.get("account_id") or session.get("username") or request.remote_addr or "anonymous")
+    now=time.monotonic(); attempts=_site_ai_requests[key]
+    while attempts and now-attempts[0]>SITE_AI_RATE_WINDOW_SECONDS: attempts.popleft()
+    if len(attempts)>=SITE_AI_RATE_LIMIT:return False
+    attempts.append(now);return True
 @app.after_request
 def inject_dashboard_modules(response):
     if response.mimetype=="text/html" and response.status_code==200:
         html=response.get_data(as_text=True); marker="</body>"; scripts=[]
+        head_marker="</head>"; assistant_style='<link rel="stylesheet" href="/static/css/site_ai_assistant.css">'
+        if head_marker in html and assistant_style not in html: html=html.replace(head_marker,assistant_style+"\\n"+head_marker,1)
+        scripts.append('<script src="/static/js/site_ai_assistant.js" defer></script>')
         if request.path=="/dashboard" and request.args.get("view")=="live":
             head_marker="</head>"
             prelayout='''<style id="ds-live-prelayout-style">html.ds-live-prelayout .card:has(#stock-select){display:none!important}html.ds-live-prelayout .card.ds-live-viewer-card:has(#stock-select){display:block!important}</style><script>document.documentElement.classList.add("ds-live-prelayout")</script>'''
@@ -200,6 +215,18 @@ def api_crypto_history_file():
     history_range=normalize_history_range(request.args.get("range","ALL"));path=get_crypto_history_cache_path(history_range)
     if not path.exists():get_crypto_history_payload(history_range)
     return send_file(path,mimetype="application/json",conditional=True,max_age=30)
+@app.post("/api/site-assistant")
+def api_site_assistant():
+    if not request.is_json:return jsonify({"error":"JSON request required."}),415
+    if not _site_ai_rate_allowed():return jsonify({"error":"Please wait a moment before asking another question."}),429
+    payload=request.get_json(silent=True) or {}
+    question=payload.get("question","");page=payload.get("page",{});history=payload.get("history",[])
+    try:answer=ask_site_ai(question,page,history)
+    except ValueError as exc:return jsonify({"error":str(exc)}),400
+    except SiteAIConfigurationError as exc:return jsonify({"error":str(exc)}),503
+    except SiteAIProviderError:return jsonify({"error":"The site assistant is temporarily unavailable. Please try again shortly."}),502
+    return jsonify({"answer":answer,"research_only":True})
+
 @app.route("/health")
 def health():return jsonify({"status":"ok","service":"data-shepherd-web","timestamp_utc":datetime.now(timezone.utc).isoformat()})
 @app.get("/api/v8/holdout")
