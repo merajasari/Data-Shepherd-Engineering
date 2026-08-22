@@ -3,6 +3,11 @@
 Locks the Phase-4 primary challenger without changing it and evaluates only
 future, post-development decisions. The confirmation window is separate from
 V10's untouched formal holdout beginning 2026-11-02 UTC.
+
+In addition to the latest status, this module writes a deterministic cumulative
+progress-history artifact derived only from completed matched confirmation
+periods. The history is display-only and never changes the frozen contract,
+formal holdout, production state, or brokerage state.
 """
 from __future__ import annotations
 
@@ -24,6 +29,7 @@ POSITIVE_REGIME_NONINFERIORITY_TOLERANCE = 0.00025
 OUTPUT_ROOT = Path("data/model/v10/confirmation")
 STATUS_PATH = OUTPUT_ROOT / "status.json"
 RESULTS_PATH = OUTPUT_ROOT / "confirmation_results.csv"
+HISTORY_PATH = OUTPUT_ROOT / "confirmation_history.json"
 CONTRACT_PATH = OUTPUT_ROOT / "contract.json"
 
 CONTRACT = {
@@ -64,6 +70,54 @@ def _decision_regime(x):
     raise ValueError("V10 Phase-3 periods must contain decision_regime")
 
 
+def _json_number(value):
+    value = float(value) if value is not None else np.nan
+    return value if np.isfinite(value) else None
+
+
+def _write_history(results: pd.DataFrame | None, contract_sha256: str):
+    """Write cumulative, point-in-time confirmation progress for the dashboard.
+
+    Each point includes all completed matched periods whose exit timestamp is at
+    or before that point. Re-running this function is deterministic for the same
+    completed evidence and cannot add pre-confirmation/development observations.
+    """
+    payload = {
+        "schema_version": 1,
+        "research_version": "stock_v10",
+        "candidate": PRIMARY,
+        "baseline": BASELINE,
+        "contract_sha256": contract_sha256,
+        "confirmation_start_utc": CONFIRMATION_START_UTC.isoformat(),
+        "formal_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "history": [],
+        "formal_holdout_scored": False,
+        "production_modified": False,
+        "brokerage_orders": False,
+    }
+
+    if results is not None and not results.empty:
+        ordered = results.copy()
+        ordered["exit_timestamp_utc"] = pd.to_datetime(ordered["exit_timestamp_utc"], utc=True)
+        ordered = ordered.sort_values(["exit_timestamp_utc", "decision_timestamp_utc", "cohort_offset"])
+        for exit_ts in ordered["exit_timestamp_utc"].drop_duplicates().sort_values():
+            cumulative = ordered[ordered["exit_timestamp_utc"] <= exit_ts]
+            neg = cumulative[cumulative["decision_regime"].str.startswith("NEGATIVE_")]
+            pos = cumulative[cumulative["decision_regime"].str.startswith("POSITIVE_")]
+            payload["history"].append({
+                "as_of_exit_timestamp_utc": pd.Timestamp(exit_ts).isoformat(),
+                "matched_periods": int(len(cumulative)),
+                "negative_regime_periods": int(len(neg)),
+                "positive_regime_periods": int(len(pos)),
+                "overall_mean_delta_net_relative_return_vs_v8": _json_number(cumulative["delta_net_relative_return_vs_v8"].mean()),
+                "negative_spy_mean_delta_net_relative_return_vs_v8": _json_number(neg["delta_net_relative_return_vs_v8"].mean()) if len(neg) else None,
+                "positive_spy_mean_delta_net_relative_return_vs_v8": _json_number(pos["delta_net_relative_return_vs_v8"].mean()) if len(pos) else None,
+            })
+
+    HISTORY_PATH.write_text(json.dumps(payload, indent=2) + "\n")
+
+
 def main():
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     contract = dict(CONTRACT)
@@ -80,6 +134,7 @@ def main():
     ].copy()
 
     if periods.empty:
+        _write_history(None, contract["contract_sha256"])
         status = {
             "status": "WAITING_FOR_CONFIRMATION_EVIDENCE",
             "updated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -125,6 +180,7 @@ def main():
         })
     results = pd.DataFrame(rows).sort_values(keys)
     results.to_csv(RESULTS_PATH, index=False)
+    _write_history(results, contract["contract_sha256"])
 
     neg = results[results.decision_regime.str.startswith("NEGATIVE_")]
     pos = results[results.decision_regime.str.startswith("POSITIVE_")]
