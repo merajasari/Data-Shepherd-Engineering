@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ml.v10.config import FUTURE_HOLDOUT_START_UTC, RESEARCH_VERSION
-from ml.v10.phase2 import _build_score_panel
+from ml.v10.phase3 import _build_score_panel
 from ml.v10.phase3 import (
     PHASE1_PANEL,
     _load_execution_data,
