@@ -29,10 +29,24 @@ OUTPUT_PATH = PROJECT_ROOT / "data/live/v8_latest_rankings.json"
 def build_v8_rankings() -> dict:
     spec = _verify_freeze()
     symbols, frames, _, _ = _load_market()
-    decision_date = min(
-        frame.index[frame["close"].notna()].max()
-        for frame in frames.values()
-    )
+    latest_by_symbol = {
+        symbol: frame.index[frame["close"].notna()].max()
+        for symbol, frame in frames.items()
+    }
+    latest_sessions = set(latest_by_symbol.values())
+    if len(latest_sessions) != 1:
+        newest = max(latest_sessions)
+        lagging = sorted(
+            symbol
+            for symbol, timestamp in latest_by_symbol.items()
+            if timestamp < newest
+        )
+        raise RuntimeError(
+            "V8 production inference failed closed because feature sessions are "
+            f"not aligned. newest={newest.isoformat()} lagging={', '.join(lagging)}"
+        )
+
+    decision_date = latest_sessions.pop()
     ranking = _rank_for_date(decision_date, symbols, frames)
     if len(ranking) != 100:
         raise RuntimeError(
