@@ -19,7 +19,6 @@ from ml.v9.phase3 import (
     PHASE1_PANEL,
     _annualized_stats,
     _load_execution_data,
-    _transition_notional,
 )
 from ml.v9.tuning_registry import (
     HOLD_SESSION_VALUES,
@@ -94,6 +93,20 @@ def _load_development_inputs():
     return scores, opens, trading_dates, date_to_idx
 
 
+def _transition_notional(previous_symbols, new_symbols, top_n):
+    new_weights = {symbol: 1.0 / top_n for symbol in new_symbols}
+    if previous_symbols is None:
+        return float(sum(new_weights.values()))
+    old_weights = {symbol: 1.0 / top_n for symbol in previous_symbols}
+    symbols = set(old_weights) | set(new_weights)
+    return float(
+        sum(
+            abs(new_weights.get(symbol, 0.0) - old_weights.get(symbol, 0.0))
+            for symbol in symbols
+        )
+    )
+
+
 def _simulate_candidate_fold(candidate, fold, scores, opens, trading_dates, date_to_idx):
     config = candidate["config"]
     score_id = config["score_id"]
@@ -163,7 +176,7 @@ def _simulate_candidate_fold(candidate, fold, scores, opens, trading_dates, date
 
         cohort = int(i % hold)
         previous = previous_by_cohort.get(cohort)
-        traded = _transition_notional(previous, picks)
+        traded = _transition_notional(previous, picks, top_n)
         cost_rate = traded * cost_bps / 10000.0
         gross = float(np.mean(stock_returns))
         net = float((1.0 + gross) * (1.0 - cost_rate) - 1.0)
