@@ -3,6 +3,10 @@
 The main EOD scheduler invokes this frequently, but the expensive confirmation
 reconstruction only runs when the common feature session advances. Artifacts are
 published read-only for the dashboard after each successful run.
+
+A same-session invocation may still rebuild once when a newly introduced
+artifact is missing. This keeps dashboard publication complete across code
+deployments without treating an unchanged feature session as new evidence.
 """
 from __future__ import annotations
 
@@ -45,6 +49,17 @@ def _publish():
         shutil.copyfile(HISTORY_PATH, PUBLIC_HISTORY)
 
 
+def _all_local_artifacts_exist():
+    """Return True only when every expected confirmation artifact exists.
+
+    This prevents a same-session optimization skip from leaving a newly added
+    dashboard artifact unpublished after a deployment. Rebuilding here remains
+    deterministic because confirmation.py derives artifacts only from already
+    completed prospective evidence and does not mutate the locked contract.
+    """
+    return all(path.exists() for path in (STATUS_PATH, CONTRACT_PATH, HISTORY_PATH))
+
+
 def main():
     latest = _feature_common_latest()
     previous = _read_json(CYCLE_STATE).get("last_feature_common_latest_utc")
@@ -53,14 +68,27 @@ def main():
     # available. This makes dashboard deployment independent of research reruns.
     _publish()
 
-    if latest and latest == previous and STATUS_PATH.exists():
+    artifacts_complete = _all_local_artifacts_exist()
+    if latest and latest == previous and artifacts_complete:
         print(f"V10 CONFIRMATION CYCLE: SKIP | common feature session unchanged at {latest}")
         return
 
-    print("V10 CONFIRMATION CYCLE")
-    print("=" * 88)
-    print(f"Feature common latest: {latest or 'unknown'}")
-    print(f"Previously processed: {previous or 'none'}")
+    if latest and latest == previous and not artifacts_complete:
+        missing = [
+            str(path)
+            for path in (STATUS_PATH, CONTRACT_PATH, HISTORY_PATH)
+            if not path.exists()
+        ]
+        print("V10 CONFIRMATION CYCLE: REBUILD MISSING ARTIFACTS")
+        print("=" * 88)
+        print(f"Common feature session unchanged at: {latest}")
+        print("Missing: " + ", ".join(missing))
+    else:
+        print("V10 CONFIRMATION CYCLE")
+        print("=" * 88)
+        print(f"Feature common latest: {latest or 'unknown'}")
+        print(f"Previously processed: {previous or 'none'}")
+
     run_confirmation()
     _publish()
 
