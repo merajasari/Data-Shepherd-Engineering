@@ -69,7 +69,7 @@ SIGNALS = (
     {
         "signal_id": "abnormal_dollar_volume_5_60",
         "formula": "log(mean(close*volume, 5) / mean(close*volume, 60))",
-        "direction_hypothesis": "two_sided_test_positive_rank_direction",
+        "direction_hypothesis": "higher_is_better",
         "hypothesis": (
             "A sustained abnormal dollar-volume shock identifies attention and "
             "information arrival not explained by the existing volume-trend control."
