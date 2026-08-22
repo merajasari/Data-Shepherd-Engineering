@@ -46,7 +46,7 @@ def inject_dashboard_modules(response):
     if response.mimetype=="text/html" and response.status_code==200:
         html=response.get_data(as_text=True); marker="</body>"; scripts=[]
         head_marker="</head>"; assistant_style='<link rel="stylesheet" href="/static/css/site_ai_assistant.css">'
-        if head_marker in html and assistant_style not in html: html=html.replace(head_marker,assistant_style+"\\n"+head_marker,1)
+        if head_marker in html and assistant_style not in html: html=html.replace(head_marker,assistant_style+"\n"+head_marker,1)
         scripts.append('<script src="/static/js/site_ai_assistant.js" defer></script>')
         if request.path=="/dashboard" and request.args.get("view")=="live":
             head_marker="</head>"
