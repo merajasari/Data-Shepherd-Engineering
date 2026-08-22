@@ -55,6 +55,12 @@
   }
 
   function pageContext() {
+    const sensitivePath = ["/verify-email/", "/complete-account", "/change-password", "/signup"].some(
+      (prefix) => location.pathname.startsWith(prefix)
+    );
+    if (sensitivePath) {
+      return { title: "Data Shepherd account page", path: "/account", visible_text: "" };
+    }
     const clone = document.body.cloneNode(true);
     clone.querySelector("#ds-ai-root")?.remove();
     clone.querySelectorAll("script,style,noscript,input,textarea,select").forEach((node) => node.remove());
