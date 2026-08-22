@@ -5,7 +5,9 @@ Changes over V11:
 - presents only V8 and V10 as model generations
 - folds the retained V9 auto-tuning and Cycle 2 capabilities into V10
 - removes the rejected-winner explanation scene
-- removes the two lower-right dashboard panels so the architecture background remains visible
+- removes every floating detail viewport from the product and engineering scenes
+- keeps the original phone artwork and turns its screen into a small website browser
+- reveals the GitHub repository content already embedded in the engineering artwork
 """
 from __future__ import annotations
 
@@ -23,17 +25,10 @@ v10 = v11.v10
 v6 = v11.v6
 
 
-# The dashboard source image contains two lower panels labelled
-# "10. Boot & Environment" and "11. Logging & State".  Remove those panels
-# before the normal animated crop is applied, revealing a clean architecture
-# background instead of placing additional rectangles over the product view.
-_site_base = v6.site
-
-
-def cleaned_dashboard_site(path, t, title, subtitle):
-    if path != v6.ASSETS["dashboard"]:
-        return _site_base(path, t, title, subtitle)
-
+# Render site imagery directly instead of calling the V8/V10 site wrappers.
+# Those wrappers add the floating LIVE DETAIL / SYSTEM DETAIL viewports and the
+# oversized portfolio phone that the user asked to remove.
+def clean_site(path, t, title, subtitle):
     im = v6.bg()
     v6.head(im, title, subtitle)
     d = v6.ImageDraw.Draw(im)
@@ -42,25 +37,65 @@ def cleaned_dashboard_site(path, t, title, subtitle):
         source = v6.load(path)
         sd = v6.ImageDraw.Draw(source)
         sw, sh = source.size
-        # Coordinates are proportional so the cleanup remains correct if the
-        # source asset is regenerated at a different resolution.
-        x0, y0 = int(sw * 0.522), int(sh * 0.842)
-        x1, y1 = int(sw * 0.997), int(sh * 0.997)
-        sd.rectangle((x0, y0, x1, y1), fill=(6, 18, 29))
-        # Preserve the subtle architecture-grid feel without recreating cards.
-        for x in range(x0 + 34, x1, 88):
-            sd.line((x, y0, x, y1), fill=(7, 25, 40), width=1)
-        for y in range(y0 + 34, y1, 70):
-            sd.line((x0, y, x1, y), fill=(7, 25, 40), width=1)
+
+        if path == v6.ASSETS["dashboard"]:
+            # Remove the two lower-right source panels before the animated crop,
+            # leaving a clean continuation of the architecture background.
+            x0, y0 = int(sw * 0.522), int(sh * 0.842)
+            x1, y1 = int(sw * 0.997), int(sh * 0.997)
+            sd.rectangle((x0, y0, x1, y1), fill=(6, 18, 29))
+            for x in range(x0 + 34, x1, 88):
+                sd.line((x, y0, x, y1), fill=(7, 25, 40), width=1)
+            for y in range(y0 + 34, y1, 70):
+                sd.line((x0, y, x1, y), fill=(7, 25, 40), width=1)
+
+        elif path == v6.ASSETS["overview"]:
+            # Keep the phone already present in the artwork.  Only replace its
+            # inner display so it looks like it is browsing the live website.
+            px0, py0 = int(sw * 0.218), int(sh * 0.555)
+            px1, py1 = int(sw * 0.307), int(sh * 0.765)
+            radius = max(8, int(sw * 0.006))
+            sd.rounded_rectangle((px0, py0, px1, py1), radius, fill=(4, 15, 27), outline=(55, 105, 145), width=max(2, sw // 700))
+            bar_h = max(14, int((py1 - py0) * 0.15))
+            sd.rounded_rectangle((px0 + 3, py0 + 3, px1 - 3, py0 + bar_h), radius // 2, fill=(8, 29, 48))
+            dot_r = max(2, sw // 900)
+            for n, colour in enumerate(((255, 95, 86), (255, 189, 46), (39, 201, 63))):
+                cx = px0 + 10 + n * (dot_r * 3)
+                cy = py0 + bar_h // 2
+                sd.ellipse((cx - dot_r, cy - dot_r, cx + dot_r, cy + dot_r), fill=colour)
+            sd.text((px0 + 8, py0 + bar_h + 8), "DATA SHEPHERD", font=v6.font(max(9, sw // 145), True), fill=v6.CYAN)
+            sd.text((px0 + 8, py0 + bar_h + 28), "MARKET AI", font=v6.font(max(8, sw // 175), True), fill=v6.TEXT)
+            chart_top = py0 + bar_h + 52
+            chart_bottom = py1 - 32
+            points = []
+            for n in range(7):
+                xx = px0 + 10 + n * max(8, (px1 - px0 - 22) // 6)
+                yy = chart_bottom - int((chart_bottom - chart_top) * (0.18 + 0.10 * n + 0.13 * (n % 2)))
+                points.append((xx, yy))
+            sd.line(points, fill=v6.GREEN, width=max(2, sw // 650))
+            sd.rounded_rectangle((px0 + 8, py1 - 25, px1 - 8, py1 - 8), 4, fill=(23, 83, 133))
+            sd.text((px0 + 18, py1 - 24), "VIEW SITE", font=v6.font(max(7, sw // 210), True), fill=v6.TEXT)
+
         im.paste(
             v6.cover(source, (1780, 815), 1 + 0.09 * v6.ease(t), 0.5 + 0.05 * v6.math.sin(t * v6.math.pi), 0.47),
             (70, 200),
         )
+
+    # One browser frame around the main image only—never extra inset boxes.
+    bx0, by0, bx1 = 120, 205, 1800
+    d.rounded_rectangle((bx0, by0, bx1, by0 + 48), 14, fill=(7, 18, 31), outline=v6.BORDER, width=2)
+    for n, colour in enumerate(((255, 95, 86), (255, 189, 46), (39, 201, 63))):
+        cx = bx0 + 25 + n * 28
+        d.ellipse((cx - 7, by0 + 17, cx + 7, by0 + 31), fill=colour)
+    d.rounded_rectangle((bx0 + 130, by0 + 10, bx1 - 25, by0 + 38), 10, fill=(11, 30, 49))
+    d.text((bx0 + 155, by0 + 13), "datashepherdengineering.com", font=v6.font(15, True), fill=v6.MUTED)
     d.rounded_rectangle(area, 26, outline=v6.CYAN, width=3)
+    d.rounded_rectangle((1435, 145, 1815, 190), 12, fill=(4, 18, 31), outline=v6.BORDER, width=2)
+    d.text((1460, 157), "ACTUAL DATA SHEPHERD PLATFORM", font=v6.font(15, True), fill=v6.GREEN)
     return im
 
 
-v6.site = cleaned_dashboard_site
+v6.site = clean_site
 
 
 def two_generation_frame(t):
