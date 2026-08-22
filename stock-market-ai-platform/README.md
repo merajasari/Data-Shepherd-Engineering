@@ -1,5 +1,7 @@
 # Data Shepherd Engineering
 
+[Complete system architecture](docs/system-architecture.md)
+
 Data Shepherd Engineering is an experimental research platform for systematic stock and crypto research, model evaluation, paper simulation, and forward paper monitoring.
 
 > **Research and simulation only. Not financial advice. No real brokerage orders are placed by the current platform.**
