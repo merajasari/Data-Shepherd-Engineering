@@ -30,7 +30,6 @@ def choose_voice() -> str:
         listing = subprocess.check_output(["say", "-v", "?"], text=True)
     except Exception:
         listing = ""
-    # Prefer newer/softer British female voices when present.
     for name in ("Martha", "Serena", "Kate", "Stephanie"):
         if re.search(rf"(?m)^{re.escape(name)}\s+", listing):
             return name
@@ -43,7 +42,6 @@ def choose_voice() -> str:
 
 
 def _clauses(text: str):
-    # Smaller phrases give Apple's speech engine more natural resets and less robotic prosody.
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     out=[]
     for sentence in sentences:
@@ -56,7 +54,6 @@ def _clauses(text: str):
             if not bit:
                 continue
             candidate=(buf+" "+bit).strip() if buf else bit
-            # Avoid over-fragmenting very short clauses.
             if len(candidate.split()) < 7:
                 buf=candidate
             else:
@@ -75,7 +72,6 @@ def natural_british_voice(text, path):
     try:
         clauses = _clauses(text)
         files=[]
-        # Gentle pace variation around a calmer base. Important phrases slow slightly.
         for i, clause in enumerate(clauses):
             lower=clause.lower()
             emphasis = any(k in lower for k in (
@@ -84,7 +80,6 @@ def natural_british_voice(text, path):
             ))
             rate = base - 5 if emphasis else base + (2 if i % 4 == 1 else (-2 if i % 4 == 3 else 0))
             seg=tmp/f"seg_{i:03d}.aiff"
-            # Punctuation and ellipses encourage more human cadence without changing meaning.
             spoken=clause
             if emphasis and not spoken.endswith(('.', '!', '?')):
                 spoken += "."
@@ -97,20 +92,36 @@ def natural_british_voice(text, path):
                 if any(k in lower for k in ("not confirmed","rejected","formal holdout")):
                     pause=0.30
                 sil=tmp/f"sil_{i:03d}.aiff"
-                subprocess.check_call([v6.ff(),"-y","-f","lavfi","-i","anullsrc=r=22050:cl=mono","-t",str(pause),"-c:a","pcm_s16be",str(sil)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                subprocess.check_call([
+                    v6.ff(),"-y","-f","lavfi","-i","anullsrc=r=22050:cl=mono","-t",str(pause),
+                    "-ar","22050","-ac","1","-c:a","pcm_s16be",str(sil)
+                ],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
                 files.append(sil)
         concat=tmp/'list.txt'; concat.write_text(''.join(f"file '{p}'\n" for p in files))
         raw=tmp/'joined.aiff'
-        subprocess.check_call([v6.ff(),"-y","-f","concat","-safe","0","-i",str(concat),"-ar","22050","-ac","1","-c:a","pcm_s16be",str(raw)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-        # Minimal mastering: retain natural dynamics and reduce the synthetic 'radio' sheen.
+        subprocess.check_call([
+            v6.ff(),"-y","-f","concat","-safe","0","-i",str(concat),
+            "-ar","22050","-ac","1","-c:a","pcm_s16be",str(raw)
+        ],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+
+        # Keep mastering deliberately light. Explicit AIFF codec/sample settings avoid
+        # ffmpeg's platform-dependent encoder selection that caused exit status 222.
         filters=(
             "highpass=f=60,lowpass=f=14000,"
             "equalizer=f=190:t=q:w=1.0:g=0.8,"
             "equalizer=f=2800:t=q:w=1.3:g=-0.5,"
-            "acompressor=threshold=-18dB:ratio=1.25:attack=35:release=260:makeup=0.5,"
-            "loudnorm=I=-17:TP=-1.8:LRA=10"
+            "acompressor=threshold=-18dB:ratio=1.25:attack=35:release=260:makeup=0.5"
         )
-        subprocess.check_call([v6.ff(),"-y","-i",str(raw),"-af",filters,str(path)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            subprocess.check_call([
+                v6.ff(),"-y","-i",str(raw),"-af",filters,
+                "-ar","22050","-ac","1","-c:a","pcm_s16be",str(path)
+            ],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            # Narration must never abort the entire render just because optional
+            # mastering fails. The joined speech is already valid AIFF audio.
+            shutil.copy2(raw, path)
+            print("Narration mastering unavailable; using clean unmastered AIFF fallback.")
     finally:
         shutil.rmtree(tmp,ignore_errors=True)
     print(f"Narration voice: {voice_name} (natural British female, ~{base} wpm)")
@@ -118,7 +129,6 @@ def natural_british_voice(text, path):
 v6.voice = natural_british_voice
 
 
-# Dedicated explainer so viewers understand V8/V9/V10 are ML/AI model generations.
 def model_lineage_frame(t):
     im=v6.bg(); v6.head(im,"THE MODEL GENERATIONS","V8, V9 and V10 are successive machine-learning / AI model systems")
     d=v6.ImageDraw.Draw(im)
@@ -141,18 +151,13 @@ def model_lineage_frame(t):
     d.text((430,900),"THE VERSION NUMBER DESCRIBES THE MODEL GENERATION — NOT A SOFTWARE RELEASE.",font=v6.font(27,True),fill=v6.CYAN)
     return im
 
-
-# Preserve the V10 frame renderer before wrapping it.
 _frame_base=v6.frame
-
 def frame_v11(scene,t):
     if scene[0]=='model_lineage':
         return model_lineage_frame(t)
     return _frame_base(scene,t)
 v6.frame=frame_v11
 
-
-# Insert the model explainer immediately before V9 tuning.
 insert_at=None
 for i,scene in enumerate(v6.SC):
     if scene[0]=='diagram' and scene[1]=='v9':
@@ -164,7 +169,6 @@ if insert_at is not None:
         "Before we go further, V8, V9 and V10 are not website versions. They are successive generations of Data Shepherd's machine-learning and artificial-intelligence model systems. V8 is the frozen production reference model. V9 is the automatic-tuning research generation that searches and validates bounded challenger configurations. V10 is a separate, regime-aware machine-learning challenger with its own validation and future holdout protocol."
     ))
 
-# Make later references self-explanatory too.
 for i,scene in enumerate(v6.SC):
     if scene[0]=='diagram' and scene[1]=='v9':
         v6.SC[i]=('diagram','v9',"V9, the automatic-tuning machine-learning research model, begins with candidate configurations declared before evaluation. Those AI model candidates are tested chronologically, and the development winner is locked before independent confirmation.")
