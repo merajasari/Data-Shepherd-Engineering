@@ -25,7 +25,7 @@
     <div class="smc-toolbar"><strong class="muted">RANGE</strong><button class="smc-btn" data-range="ALL">ALL</button><button class="smc-btn" data-range="5Y">5Y</button><button class="smc-btn active" data-range="3Y">3Y</button><button class="smc-btn" data-range="1Y">1Y</button><button class="smc-btn" data-range="90D">90D</button><button class="smc-btn" data-range="30D">30D</button><strong class="muted" style="margin-left:10px">VIEW</strong><button class="smc-btn active" data-mode="equity">EQUITY USD</button><button class="smc-btn" data-mode="normalized">NORMALIZED GROWTH</button></div>
     <div id="smc-range-message" class="smc-range-message"></div>
     <div id="smc-models" class="smc-models"></div>
-    <div class="smc-ux"><div class="hint"><strong>Explore:</strong> hover to compare every visible model at a date · click to pin · toggle models · choose range · zoom and pan.</div><button class="smc-nav" data-action="left">◀ EARLIER</button><button class="smc-nav" data-action="out">− ZOOM OUT</button><span id="smc-zoom-status" class="smc-zoom-status">FULL RANGE</span><button class="smc-nav" data-action="in">+ ZOOM IN</button><button class="smc-nav" data-action="right">LATER ▶</button><button class="smc-nav" data-action="reset">RESET VIEW</button></div>
+    <div class="smc-ux"><div class="hint"><strong>Explore:</strong> move near a line to highlight that model · click to pin · click again to release · toggle models · choose range · zoom and pan.</div><button class="smc-nav" data-action="left">◀ EARLIER</button><button class="smc-nav" data-action="out">− ZOOM OUT</button><span id="smc-zoom-status" class="smc-zoom-status">FULL RANGE</span><button class="smc-nav" data-action="in">+ ZOOM IN</button><button class="smc-nav" data-action="right">LATER ▶</button><button class="smc-nav" data-action="reset">RESET VIEW</button></div>
     <div class="smc-panel"><svg id="smc-chart" class="smc-svg" viewBox="0 0 1200 520" preserveAspectRatio="none"></svg><div id="smc-tooltip" class="smc-tooltip"></div><div id="smc-scale-note" class="smc-note">Each model begins at $100,000 on its own first scientifically eligible historical date.</div></div>
     <div id="smc-method-note" class="smc-warning">V6 and V7 are intentionally excluded. V8 and V10 are development-era reconstructions; genuine V8 forward evidence and V10 confirmation/Nov-2-2026+ holdout evidence remain separate.</div>
     <div class="smc-holdout" id="smc-v8-holdout-interaction">
@@ -68,12 +68,41 @@
     const x=t=>p.l+(W-p.l-p.r)*(t-a)/Math.max(1,b-a),y=v=>p.t+(H-p.t-p.b)*(1-(v-minV)/Math.max(.000001,maxV-minV));
     for(let i=0;i<5;i++){const v=minV+(maxV-minV)*i/4,yy=y(v);svg.appendChild(el('line',{x1:p.l,y1:yy,x2:W-p.r,y2:yy,stroke:'rgba(145,166,194,.13)'}));const n=el('text',{x:p.l-10,y:yy+4,'text-anchor':'end',fill:'#91a6c2','font-size':11});n.textContent=mode==='normalized'?v.toFixed(1):money(v);svg.appendChild(n);}
     for(let i=0;i<5;i++){const t=a+(b-a)*i/4,n=el('text',{x:x(t),y:H-24,'text-anchor':i===0?'start':i===4?'end':'middle',fill:'#91a6c2','font-size':11});n.textContent=date(t);svg.appendChild(n);}
-    activeSeries.forEach(id=>{const rows=vis[id];if(rows.length<2)return;const pts=rows.map(r=>[x(r.t),y(value(series[id],r))]);svg.appendChild(el('polyline',{points:pts.map(q=>q.join(',')).join(' '),fill:'none',stroke:COLORS[id],'stroke-width':(id==='V8'||id==='V10')?3.2:2.7,'stroke-linejoin':'round','stroke-linecap':'round'}));});
+    activeSeries.forEach(id=>{const rows=vis[id];if(rows.length<2)return;const pts=rows.map(r=>[x(r.t),y(value(series[id],r))]),width=(id==='V8'||id==='V10')?3.2:2.7;svg.appendChild(el('polyline',{points:pts.map(q=>q.join(',')).join(' '),fill:'none',stroke:COLORS[id],'stroke-width':width,opacity:.94,'stroke-linejoin':'round','stroke-linecap':'round','data-model':id,'data-width':width}));});
 
-    const guide=el('line',{y1:p.t,y2:H-p.b,stroke:'#e7edf7','stroke-dasharray':'4 4',opacity:.55,visibility:'hidden'});svg.appendChild(guide);const dots={};activeSeries.forEach(id=>{dots[id]=el('circle',{r:4.5,fill:COLORS[id],stroke:'#07101f','stroke-width':2,visibility:'hidden'});svg.appendChild(dots[id]);});
+    const guide=el('line',{y1:p.t,y2:H-p.b,stroke:'#e7edf7','stroke-dasharray':'4 4',opacity:.7,visibility:'hidden'});svg.appendChild(guide);
+    const focusDot=el('circle',{r:5.5,fill:'#fff',stroke:'#07101f','stroke-width':2,visibility:'hidden'});svg.appendChild(focusDot);
     const overlay=el('rect',{x:p.l,y:p.t,width:W-p.l-p.r,height:H-p.t-p.b,fill:'rgba(0,0,0,.001)','pointer-events':'all'});svg.appendChild(overlay);
-    function inspect(e,pin=false){const rect=svg.getBoundingClientRect(),mx=(e.clientX-rect.left)/rect.width*W;if(mx<p.l||mx>W-p.r)return;const t=a+(mx-p.l)/(W-p.l-p.r)*(b-a);guide.setAttribute('x1',x(t));guide.setAttribute('x2',x(t));guide.setAttribute('visibility','visible');let html=`<strong>${dateTime(t)}</strong>`;activeSeries.forEach(id=>{const r=nearest(vis[id],t);if(!r)return;dots[id].setAttribute('cx',x(r.t));dots[id].setAttribute('cy',y(value(series[id],r)));dots[id].setAttribute('visibility','visible');html+=`<div class="smc-tooltip-row"><span><span class="smc-dot" style="background:${COLORS[id]};margin-right:6px"></span>${series[id].label}</span><b>${mode==='normalized'?value(series[id],r).toFixed(2):money(r.equity)}</b></div>`;});tooltip.innerHTML=html;tooltip.style.display='block';const pr=panel.getBoundingClientRect();tooltip.style.left=Math.min(e.clientX-pr.left+14,pr.width-300)+'px';tooltip.style.top=Math.max(8,e.clientY-pr.top-20)+'px';if(pin)pinned=!pinned;}
-    overlay.addEventListener('pointermove',e=>{if(!pinned)inspect(e,false)});overlay.addEventListener('click',e=>inspect(e,true));overlay.addEventListener('pointerleave',()=>{if(!pinned){tooltip.style.display='none';guide.setAttribute('visibility','hidden');Object.values(dots).forEach(d=>d.setAttribute('visibility','hidden'));}});
+
+    function clearFocus(){
+      tooltip.style.display='none';
+      guide.setAttribute('visibility','hidden');
+      focusDot.setAttribute('visibility','hidden');
+      svg.querySelectorAll('[data-model]').forEach(line=>{line.setAttribute('opacity','.94');line.setAttribute('stroke-width',line.dataset.width);});
+    }
+
+    function inspect(e,pin=false){
+      const rect=svg.getBoundingClientRect(),mx=(e.clientX-rect.left)/rect.width*W,my=(e.clientY-rect.top)/rect.height*H;
+      if(mx<p.l||mx>W-p.r||my<p.t||my>H-p.b)return;
+      const t=a+(mx-p.l)/(W-p.l-p.r)*(b-a);
+      let best=null;
+      activeSeries.forEach(id=>{const r=nearest(vis[id],t);if(!r)return;const yy=y(value(series[id],r)),distance=Math.abs(yy-my);if(!best||distance<best.distance)best={id,r,yy,distance};});
+      if(!best||best.distance>38){if(!pinned)clearFocus();return;}
+
+      const selectedX=x(best.r.t),selectedValue=value(series[best.id],best.r);
+      guide.setAttribute('x1',mx);guide.setAttribute('x2',mx);guide.setAttribute('visibility','visible');
+      focusDot.setAttribute('cx',selectedX);focusDot.setAttribute('cy',best.yy);focusDot.setAttribute('fill',COLORS[best.id]);focusDot.setAttribute('visibility','visible');
+      svg.querySelectorAll('[data-model]').forEach(line=>{const selected=line.dataset.model===best.id;line.setAttribute('opacity',selected?'1':'.16');line.setAttribute('stroke-width',selected?'5':line.dataset.width);});
+
+      const ranked=activeSeries.map(id=>({id,equity:nearest(vis[id],best.r.t)?.equity})).filter(item=>Number.isFinite(item.equity)).sort((u,v)=>v.equity-u.equity);
+      const rank=ranked.findIndex(item=>item.id===best.id)+1;
+      tooltip.innerHTML=`<strong><span class="smc-dot" style="background:${COLORS[best.id]};margin-right:7px"></span>${series[best.id].label}</strong><div class="smc-tooltip-row"><span>Date</span><b>${dateTime(best.r.t)}</b></div><div class="smc-tooltip-row"><span>${mode==='normalized'?'Growth index':'Portfolio equity'}</span><b>${mode==='normalized'?selectedValue.toFixed(2):money(best.r.equity)}</b></div><div class="smc-tooltip-row"><span>Historical total return</span><b>${pct(series[best.id].totalReturnPct)}</b></div><div class="smc-tooltip-row"><span>Rank at this date</span><b>#${rank} of ${ranked.length}</b></div>`;
+      tooltip.style.display='block';const pr=panel.getBoundingClientRect();tooltip.style.left=Math.min(e.clientX-pr.left+14,pr.width-300)+'px';tooltip.style.top=Math.max(8,e.clientY-pr.top-20)+'px';
+      if(pin)pinned=!pinned;
+    }
+    overlay.addEventListener('pointermove',e=>{if(!pinned)inspect(e,false)});
+    overlay.addEventListener('click',e=>{if(pinned){pinned=false;clearFocus();}else inspect(e,true);});
+    overlay.addEventListener('pointerleave',()=>{if(!pinned)clearFocus();});
   }
 
   function renderHoldoutInteraction(d){
