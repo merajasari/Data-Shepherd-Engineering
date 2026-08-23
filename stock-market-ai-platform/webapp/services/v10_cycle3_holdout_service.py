@@ -13,6 +13,7 @@ HOLDOUT_START = "2027-01-04T00:00:00+00:00"
 ROOT = Path("data/model/v10/cycle3/holdout")
 JOURNAL_PATH = ROOT / "journal.jsonl"
 STATUS_PATH = ROOT / "status.json"
+MONITOR_PATH = Path("data/model/v10/cycle3/monitor/alert_state.json")
 _CACHE_TTL_SECONDS = 10.0
 _cache = {"signature": None, "expires_at": 0.0, "payload": None}
 
@@ -25,9 +26,9 @@ def _signature(path):
         return None
 
 
-def _read_status():
+def _read_json(path):
     try:
-        return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -115,7 +116,11 @@ def _metrics(exits, curve):
 
 
 def get_v10_cycle3_holdout_dashboard():
-    signature = (_signature(STATUS_PATH), _signature(JOURNAL_PATH))
+    signature = (
+        _signature(STATUS_PATH),
+        _signature(JOURNAL_PATH),
+        _signature(MONITOR_PATH),
+    )
     now_mono = time.monotonic()
     if (
         _cache["payload"] is not None
@@ -124,7 +129,8 @@ def get_v10_cycle3_holdout_dashboard():
     ):
         return _cache["payload"]
 
-    status = _read_status()
+    status = _read_json(STATUS_PATH)
+    monitor = _read_json(MONITOR_PATH)
     events = _read_events()
     journal_error = any(event.get("event_type") == "JOURNAL_ERROR" for event in events)
     decisions = [event for event in events if event.get("event_type") == "DECISION"]
@@ -160,6 +166,11 @@ def get_v10_cycle3_holdout_dashboard():
         "holding_sessions": 5,
         "brokerage_orders": False,
         "v8_modified": False,
+        "operational_status": monitor.get("status", "UNKNOWN"),
+        "operational_checked_at_utc": monitor.get("checked_at_utc"),
+        "operational_failures": monitor.get("failures", []),
+        "operational_notification": monitor.get("notification", "NONE"),
+        "scheduler_interval_seconds": 300,
         "method_note": (
             "Only completed post-January 4, 2027 cohorts enter performance. "
             "Top 10, next-open entry, five-session hold and 10-bps modeled cost "
