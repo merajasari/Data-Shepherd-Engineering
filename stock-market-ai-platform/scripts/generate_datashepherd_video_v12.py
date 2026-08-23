@@ -419,10 +419,57 @@ def draw_tech_icon(d, kind, cx, cy, size, colour, muted=False):
         d.ellipse((cx-r,cy-r,cx+r,cy+r),outline=col,width=line)
 
 
-def icon_node(d, x, y, label, kind, colour, on=True):
+_reference_source = None
+_reference_icons = {}
+
+
+def reference_icon(kind, size):
+    """Crop an icon from the real platform-engineering artwork for visual continuity."""
+    global _reference_source
+    boxes = {
+        # Normalized boxes in the existing END-TO-END PIPELINE artwork.
+        "cloud": (0.025, 0.395, 0.145, 0.625),
+        "bronze_3d": (0.165, 0.235, 0.260, 0.445),
+        "silver_3d": (0.300, 0.235, 0.395, 0.445),
+        "gold_3d": (0.435, 0.230, 0.535, 0.450),
+        "feature_table": (0.555, 0.235, 0.655, 0.445),
+        "ai_brain": (0.700, 0.215, 0.810, 0.455),
+        "prediction": (0.840, 0.235, 0.970, 0.475),
+    }
+    if kind not in boxes or not v6.ASSETS["engineering"].exists():
+        return None
+    key=(kind,size)
+    if key in _reference_icons:
+        return _reference_icons[key].copy()
+    if _reference_source is None:
+        _reference_source=v6.load(v6.ASSETS["engineering"])
+    sw,sh=_reference_source.size; x0,y0,x1,y1=boxes[kind]
+    crop=_reference_source.crop((int(sw*x0),int(sh*y0),int(sw*x1),int(sh*y1)))
+    # Remove the source panel background while retaining the luminous artwork.
+    rgba=crop.convert("RGBA"); px=rgba.load(); bg=rgba.getpixel((2,2))[:3]
+    for yy in range(rgba.height):
+        for xx in range(rgba.width):
+            rr,gg,bb,aa=px[xx,yy]
+            distance=max(abs(rr-bg[0]),abs(gg-bg[1]),abs(bb-bg[2]))
+            alpha=max(0,min(255,(distance-8)*12))
+            px[xx,yy]=(rr,gg,bb,min(aa,alpha))
+    rgba.thumbnail((size,size),v6.Image.Resampling.LANCZOS)
+    _reference_icons[key]=rgba
+    return rgba.copy()
+
+
+def paste_reference_icon(im, kind, cx, cy, size):
+    icon=reference_icon(kind,size)
+    if icon is None:return False
+    im.paste(icon,(int(cx-icon.width/2),int(cy-icon.height/2)),icon)
+    return True
+
+
+def icon_node(im, d, x, y, label, kind, colour, on=True, reference=None):
     col = colour if on else v6.BORDER
     d.rounded_rectangle((x-125,y-85,x+125,y+85),24,fill=v6.PANEL,outline=col,width=4)
-    draw_tech_icon(d, kind, x, y-24, 48, colour, not on)
+    used=paste_reference_icon(im,reference,x,y-24,66) if reference and on else False
+    if not used:draw_tech_icon(d, kind, x, y-24, 48, colour, not on)
     bb=d.textbbox((0,0),label,font=v6.font(18,True))
     d.text((x-(bb[2]-bb[0])/2,y+43),label,font=v6.font(18,True),fill=v6.TEXT)
 
@@ -431,15 +478,15 @@ def architecture_frame(kind, t):
     im=v6.bg(); d=v6.ImageDraw.Draw(im)
     if kind == "pipeline":
         v6.head(im,"END-TO-END DATA ARCHITECTURE","Governed model inputs from ingestion to features")
-        labs=[("INGEST","ingest",v6.CYAN),("BRONZE","bronze",v6.GOLD),("SILVER","silver",v6.MUTED),("GOLD","gold",v6.GOLD),("ML FEATURES","features",v6.GREEN)]
+        labs=[("INGEST","ingest",v6.CYAN,"cloud"),("BRONZE","bronze",v6.GOLD,"bronze_3d"),("SILVER","silver",v6.MUTED,"silver_3d"),("GOLD","gold",v6.GOLD,"gold_3d"),("ML FEATURES","features",v6.GREEN,"feature_table")]
         captions=["LIVE MARKET","RAW IMMUTABLE","CLEANSED","CURATED","MODEL READY"]
     else:
         v6.head(im,"PYSPARK IN PRODUCTION","Distributed feature processing with fail-closed validation")
-        labs=[("MARKET","chart",v6.CYAN),("PYSPARK","spark",v6.CYAN),("PARQUET","parquet",v6.GOLD),("101 / 101","validated",v6.GREEN),("MODELS","network",v6.GREEN)]
+        labs=[("MARKET","chart",v6.CYAN,"prediction"),("PYSPARK","spark",v6.CYAN,None),("PARQUET","parquet",v6.GOLD,"silver_3d"),("101 / 101","validated",v6.GREEN,None),("MODELS","network",v6.GREEN,"ai_brain")]
         captions=["SOURCE FRAMES","DISTRIBUTED COMPUTE","COLUMNAR LAYER","CONTRACT PASS","AI / ML READY"]
     xs=[220,570,920,1270,1620]
-    for i,(label,icon,colour) in enumerate(labs):
-        icon_node(d,xs[i],550,label,icon,colour,i<=int(t*5))
+    for i,(label,icon,colour,reference) in enumerate(labs):
+        icon_node(im,d,xs[i],550,label,icon,colour,i<=int(t*5),reference)
         if i<4:
             d.line((xs[i]+130,550,xs[i+1]-130,550),fill=v6.GREEN if kind=="spark" else v6.CYAN,width=4)
             phase=(t*1.7+i*.19)%1
@@ -481,7 +528,8 @@ def two_generation_frame(t):
         outline = colour if i <= active else v6.BORDER
         d.rounded_rectangle((x0, y0, x1, y1), 32, fill=v6.PANEL, outline=outline, width=5)
         d.text((x0 + 46, y0 + 38), version, font=v6.font(82, True), fill=colour)
-        draw_tech_icon(d, "fixed" if version == "V8" else "network", x1 - 105, y0 + 95, 70, colour)
+        if not paste_reference_icon(im,"ai_brain",x1-105,y0+95,82):
+            draw_tech_icon(d,"fixed" if version=="V8" else "network",x1-105,y0+95,70,colour)
         d.text((x0 + 46, y0 + 150), label, font=v6.font(25, True), fill=v6.TEXT)
         d.text((x0 + 46, y0 + 202), sub, font=v6.font(20, True), fill=v6.MUTED)
         d.line((x0 + 46, y0 + 255, x1 - 46, y0 + 255), fill=v6.BORDER, width=2)
@@ -500,16 +548,16 @@ def v8_operation_frame(t):
     v6.head(im, "HOW V8 WORKS", "A frozen, deterministic path from validated features to ranked portfolio signals")
     d = v6.ImageDraw.Draw(im)
     steps = [
-        ("VALIDATED", "Spark features", "validated"),
-        ("FIXED MODEL", "Frozen artifacts", "fixed"),
-        ("SCORE", "Each stock", "score"),
-        ("RANK", "100-stock universe", "rank"),
-        ("PUBLISH", "Dashboard + monitor", "publish"),
+        ("VALIDATED", "Spark features", "validated", None),
+        ("FIXED MODEL", "Frozen artifacts", "fixed", "ai_brain"),
+        ("SCORE", "Each stock", "score", "prediction"),
+        ("RANK", "100-stock universe", "rank", "feature_table"),
+        ("PUBLISH", "Dashboard + monitor", "publish", "prediction"),
     ]
     xs = [205, 570, 935, 1300, 1665]
-    for i, (label, detail, icon) in enumerate(steps):
+    for i, (label, detail, icon, reference) in enumerate(steps):
         on = i <= int(t * len(steps))
-        icon_node(d, xs[i], 515, label, icon, v6.GREEN, on)
+        icon_node(im,d,xs[i],515,label,icon,v6.GREEN,on,reference)
         box = d.textbbox((0, 0), detail, font=v6.font(17, True))
         d.text((xs[i] - (box[2] - box[0]) / 2, 625), detail, font=v6.font(17, True), fill=v6.MUTED)
         if i < len(xs) - 1:
@@ -542,7 +590,7 @@ def integrated_v10_frame(mode, t):
         for i, (label, detail, icon) in enumerate(steps):
             x = 660 + i * 295
             on = i <= int(t * 4)
-            icon_node(d, x, 565, label, icon, v6.GREEN if i < 3 else v6.GOLD, on)
+            icon_node(im,d,x,565,label,icon,v6.GREEN if i<3 else v6.GOLD,on,"ai_brain" if i==0 else None)
             d.text((x - 62, 685), detail.upper(), font=v6.font(14, True), fill=v6.MUTED)
         d.text((565, 855), "DECLARE  →  EVALUATE  →  LOCK  →  CONFIRM", font=v6.font(30, True), fill=v6.GREEN)
     else:
