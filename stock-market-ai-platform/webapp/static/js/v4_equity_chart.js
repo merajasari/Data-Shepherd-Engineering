@@ -70,6 +70,25 @@
     for(let i=0;i<5;i++){const t=a+(b-a)*i/4,n=el('text',{x:x(t),y:H-24,'text-anchor':i===0?'start':i===4?'end':'middle',fill:'#91a6c2','font-size':11});n.textContent=date(t);svg.appendChild(n);}
     activeSeries.forEach(id=>{const rows=vis[id];if(rows.length<2)return;const pts=rows.map(r=>[x(r.t),y(value(series[id],r))]),width=(id==='V8'||id==='V10')?3.2:2.7;svg.appendChild(el('polyline',{points:pts.map(q=>q.join(',')).join(' '),fill:'none',stroke:COLORS[id],'stroke-width':width,opacity:.94,'stroke-linejoin':'round','stroke-linecap':'round','data-model':id,'data-width':width}));});
 
+    const endpointLabels=activeSeries.map(id=>{const rows=vis[id];if(!rows.length)return null;const r=rows.at(-1);return{id,r,anchorX:x(r.t),anchorY:y(value(series[id],r)),label:id==='V8'?'V8 FROZEN':id};}).filter(Boolean).sort((u,v)=>u.anchorY-v.anchorY);
+    const minLabelY=p.t+12,maxLabelY=H-p.b-12,labelGap=25;
+    endpointLabels.forEach((item,index)=>{
+      item.labelY=Math.max(item.anchorY,index?endpointLabels[index-1].labelY+labelGap:minLabelY);
+    });
+    if(endpointLabels.length&&endpointLabels.at(-1).labelY>maxLabelY){
+      const shift=endpointLabels.at(-1).labelY-maxLabelY;
+      endpointLabels.forEach(item=>item.labelY-=shift);
+      for(let i=endpointLabels.length-2;i>=0;i--)endpointLabels[i].labelY=Math.min(endpointLabels[i].labelY,endpointLabels[i+1].labelY-labelGap);
+    }
+    endpointLabels.forEach(item=>{
+      const labelX=Math.min(W-p.r-4,item.anchorX+14),textWidth=Math.max(36,item.label.length*7+14);
+      svg.appendChild(el('line',{x1:item.anchorX+2,y1:item.anchorY,x2:labelX,y2:item.labelY,stroke:COLORS[item.id],'stroke-width':1.5,opacity:.7,'pointer-events':'none'}));
+      svg.appendChild(el('rect',{x:labelX,y:item.labelY-11,width:textWidth,height:22,rx:8,fill:'#081526',stroke:COLORS[item.id],'stroke-width':1.4,opacity:.96,'pointer-events':'none'}));
+      const label=el('text',{x:labelX+7,y:item.labelY+4,fill:COLORS[item.id],'font-size':11,'font-weight':900,'pointer-events':'none'});
+      label.textContent=item.label;
+      svg.appendChild(label);
+    });
+
     const guide=el('line',{y1:p.t,y2:H-p.b,stroke:'#e7edf7','stroke-dasharray':'4 4',opacity:.7,visibility:'hidden'});svg.appendChild(guide);
     const focusDot=el('circle',{r:5.5,fill:'#fff',stroke:'#07101f','stroke-width':2,visibility:'hidden'});svg.appendChild(focusDot);
     const overlay=el('rect',{x:p.l,y:p.t,width:W-p.l-p.r,height:H-p.t-p.b,fill:'rgba(0,0,0,.001)','pointer-events':'all'});svg.appendChild(overlay);
