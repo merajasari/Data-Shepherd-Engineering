@@ -16,6 +16,7 @@ The rehearsal validates:
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -267,6 +268,50 @@ def _validate_lifecycle(events, date_to_idx):
     return failures
 
 
+def _test_concurrent_append_is_duplicate_safe():
+    """Race identical event appends through the production lock implementation."""
+    concurrent_root = ROOT / "concurrent_append_test"
+    journal_path = concurrent_root / "journal.jsonl"
+    lock_path = concurrent_root / "journal.lock"
+    journal_path.unlink(missing_ok=True)
+    lock_path.unlink(missing_ok=True)
+    event = {
+        "event_type": "DECISION",
+        "journal_type": "V8_REHEARSAL_CONCURRENCY_TEST",
+        "candidate_id": "V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
+        "frozen_sha256": prod.EXPECTED_SHA,
+        "decision_timestamp_utc": "2026-08-03T00:00:00+00:00",
+        "cohort_offset": 0,
+        "symbols": ["TEST"],
+        "brokerage_orders": False,
+        "rehearsal_only": True,
+    }
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(
+                pool.map(
+                    lambda _: prod._append(event, path=journal_path, lock_path=lock_path),
+                    range(24),
+                )
+            )
+        events = prod._read_events(journal_path)
+        keys = [prod._event_key(row) for row in events]
+        ok = sum(bool(value) for value in results) == 1 and len(events) == 1 and len(set(keys)) == 1
+        return ok, {
+            "attempts": len(results),
+            "successful_appends": sum(bool(value) for value in results),
+            "journal_events": len(events),
+            "unique_event_keys": len(set(keys)),
+        }
+    finally:
+        journal_path.unlink(missing_ok=True)
+        lock_path.unlink(missing_ok=True)
+        try:
+            concurrent_root.rmdir()
+        except OSError:
+            pass
+
+
 def _test_missing_entry_price_fails_closed(symbols, frames, dates, date_to_idx, decision_ts):
     ranking = prod._rank_for_date(decision_ts, symbols, frames)
     picks = ranking.head(prod.TOP_N)["symbol"].tolist()
@@ -328,6 +373,13 @@ def main():
     if not missing_price_ok:
         failures.append(missing_price_error or "missing-price fail-closed test failed")
 
+    concurrent_append_ok, concurrent_append_details = _test_concurrent_append_is_duplicate_safe()
+    if not concurrent_append_ok:
+        failures.append(
+            "concurrent append regression failed: "
+            + json.dumps(concurrent_append_details, sort_keys=True)
+        )
+
     production_journal_after = _digest(prod.JOURNAL_PATH)
     production_status_after = _digest(prod.STATUS_PATH)
     if production_journal_before != production_journal_after:
@@ -353,6 +405,8 @@ def main():
         "restart_pass_appended": second_appended,
         "idempotent_restart": second_appended == 0 and first_digest == second_digest,
         "missing_entry_price_fails_closed": missing_price_ok,
+        "concurrent_append_duplicate_safe": concurrent_append_ok,
+        "concurrent_append_details": concurrent_append_details,
         "production_journal_unchanged": production_journal_before == production_journal_after,
         "production_status_unchanged": production_status_before == production_status_after,
         "brokerage_orders": False,
@@ -369,7 +423,7 @@ def main():
         "rehearsal_journal_path": str(JOURNAL_PATH),
         "production_journal_path": str(prod.JOURNAL_PATH),
     }
-    STATUS_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    prod._atomic_write_json(STATUS_PATH, payload)
 
     checklist = {
         "status": status,
@@ -383,11 +437,12 @@ def main():
         "spy_benchmark": "PASS" if exits else "FAIL",
         "append_only_idempotency": "PASS" if checks["idempotent_restart"] else "FAIL",
         "missing_data_fail_closed": "PASS" if missing_price_ok else "FAIL",
+        "concurrent_journal_locking": "PASS" if concurrent_append_ok else "FAIL",
         "production_journal_isolation": "PASS" if checks["production_journal_unchanged"] else "FAIL",
         "production_status_isolation": "PASS" if checks["production_status_unchanged"] else "FAIL",
         "brokerage_orders_off": "PASS",
     }
-    CHECKLIST_PATH.write_text(json.dumps(checklist, indent=2, sort_keys=True) + "\n")
+    prod._atomic_write_json(CHECKLIST_PATH, checklist)
 
     print("V8 HOLDOUT END-TO-END REHEARSAL")
     print("=" * 92)
@@ -397,6 +452,7 @@ def main():
     print(f"First pass appended: {first_appended} | restart pass appended: {second_appended}")
     print(f"Idempotent restart: {checks['idempotent_restart']}")
     print(f"Missing-price fail closed: {missing_price_ok}")
+    print(f"Concurrent append duplicate-safe: {concurrent_append_ok}")
     print(f"Production journal unchanged: {checks['production_journal_unchanged']}")
     print(f"Production status unchanged: {checks['production_status_unchanged']}")
     print("Brokerage orders: OFF | strategy modified: NO | production holdout evidence: NONE")
