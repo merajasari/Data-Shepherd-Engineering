@@ -2,39 +2,90 @@
   const root = document.getElementById('v8-holdout-monitor');
   if (!root) return;
   const style = document.createElement('style');
+  style.id = 'v8-forward-performance-style';
   style.textContent = `
-    .v8h-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+    #v8-holdout-monitor .panel-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+    .v8h-evidence{padding:8px 11px;border:1px solid rgba(239,197,107,.3);border-radius:999px;background:rgba(239,197,107,.08);color:var(--gold);font-size:.69rem;font-weight:950;letter-spacing:.06em}
+    .v8h-evidence.mature{border-color:rgba(57,227,161,.35);background:rgba(57,227,161,.08);color:var(--green)}
+    .v8h-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
     .v8h-card{padding:12px;border:1px solid rgba(120,155,205,.16);border-radius:12px;background:rgba(7,16,31,.48)}
-    .v8h-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.v8h-value{font-size:1.05rem;font-weight:700;margin-top:3px}
-    .v8h-sha{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;word-break:break-all;color:var(--muted)}
-    .v8h-chart{height:280px;border:1px solid rgba(120,155,205,.14);border-radius:14px;background:rgba(7,16,31,.45);overflow:hidden;margin-top:12px}
-    .v8h-chart svg{width:100%;height:100%;display:block}.v8h-note{font-size:.78rem;color:var(--muted);margin-top:8px}
-    @media(max-width:800px){.v8h-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  `; document.head.appendChild(style);
-  const fmtPct = v => v == null ? '—' : `${(100*v).toFixed(3)}%`;
-  function draw(curve){
-    const box=root.querySelector('.v8h-chart'); if(!box)return;
-    if(!curve.length){box.innerHTML='<div style="padding:28px;color:var(--muted)">Forward curve will begin after completed holdout cohorts are available.</div>';return;}
-    const W=1000,H=280,p=34; const vals=curve.flatMap(x=>[x.strategy_normalized,x.spy_normalized]);
-    const lo=Math.min(...vals),hi=Math.max(...vals),span=Math.max(1,hi-lo);
-    const x=i=>p+(W-2*p)*(i/Math.max(1,curve.length-1)); const y=v=>H-p-(H-2*p)*((v-lo)/span);
-    const path=k=>curve.map((d,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(d[k]).toFixed(1)}`).join(' ');
-    box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${path('strategy_normalized')}" fill="none" stroke="currentColor" stroke-width="3"/><path d="${path('spy_normalized')}" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="2" stroke-dasharray="8 6"/></svg>`;
+    .v8h-label{font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}.v8h-value{font-size:1rem;font-weight:850;margin-top:4px}
+    .v8h-positive{color:var(--green)}.v8h-negative{color:#ff6680}
+    .v8h-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:.72rem;margin:8px 0}
+    .v8h-legend span{display:flex;align-items:center;gap:7px}.v8h-line{display:inline-block;width:24px;border-top:3px solid}.v8h-line-v8{border-color:var(--gold)}.v8h-line-spy{border-color:#a78bfa;border-top-style:dashed}
+    .v8h-sha{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.68rem;word-break:break-all;color:var(--muted);margin-top:9px}
+    .v8h-chart{position:relative;height:390px;border:1px solid rgba(120,155,205,.14);border-radius:14px;background:rgba(7,16,31,.45);overflow:hidden;margin-top:10px}
+    .v8h-chart svg{width:100%;height:100%;display:block}.v8h-empty{padding:32px;color:var(--muted);line-height:1.55}.v8h-empty strong{display:block;color:var(--gold);margin-bottom:5px}
+    .v8h-tooltip{position:absolute;display:none;pointer-events:none;z-index:5;min-width:210px;padding:10px 12px;border:1px solid #2a5277;border-radius:11px;background:rgba(7,21,39,.97);box-shadow:0 14px 32px rgba(0,0,0,.4);font-size:.73rem;color:#f2f6ff}
+    .v8h-tooltip strong{display:block;margin-bottom:5px}.v8h-tip-row{display:flex;justify-content:space-between;gap:16px;margin-top:3px}.v8h-method{padding:9px 11px;margin-top:9px;border:1px solid rgba(120,155,205,.14);border-radius:10px;background:rgba(8,20,36,.42);color:var(--muted);font-size:.72rem;line-height:1.45}
+    .v8h-note{font-size:.73rem;color:var(--muted);margin-top:8px;line-height:1.5}
+    @media(max-width:800px){.v8h-chart{height:310px}}
+  `;
+  document.getElementById(style.id)?.remove();
+  document.head.appendChild(style);
+
+  const fmtPct = v => v == null ? '—' : `${v>=0?'+':''}${(100*v).toFixed(2)}%`;
+  const fmtNumber = v => v == null ? '—' : Number(v).toFixed(2);
+  const fmtMoney = v => '$'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const set = (selector,value) => { const el=root.querySelector(selector); if(el)el.textContent=value; };
+  const colorMetric = (selector,value) => {
+    const el=root.querySelector(selector); if(!el)return;
+    el.textContent=fmtPct(value); el.classList.remove('v8h-positive','v8h-negative');
+    if(value!=null)el.classList.add(value>=0?'v8h-positive':'v8h-negative');
+  };
+
+  function evidenceLabel(status,count,minimum){
+    if(status==='NO_COMPLETED_COHORTS')return 'NO COMPLETED COHORTS';
+    if(status==='INSUFFICIENT_EVIDENCE')return `INSUFFICIENT EVIDENCE · ${count}/${minimum}`;
+    if(status==='EARLY_EVIDENCE')return 'EARLY FORWARD EVIDENCE';
+    return 'FORWARD EVIDENCE ACCUMULATING';
   }
+
+  function draw(curve,evidenceStatus){
+    const box=root.querySelector('.v8h-chart'); if(!box)return;
+    box.innerHTML='';
+    if(!curve.length){
+      box.innerHTML=`<div class="v8h-empty"><strong>${evidenceStatus==='NO_COMPLETED_COHORTS'?'No completed forward cohorts yet':'Forward curve pending'}</strong>The chart begins only after a genuine post-September 1 cohort completes its next-open entry and five-session holding lifecycle.</div>`;
+      return;
+    }
+    const rows=[{timestamp_utc:null,strategy_normalized:100000,spy_normalized:100000},...curve];
+    const W=1200,H=390,p={l:82,r:118,t:28,b:55}; const vals=rows.flatMap(x=>[x.strategy_normalized,x.spy_normalized,100000]);
+    let lo=Math.min(...vals),hi=Math.max(...vals); const span=Math.max(500,hi-lo);lo-=span*.18;hi+=span*.18;
+    const x=i=>p.l+(W-p.l-p.r)*(i/Math.max(1,rows.length-1)); const y=v=>p.t+(H-p.t-p.b)*(1-(v-lo)/(hi-lo));
+    const ns='http://www.w3.org/2000/svg';
+    const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('preserveAspectRatio','none');box.appendChild(svg);
+    const make=(tag,attrs={})=>{const n=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v)));svg.appendChild(n);return n;};
+    for(let i=0;i<5;i++){const val=lo+(hi-lo)*i/4,yy=y(val);make('line',{x1:p.l,y1:yy,x2:W-p.r,y2:yy,stroke:'rgba(145,166,194,.15)'});const t=make('text',{x:p.l-10,y:yy+4,'text-anchor':'end',fill:'#91a6c2','font-size':11});t.textContent='$'+Math.round(val).toLocaleString();}
+    const path=k=>rows.map((d,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(d[k]).toFixed(1)}`).join(' ');
+    make('path',{d:path('strategy_normalized'),fill:'none',stroke:'#efc56b','stroke-width':3.5,'stroke-linecap':'round','stroke-linejoin':'round'});
+    make('path',{d:path('spy_normalized'),fill:'none',stroke:'#a78bfa','stroke-width':2.5,'stroke-dasharray':'8 6','stroke-linecap':'round'});
+    const last=rows.at(-1),lx=x(rows.length-1);
+    [['V8',last.strategy_normalized,'#efc56b'],['SPY',last.spy_normalized,'#a78bfa']].forEach(([name,value,color],i)=>{const t=make('text',{x:lx+10,y:y(value)+(i?14:-7),fill:color,'font-size':12,'font-weight':900});t.textContent=`${name} ${fmtMoney(value)}`;});
+    const startText=make('text',{x:p.l,y:H-18,'text-anchor':'start',fill:'#91a6c2','font-size':10});startText.textContent='Start';
+    const endText=make('text',{x:W-p.r,y:H-18,'text-anchor':'end',fill:'#91a6c2','font-size':10});endText.textContent=new Date(rows.at(-1).timestamp_utc).toLocaleDateString();
+    const guide=make('line',{y1:p.t,y2:H-p.b,stroke:'#dfe8f6','stroke-dasharray':'4 4',opacity:.45,visibility:'hidden'});
+    const dotV8=make('circle',{r:5,fill:'#efc56b',stroke:'#07101f','stroke-width':2,visibility:'hidden'});
+    const dotSpy=make('circle',{r:5,fill:'#a78bfa',stroke:'#07101f','stroke-width':2,visibility:'hidden'});
+    const overlay=make('rect',{x:p.l,y:p.t,width:W-p.l-p.r,height:H-p.t-p.b,fill:'rgba(0,0,0,.001)','pointer-events':'all'});
+    const tip=document.createElement('div');tip.className='v8h-tooltip';box.appendChild(tip);
+    overlay.addEventListener('pointermove',e=>{const rect=svg.getBoundingClientRect();const mx=(e.clientX-rect.left)/rect.width*W;const idx=Math.max(0,Math.min(rows.length-1,Math.round((mx-p.l)/(W-p.l-p.r)*(rows.length-1))));const row=rows[idx],xx=x(idx);guide.setAttribute('x1',xx);guide.setAttribute('x2',xx);guide.setAttribute('visibility','visible');[[dotV8,row.strategy_normalized],[dotSpy,row.spy_normalized]].forEach(([dot,value])=>{dot.setAttribute('cx',xx);dot.setAttribute('cy',y(value));dot.setAttribute('visibility','visible');});const when=idx===0?'Normalized start':new Date(row.timestamp_utc).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});tip.innerHTML=`<strong>${when}</strong><div class="v8h-tip-row"><span>Frozen V8</span><b>${fmtMoney(row.strategy_normalized)}</b></div><div class="v8h-tip-row"><span>SPY</span><b>${fmtMoney(row.spy_normalized)}</b></div>`;tip.style.display='block';tip.style.left=Math.min(e.clientX-box.getBoundingClientRect().left+12,box.clientWidth-225)+'px';tip.style.top=Math.max(8,e.clientY-box.getBoundingClientRect().top-64)+'px';});
+    overlay.addEventListener('pointerleave',()=>{tip.style.display='none';guide.setAttribute('visibility','hidden');dotV8.setAttribute('visibility','hidden');dotSpy.setAttribute('visibility','hidden');});
+  }
+
   async function refresh(){
     try{
       const r=await fetch('/api/v8/holdout',{cache:'no-store'}); if(!r.ok)throw new Error(`HTTP ${r.status}`); const d=await r.json();
-      root.querySelector('[data-v8h-state]').textContent=d.state;
-      root.querySelector('[data-v8h-decisions]').textContent=d.decisions;
-      root.querySelector('[data-v8h-exits]').textContent=d.completed_cohorts;
-      root.querySelector('[data-v8h-edge]').textContent=fmtPct(d.mean_net_relative_return);
-      root.querySelector('[data-v8h-hit]').textContent=fmtPct(d.net_relative_hit_rate);
-      root.querySelector('[data-v8h-sha]').textContent=d.frozen_sha256;
-      root.querySelector('[data-v8h-start]').textContent=d.holdout_start_utc.replace('T00:00:00+00:00','');
-      draw(d.curve||[]);
-    }catch(e){root.querySelector('[data-v8h-state]').textContent='MONITOR ERROR'; console.error(e);}
+      set('[data-v8h-state]',String(d.state||'UNKNOWN').replaceAll('_',' '));
+      set('[data-v8h-decisions]',d.decisions??0);set('[data-v8h-entries]',d.entries??0);set('[data-v8h-exits]',d.completed_cohorts??0);
+      colorMetric('[data-v8h-v8-return]',d.strategy_total_return);colorMetric('[data-v8h-spy-return]',d.spy_total_return);colorMetric('[data-v8h-edge]',d.total_relative_return);
+      set('[data-v8h-hit]',fmtPct(d.net_relative_hit_rate));colorMetric('[data-v8h-drawdown]',d.max_drawdown);set('[data-v8h-volatility]',fmtPct(d.cohort_return_volatility));set('[data-v8h-sharpe]',fmtNumber(d.diagnostic_annualized_sharpe));
+      set('[data-v8h-sha]',d.frozen_sha256);set('[data-v8h-start]',d.holdout_start_utc.replace('T00:00:00+00:00',''));
+      const evidence=root.querySelector('[data-v8h-evidence]');evidence.textContent=evidenceLabel(d.evidence_status,d.completed_cohorts,d.minimum_completed_cohorts_for_early_read);evidence.classList.toggle('mature',['EARLY_EVIDENCE','EVIDENCE_ACCUMULATING'].includes(d.evidence_status));
+      set('[data-v8h-method]',d.metric_note||'Completed five-session forward cohorts after modeled costs.');
+      draw(d.curve||[],d.evidence_status);
+    }catch(e){set('[data-v8h-state]','MONITOR ERROR');console.error(e);}
   }
-  refresh(); setInterval(refresh,15000);
+  refresh(); setInterval(refresh,30000);
 })();
 
 /* Additive V4 portfolio-equity chart. This intentionally leaves the existing model-comparison panel untouched. */
