@@ -25,7 +25,7 @@ from ml.v8.holdout_runner import (
 LABEL = "com.datashepherd.v8paper"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 EXPECTED_INTERVAL_SECONDS = 300
-EXPECTED_MODULE = "ml.v8.eod_orchestrator"
+EXPECTED_MODULE = "ml.v8.scheduled_entrypoint"
 FORBIDDEN_DIRECT_MODULE = "ml.v8.holdout_runner"
 
 
@@ -91,7 +91,7 @@ def run_preflight():
                 plist.get("StartInterval"),
             ),
             _result("launchagent_run_at_load", plist.get("RunAtLoad") is True, plist.get("RunAtLoad")),
-            _result("scheduler_uses_orchestrator", EXPECTED_MODULE in command, command),
+            _result("scheduler_uses_monitored_entrypoint", EXPECTED_MODULE in command, command),
             _result(
                 "scheduler_no_direct_runner",
                 FORBIDDEN_DIRECT_MODULE not in command,
