@@ -54,8 +54,7 @@ def _event_key(event):
     return (
         event.get("event_type"),
         event.get("decision_timestamp_utc"),
-        event.get("symbol"),
-        event.get("cohort_id"),
+        event.get("cohort_offset"),
     )
 
 
