@@ -16,6 +16,8 @@ Changes over V11:
 from __future__ import annotations
 
 import importlib.util
+import base64
+import io
 import json
 import os
 import re
@@ -34,6 +36,7 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(v11)
 v10 = v11.v10
 v6 = v11.v6
+from platform_icon_assets import ICON_BASE64
 
 
 # V11 provides clause-based narration and light mastering.  V12 steers that
@@ -426,6 +429,29 @@ _reference_icons = {}
 def reference_icon(kind, size):
     """Crop an icon from the real platform-engineering artwork for visual continuity."""
     global _reference_source
+    icon_dir=v6.ROOT/"assets"/"video"/"platform-icons"
+    icon_files={
+        "cloud":"cloud.png","bronze_3d":"bronze.png","silver_3d":"silver.png",
+        "gold_3d":"gold.png","feature_table":"features.png","ai_brain":"brain.png",
+        "prediction":"prediction.png",
+    }
+    direct=icon_dir/icon_files.get(kind,"")
+    if direct.is_file():
+        key=(kind,size)
+        if key not in _reference_icons:
+            icon=v6.Image.open(direct).convert("RGBA")
+            icon.thumbnail((size,size),v6.Image.Resampling.LANCZOS)
+            _reference_icons[key]=icon
+        return _reference_icons[key].copy()
+    embedded_name=icon_files.get(kind,"").removesuffix(".png")
+    if embedded_name in ICON_BASE64:
+        key=(kind,size)
+        if key not in _reference_icons:
+            raw=base64.b64decode(ICON_BASE64[embedded_name])
+            icon=v6.Image.open(io.BytesIO(raw)).convert("RGBA")
+            icon.thumbnail((size,size),v6.Image.Resampling.LANCZOS)
+            _reference_icons[key]=icon
+        return _reference_icons[key].copy()
     boxes = {
         # Normalized boxes in the existing END-TO-END PIPELINE artwork.
         "cloud": (0.025, 0.395, 0.145, 0.625),
@@ -463,6 +489,53 @@ def paste_reference_icon(im, kind, cx, cy, size):
     if icon is None:return False
     im.paste(icon,(int(cx-icon.width/2),int(cy-icon.height/2)),icon)
     return True
+
+
+def executive_founder(t, close=False):
+    """A restrained branded opener using the platform's own visual language."""
+    if close:return professional_founder(t,True)
+    im=v6.bg(); d=v6.ImageDraw.Draw(im)
+    v6.logo(im,62,38,300,112)
+    d.text((105,220),"MERAJ ASARI",font=v6.font(70,True),fill=v6.TEXT)
+    d.text((108,310),"FOUNDER  •  LEAD ENGINEER  •  CEO",font=v6.font(24,True),fill=v6.CYAN)
+    d.line((108,365,945,365),fill=v6.CYAN,width=3)
+    d.text((108,415),"DATA ENGINEERING",font=v6.font(46,True),fill=v6.TEXT)
+    d.text((108,470),"MEETS TRUSTED AI",font=v6.font(46,True),fill=v6.GREEN)
+    d.multiline_text((110,545),"Governed market data. Distributed processing.\nTransparent machine learning. Observable results.",font=v6.font(23),fill=v6.MUTED,spacing=11)
+
+    # Small portrait remains a supporting identity element, not the hero image.
+    d.rounded_rectangle((1510,48,1845,382),28,fill=(7,22,38),outline=v6.CYAN,width=3)
+    portrait_path=v6.fp()
+    if portrait_path:
+        portrait=v6.cover(v6.load(portrait_path),(293,293),1.04,.5,.22)
+        mask=v6.Image.new("L",portrait.size,0)
+        v6.ImageDraw.Draw(mask).rounded_rectangle((0,0,292,292),22,fill=255)
+        im.paste(portrait,(1531,69),mask)
+    d.text((1512,404),"FOUNDER-LED ENGINEERING",font=v6.font(16,True),fill=v6.MUTED)
+
+    # The platform's own dimensional icons tell one clean story.
+    cards=[
+        (245,"GOVERNED DATA","cloud",v6.CYAN),
+        (675,"FEATURE ENGINEERING","feature_table",v6.GREEN),
+        (1105,"MACHINE LEARNING","ai_brain",(196,105,255)),
+        (1535,"OBSERVABLE SIGNALS","prediction",v6.GOLD),
+    ]
+    y=800
+    for i,(x,label,icon,colour) in enumerate(cards):
+        active=i<=int(t*4)
+        outline=colour if active else v6.BORDER
+        d.rounded_rectangle((x-155,y-120,x+155,y+150),28,fill=(7,22,39),outline=outline,width=4)
+        if active:paste_reference_icon(im,icon,x,y-30,142)
+        bb=d.textbbox((0,0),label,font=v6.font(18,True))
+        d.text((x-(bb[2]-bb[0])/2,y+91),label,font=v6.font(18,True),fill=v6.TEXT)
+        if i<len(cards)-1:
+            d.line((x+158,y+10,cards[i+1][0]-158,y+10),fill=v6.GREEN,width=4)
+            d.polygon([(cards[i+1][0]-170,y),(cards[i+1][0]-170,y+20),(cards[i+1][0]-154,y+10)],fill=v6.GREEN)
+    d.text((575,1018),"FROM TRUSTED INPUTS TO TESTABLE ARTIFICIAL INTELLIGENCE",font=v6.font(23,True),fill=v6.CYAN)
+    return im
+
+
+v6.founder=executive_founder
 
 
 def icon_node(im, d, x, y, label, kind, colour, on=True, reference=None):
