@@ -1,4 +1,5 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
+from webapp.services.v10_cycle3_holdout_service import get_v10_cycle3_holdout_dashboard
 """Data Shepherd Engineering presentation layer."""
 import os, sys
 from datetime import datetime, timedelta, timezone
@@ -204,4 +205,6 @@ def api_crypto_history_file():
 def health():return jsonify({"status":"ok","service":"data-shepherd-web","timestamp_utc":datetime.now(timezone.utc).isoformat()})
 @app.get("/api/v8/holdout")
 def api_v8_holdout():return get_v8_holdout_dashboard()
+@app.get("/api/v10/cycle3/holdout")
+def api_v10_cycle3_holdout():return get_v10_cycle3_holdout_dashboard()
 if __name__=="__main__":app.run(host="0.0.0.0",port=5000,debug=False)
