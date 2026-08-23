@@ -49,7 +49,7 @@ def choose_friendly_female_voice():
         listing = ""
     # Prefer the more natural female voices commonly available in current
     # macOS releases. The ordered fallback keeps the render portable.
-    for name in ("Ava", "Zoe", "Samantha", "Serena", "Kate", "Martha", "Stephanie"):
+    for name in ("Zoe", "Ava", "Samantha", "Serena", "Kate", "Martha", "Stephanie"):
         if re.search(rf"(?m)^{re.escape(name)}\s+", listing):
             return name
     return "Samantha"
