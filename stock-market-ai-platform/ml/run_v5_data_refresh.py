@@ -61,6 +61,7 @@ COMPARISON_STATIC_INPUTS = (
     PROJECT_ROOT / "data/model/v5/phase3/portfolio_daily.csv",
     PROJECT_ROOT / "data/model/v8/phase5/economic_period_results.csv",
     PROJECT_ROOT / "data/model/v8/phase7/frozen_candidate_spec.json",
+    PROJECT_ROOT / "data/model/v10/phase3/economic_period_results.csv",
 )
 
 
