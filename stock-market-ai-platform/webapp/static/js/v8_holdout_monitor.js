@@ -33,7 +33,8 @@
       await loadScript('/static/js/v8_dashboard_fixes.js');
       await loadScript('/static/js/v8_dashboard_final_polish.js');
       await loadScript('/static/js/v8_launch_readiness.js');
-      await loadScript('/static/js/v10_confirmation_dashboard.js');\n      await loadScript('/static/js/v10_cycle3_holdout_monitor.js');
+      await loadScript('/static/js/v10_confirmation_dashboard.js');
+      await loadScript('/static/js/v10_cycle3_holdout_monitor.js');
     } catch (e) {
       console.error('Unable to load one or more V8/V10 dashboard enhancements.', e);
     }
