@@ -7,7 +7,9 @@ does not repeatedly deserialize the same frozen ranking panel.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
+import statistics
 import time
 
 import pandas as pd
@@ -162,6 +164,86 @@ def _curve(exits):
     return points
 
 
+def _performance_metrics(exits, curve):
+    """Diagnostic metrics from genuine completed forward cohorts only."""
+    net_returns = [
+        float(event["net_portfolio_return"])
+        for event in exits
+        if event.get("net_portfolio_return") is not None
+    ]
+    spy_returns = [
+        float(event["spy_return"])
+        for event in exits
+        if event.get("spy_return") is not None
+    ]
+    relative_returns = [
+        float(event["net_relative_return"])
+        for event in exits
+        if event.get("net_relative_return") is not None
+    ]
+
+    completed = len(net_returns)
+    strategy_total = curve[-1]["strategy_normalized"] / 100000.0 - 1.0 if curve else None
+    spy_total = curve[-1]["spy_normalized"] / 100000.0 - 1.0 if curve else None
+    max_drawdown = None
+    if curve:
+        peak = 100000.0
+        drawdowns = []
+        for point in curve:
+            wealth = float(point["strategy_normalized"])
+            peak = max(peak, wealth)
+            drawdowns.append(wealth / peak - 1.0)
+        max_drawdown = min(drawdowns, default=0.0)
+
+    volatility = statistics.stdev(net_returns) if completed >= 2 else None
+    mean_return = statistics.mean(net_returns) if net_returns else None
+    # Each observation is a five-session completed cohort. This is diagnostic,
+    # not an independence or statistical-significance claim.
+    sharpe = (
+        mean_return / volatility * math.sqrt(252.0 / 5.0)
+        if volatility is not None and volatility > 0
+        else None
+    )
+
+    if completed == 0:
+        evidence_status = "NO_COMPLETED_COHORTS"
+    elif completed < 20:
+        evidence_status = "INSUFFICIENT_EVIDENCE"
+    elif completed < 60:
+        evidence_status = "EARLY_EVIDENCE"
+    else:
+        evidence_status = "EVIDENCE_ACCUMULATING"
+
+    return {
+        "evidence_status": evidence_status,
+        "minimum_completed_cohorts_for_early_read": 20,
+        "completed_cohorts": completed,
+        "strategy_total_return": strategy_total,
+        "spy_total_return": spy_total,
+        "total_relative_return": (
+            strategy_total - spy_total
+            if strategy_total is not None and spy_total is not None
+            else None
+        ),
+        "mean_net_portfolio_return": mean_return,
+        "mean_net_relative_return": (
+            statistics.mean(relative_returns) if relative_returns else None
+        ),
+        "net_relative_hit_rate": (
+            sum(value > 0 for value in relative_returns) / len(relative_returns)
+            if relative_returns
+            else None
+        ),
+        "cohort_return_volatility": volatility,
+        "diagnostic_annualized_sharpe": sharpe,
+        "max_drawdown": max_drawdown,
+        "metric_note": (
+            "Metrics use completed five-session forward cohorts after modeled "
+            "10-bps trading costs. Overlapping cohorts are not independent."
+        ),
+    }
+
+
 def get_v8_holdout_dashboard():
     signature = _dashboard_signature()
     now_monotonic = time.monotonic()
@@ -181,6 +263,8 @@ def get_v8_holdout_dashboard():
     exits = [e for e in events if e.get("event_type") == "EXIT"]
     rel = [float(e["net_relative_return"]) for e in exits if e.get("net_relative_return") is not None]
     latest_rankings = _latest_v8_rankings()
+    curve = _curve(exits)
+    performance = _performance_metrics(exits, curve)
     checks = readiness.get("checks") or {}
     rehearsal_details = checks.get("ranking_top10_details") or []
     rehearsal_symbols = checks.get("ranking_top10") or []
@@ -229,10 +313,9 @@ def get_v8_holdout_dashboard():
         "decisions": len(decisions),
         "entries": len(entries),
         "completed_cohorts": len(exits),
-        "mean_net_relative_return": (sum(rel) / len(rel)) if rel else None,
-        "net_relative_hit_rate": (sum(x > 0 for x in rel) / len(rel)) if rel else None,
+        **performance,
         "latest_exit": exits[-1] if exits else None,
-        "curve": _curve(exits),
+        "curve": curve,
         "event_history": _event_history(events),
         "latest_research_top10_timestamp_utc": checks.get("ranking_timestamp_utc") or latest_rankings["timestamp_utc"],
         "latest_research_top10": latest_top10,
