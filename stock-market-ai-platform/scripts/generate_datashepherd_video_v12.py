@@ -357,6 +357,111 @@ def professional_founder(t, close=False):
 v6.founder = professional_founder
 
 
+def draw_tech_icon(d, kind, cx, cy, size, colour, muted=False):
+    """Draw a dependable vector icon without relying on missing font glyphs."""
+    col = v6.MUTED if muted else colour
+    line = max(2, size // 14)
+    r = size // 2
+    if kind == "ingest":
+        d.arc((cx-r, cy-r//2, cx+r, cy+r//2), 180, 360, fill=col, width=line)
+        d.line((cx-r, cy, cx-r, cy+r//2, cx+r, cy+r//2, cx+r, cy), fill=col, width=line)
+        d.line((cx, cy-r, cx, cy+r//5), fill=col, width=line)
+        d.polygon([(cx-size//6, cy), (cx+size//6, cy), (cx, cy+size//5)], fill=col)
+    elif kind in {"bronze", "silver", "gold", "parquet"}:
+        for off in (-size//5, 0, size//5):
+            d.ellipse((cx-r, cy-r//2+off, cx+r, cy+r//2+off), outline=col, width=line)
+        d.line((cx-r, cy-r//2, cx-r, cy+r//2+size//5), fill=col, width=line)
+        d.line((cx+r, cy-r//2, cx+r, cy+r//2+size//5), fill=col, width=line)
+    elif kind == "spark":
+        pts = [(cx,cy-r),(cx+size//7,cy-size//7),(cx+r,cy-size//9),(cx+size//5,cy+size//8),
+               (cx+size//4,cy+r),(cx,cy+size//4),(cx-size//4,cy+r),(cx-size//5,cy+size//8),
+               (cx-r,cy-size//9),(cx-size//7,cy-size//7)]
+        d.polygon(pts, outline=col)
+        d.ellipse((cx-size//8,cy-size//8,cx+size//8,cy+size//8), fill=col)
+    elif kind in {"features", "score", "chart"}:
+        d.line((cx-r,cy+r,cx-r,cy-r,cx+r,cy-r), fill=col, width=line)
+        pts=[(cx-r+5,cy+r-8),(cx-size//5,cy+size//8),(cx+size//10,cy+size//4),(cx+r-3,cy-r+8)]
+        d.line(pts, fill=col, width=line)
+        for x,y in pts:d.ellipse((x-line,y-line,x+line,y+line),fill=col)
+    elif kind in {"model", "ai", "network"}:
+        nodes=[(cx,cy),(cx-r,cy-r//2),(cx-r,cy+r//2),(cx+r,cy-r//2),(cx+r,cy+r//2),(cx,cy-r)]
+        for p in nodes[1:]:d.line((*nodes[0],*p),fill=col,width=line)
+        for j,(x,y) in enumerate(nodes):
+            rr=size//9 if j else size//7
+            d.ellipse((x-rr,y-rr,x+rr,y+rr),fill=(7,24,41),outline=col,width=line)
+    elif kind in {"validated", "confirm", "gate"}:
+        d.ellipse((cx-r,cy-r,cx+r,cy+r),outline=col,width=line)
+        d.line((cx-r//2,cy,cx-size//10,cy+r//2,cx+r//2,cy-r//2),fill=col,width=line+1)
+    elif kind in {"lock", "fixed"}:
+        d.rounded_rectangle((cx-r,cy-size//8,cx+r,cy+r),size//8,outline=col,width=line)
+        d.arc((cx-size//3,cy-r,cx+size//3,cy+size//5),180,360,fill=col,width=line)
+    elif kind == "rank":
+        for j,w in enumerate((size//3,size//2,size*2//3)):
+            yy=cy-r+j*size//2
+            d.line((cx-w//2,yy,cx+w//2,yy),fill=col,width=line)
+        d.polygon([(cx+r,cy-r),(cx+r-size//6,cy-r+size//8),(cx+r-size//6,cy-r-size//8)],fill=col)
+    elif kind in {"publish", "monitor"}:
+        d.rounded_rectangle((cx-r,cy-r*3//4,cx+r,cy+r*3//4),size//9,outline=col,width=line)
+        d.line((cx-size//3,cy+r,cx+size//3,cy+r),fill=col,width=line)
+        d.line((cx,cy+r*3//4,cx,cy+r),fill=col,width=line)
+        d.line([(cx-r+8,cy+size//5),(cx-size//5,cy),(cx+size//8,cy+size//8),(cx+r-8,cy-size//3)],fill=col,width=line)
+    elif kind == "folds":
+        for j in range(4):
+            x=cx-r+j*size//3
+            d.rounded_rectangle((x,cy-r+j*3,x+size//4,cy+r-j*3),4,outline=col,width=max(2,line-1))
+    elif kind == "cost":
+        d.ellipse((cx-r,cy-r,cx+r,cy+r),outline=col,width=line)
+        d.text((cx-size//6,cy-size//3),"$",font=v6.font(size//2,True),fill=col)
+    elif kind == "regime":
+        d.arc((cx-r,cy-r,cx+r,cy+r),180,360,fill=col,width=line)
+        d.line((cx-r,cy,cx-size//3,cy-size//6,cx,cy+size//5,cx+size//3,cy-size//3,cx+r,cy),fill=col,width=line)
+    else:
+        d.ellipse((cx-r,cy-r,cx+r,cy+r),outline=col,width=line)
+
+
+def icon_node(d, x, y, label, kind, colour, on=True):
+    col = colour if on else v6.BORDER
+    d.rounded_rectangle((x-125,y-85,x+125,y+85),24,fill=v6.PANEL,outline=col,width=4)
+    draw_tech_icon(d, kind, x, y-24, 48, colour, not on)
+    bb=d.textbbox((0,0),label,font=v6.font(18,True))
+    d.text((x-(bb[2]-bb[0])/2,y+43),label,font=v6.font(18,True),fill=v6.TEXT)
+
+
+def architecture_frame(kind, t):
+    im=v6.bg(); d=v6.ImageDraw.Draw(im)
+    if kind == "pipeline":
+        v6.head(im,"END-TO-END DATA ARCHITECTURE","Governed model inputs from ingestion to features")
+        labs=[("INGEST","ingest",v6.CYAN),("BRONZE","bronze",v6.GOLD),("SILVER","silver",v6.MUTED),("GOLD","gold",v6.GOLD),("ML FEATURES","features",v6.GREEN)]
+        captions=["LIVE MARKET","RAW IMMUTABLE","CLEANSED","CURATED","MODEL READY"]
+    else:
+        v6.head(im,"PYSPARK IN PRODUCTION","Distributed feature processing with fail-closed validation")
+        labs=[("MARKET","chart",v6.CYAN),("PYSPARK","spark",v6.CYAN),("PARQUET","parquet",v6.GOLD),("101 / 101","validated",v6.GREEN),("MODELS","network",v6.GREEN)]
+        captions=["SOURCE FRAMES","DISTRIBUTED COMPUTE","COLUMNAR LAYER","CONTRACT PASS","AI / ML READY"]
+    xs=[220,570,920,1270,1620]
+    for i,(label,icon,colour) in enumerate(labs):
+        icon_node(d,xs[i],550,label,icon,colour,i<=int(t*5))
+        if i<4:
+            d.line((xs[i]+130,550,xs[i+1]-130,550),fill=v6.GREEN if kind=="spark" else v6.CYAN,width=4)
+            phase=(t*1.7+i*.19)%1
+            px=int(xs[i]+130+(xs[i+1]-xs[i]-260)*phase)
+            d.ellipse((px-6,544,px+6,556),fill=v6.GREEN)
+        bb=d.textbbox((0,0),captions[i],font=v6.font(15,True))
+        d.text((xs[i]-(bb[2]-bb[0])/2,665),captions[i],font=v6.font(15,True),fill=v6.MUTED)
+    if kind=="pipeline":
+        d.rounded_rectangle((245,780,1675,930),26,fill=(6,25,34),outline=v6.CYAN,width=3)
+        d.text((360,818),"PRESERVE",font=v6.font(23,True),fill=v6.GOLD)
+        d.text((620,818),"STANDARDIZE",font=v6.font(23,True),fill=v6.MUTED)
+        d.text((955,818),"CURATE",font=v6.font(23,True),fill=v6.GOLD)
+        d.text((1205,818),"FEATURE ENGINEER",font=v6.font(23,True),fill=v6.GREEN)
+        d.text((460,875),"GOVERNED LINEAGE FROM SOURCE OBSERVATION TO MACHINE-LEARNING INPUT",font=v6.font(20,True),fill=v6.TEXT)
+    else:
+        d.rounded_rectangle((300,780,1620,930),26,fill=(6,25,34),outline=v6.GREEN,width=3)
+        for j,(label,kind2) in enumerate((("DISTRIBUTED","network"),("PARALLEL","spark"),("VALIDATED","validated"),("FAIL-CLOSED","lock"))):
+            x=410+j*315; draw_tech_icon(d,kind2,x,830,34,v6.GREEN); d.text((x+35,816),label,font=v6.font(20,True),fill=v6.TEXT)
+        d.text((555,878),"NO MODEL WORK UNTIL THE FEATURE CONTRACT PASSES",font=v6.font(21,True),fill=v6.GREEN)
+    return im
+
+
 def two_generation_frame(t):
     im = v6.bg()
     v6.head(im, "THE MODEL GENERATIONS", "V8 operates the frozen reference; V10 tests whether a challenger can earn promotion")
@@ -376,6 +481,7 @@ def two_generation_frame(t):
         outline = colour if i <= active else v6.BORDER
         d.rounded_rectangle((x0, y0, x1, y1), 32, fill=v6.PANEL, outline=outline, width=5)
         d.text((x0 + 46, y0 + 38), version, font=v6.font(82, True), fill=colour)
+        draw_tech_icon(d, "fixed" if version == "V8" else "network", x1 - 105, y0 + 95, 70, colour)
         d.text((x0 + 46, y0 + 150), label, font=v6.font(25, True), fill=v6.TEXT)
         d.text((x0 + 46, y0 + 202), sub, font=v6.font(20, True), fill=v6.MUTED)
         d.line((x0 + 46, y0 + 255, x1 - 46, y0 + 255), fill=v6.BORDER, width=2)
@@ -394,16 +500,16 @@ def v8_operation_frame(t):
     v6.head(im, "HOW V8 WORKS", "A frozen, deterministic path from validated features to ranked portfolio signals")
     d = v6.ImageDraw.Draw(im)
     steps = [
-        ("VALIDATED", "Spark features", "✓"),
-        ("FIXED MODEL", "Frozen artifacts", "◆"),
-        ("SCORE", "Each stock", "▥"),
-        ("RANK", "100-stock universe", "↕"),
-        ("PUBLISH", "Dashboard + monitor", "▣"),
+        ("VALIDATED", "Spark features", "validated"),
+        ("FIXED MODEL", "Frozen artifacts", "fixed"),
+        ("SCORE", "Each stock", "score"),
+        ("RANK", "100-stock universe", "rank"),
+        ("PUBLISH", "Dashboard + monitor", "publish"),
     ]
     xs = [205, 570, 935, 1300, 1665]
     for i, (label, detail, icon) in enumerate(steps):
         on = i <= int(t * len(steps))
-        v6.node(d, xs[i], 515, label, icon, v6.GREEN, on)
+        icon_node(d, xs[i], 515, label, icon, v6.GREEN, on)
         box = d.textbbox((0, 0), detail, font=v6.font(17, True))
         d.text((xs[i] - (box[2] - box[0]) / 2, 625), detail, font=v6.font(17, True), fill=v6.MUTED)
         if i < len(xs) - 1:
@@ -432,11 +538,11 @@ def integrated_v10_frame(mode, t):
         d.ellipse((175, 395, 535, 755), outline=v6.CYAN, width=7)
         d.text((275, 485), "27", font=v6.font(116, True), fill=v6.CYAN)
         d.text((235, 625), "INITIAL CANDIDATES", font=v6.font(20, True), fill=v6.TEXT)
-        steps = [("REGISTER", "declared first"), ("5 FOLDS", "chronological"), ("LOCK", "no retuning"), ("CONFIRM", "independent")]
-        for i, (label, detail) in enumerate(steps):
+        steps = [("REGISTER", "declared first", "features"), ("5 FOLDS", "chronological", "folds"), ("LOCK", "no retuning", "lock"), ("CONFIRM", "independent", "confirm")]
+        for i, (label, detail, icon) in enumerate(steps):
             x = 660 + i * 295
             on = i <= int(t * 4)
-            v6.node(d, x, 565, label, "✓" if i < 3 else "?", v6.GREEN if i < 3 else v6.GOLD, on)
+            icon_node(d, x, 565, label, icon, v6.GREEN if i < 3 else v6.GOLD, on)
             d.text((x - 62, 685), detail.upper(), font=v6.font(14, True), fill=v6.MUTED)
         d.text((565, 855), "DECLARE  →  EVALUATE  →  LOCK  →  CONFIRM", font=v6.font(30, True), fill=v6.GREEN)
     else:
@@ -445,15 +551,16 @@ def integrated_v10_frame(mode, t):
         d.text((242, 485), "54", font=v6.font(116, True), fill=v6.CYAN)
         d.text((215, 625), "CANDIDATES", font=v6.font(22, True), fill=v6.TEXT)
         cards = [
-            ("TOP N", "10 / 15 / 20"), ("HOLD", "10 / 20 sessions"),
-            ("EXPOSURE", "trend controlled"), ("COST", "10 / 30 bps"),
-            ("REGIMES", "conditioned ranking"), ("GATE", "frozen V8 comparison"),
+            ("TOP N", "10 / 15 / 20", "rank"), ("HOLD", "10 / 20 sessions", "folds"),
+            ("EXPOSURE", "trend controlled", "chart"), ("COST", "10 / 30 bps", "cost"),
+            ("REGIMES", "conditioned ranking", "regime"), ("GATE", "frozen V8 comparison", "gate"),
         ]
-        for i, (label, detail) in enumerate(cards):
+        for i, (label, detail, icon) in enumerate(cards):
             x = 620 + (i % 3) * 390
             y = 340 + (i // 3) * 245
             d.rounded_rectangle((x, y, x + 340, y + 185), 24, fill=v6.PANEL, outline=v6.GREEN if i <= int(t * 6) else v6.BORDER, width=4)
             d.text((x + 26, y + 28), label, font=v6.font(21, True), fill=v6.CYAN)
+            draw_tech_icon(d, icon, x + 292, y + 52, 42, v6.GREEN if i <= int(t * 6) else v6.BORDER)
             d.text((x + 26, y + 88), detail, font=v6.font(25, True), fill=v6.TEXT)
         d.text((540, 895), "WIDER SEARCH. SAME RULES. HIGHER STANDARDS.", font=v6.font(29, True), fill=v6.GREEN)
     return im
@@ -490,6 +597,8 @@ _frame_base = v6.frame
 
 
 def frame_v12(scene, t):
+    if scene[0] == "diagram" and scene[1] in {"pipeline", "spark"}:
+        return architecture_frame(scene[1], t)
     if scene[0] == "model_lineage_v12":
         return two_generation_frame(t)
     if scene[0] == "v8_operation":
