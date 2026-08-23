@@ -31,7 +31,7 @@ LABEL = "com.datashepherd.v8paper"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 MONITOR_ROOT = Path("data/model/v8/monitor")
 ALERT_STATE_PATH = MONITOR_ROOT / "alert_state.json"
-FIRST_EVIDENCE_DEADLINE = pd.Timestamp("2026-09-02T03:00:00Z")
+FIRST_EVIDENCE_DEADLINE = pd.Timestamp("2026-09-03T03:00:00Z")
 
 
 def _atomic_write_json(path, payload):
@@ -78,8 +78,7 @@ def _event_key(event):
     return (
         event.get("event_type"),
         event.get("decision_timestamp_utc"),
-        event.get("symbol"),
-        event.get("cohort_id"),
+        event.get("cohort_offset"),
     )
 
 
