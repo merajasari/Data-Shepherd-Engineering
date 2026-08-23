@@ -6,8 +6,9 @@ Changes over V11:
 - folds the retained V9 auto-tuning and Cycle 2 capabilities into V10
 - removes the rejected-winner explanation scene
 - removes every floating detail viewport from the product and engineering scenes
-- keeps the original phone artwork and turns its screen into a small website browser
+- keeps the original phone artwork completely untouched
 - reveals the GitHub repository content already embedded in the engineering artwork
+- gives the founder introduction a more polished executive-engineering treatment
 """
 from __future__ import annotations
 
@@ -49,33 +50,6 @@ def clean_site(path, t, title, subtitle):
             for y in range(y0 + 34, y1, 70):
                 sd.line((x0, y, x1, y), fill=(7, 25, 40), width=1)
 
-        elif path == v6.ASSETS["overview"]:
-            # Keep the phone already present in the artwork.  Only replace its
-            # inner display so it looks like it is browsing the live website.
-            px0, py0 = int(sw * 0.218), int(sh * 0.555)
-            px1, py1 = int(sw * 0.307), int(sh * 0.765)
-            radius = max(8, int(sw * 0.006))
-            sd.rounded_rectangle((px0, py0, px1, py1), radius, fill=(4, 15, 27), outline=(55, 105, 145), width=max(2, sw // 700))
-            bar_h = max(14, int((py1 - py0) * 0.15))
-            sd.rounded_rectangle((px0 + 3, py0 + 3, px1 - 3, py0 + bar_h), radius // 2, fill=(8, 29, 48))
-            dot_r = max(2, sw // 900)
-            for n, colour in enumerate(((255, 95, 86), (255, 189, 46), (39, 201, 63))):
-                cx = px0 + 10 + n * (dot_r * 3)
-                cy = py0 + bar_h // 2
-                sd.ellipse((cx - dot_r, cy - dot_r, cx + dot_r, cy + dot_r), fill=colour)
-            sd.text((px0 + 8, py0 + bar_h + 8), "DATA SHEPHERD", font=v6.font(max(9, sw // 145), True), fill=v6.CYAN)
-            sd.text((px0 + 8, py0 + bar_h + 28), "MARKET AI", font=v6.font(max(8, sw // 175), True), fill=v6.TEXT)
-            chart_top = py0 + bar_h + 52
-            chart_bottom = py1 - 32
-            points = []
-            for n in range(7):
-                xx = px0 + 10 + n * max(8, (px1 - px0 - 22) // 6)
-                yy = chart_bottom - int((chart_bottom - chart_top) * (0.18 + 0.10 * n + 0.13 * (n % 2)))
-                points.append((xx, yy))
-            sd.line(points, fill=v6.GREEN, width=max(2, sw // 650))
-            sd.rounded_rectangle((px0 + 8, py1 - 25, px1 - 8, py1 - 8), 4, fill=(23, 83, 133))
-            sd.text((px0 + 18, py1 - 24), "VIEW SITE", font=v6.font(max(7, sw // 210), True), fill=v6.TEXT)
-
         im.paste(
             v6.cover(source, (1780, 815), 1 + 0.09 * v6.ease(t), 0.5 + 0.05 * v6.math.sin(t * v6.math.pi), 0.47),
             (70, 200),
@@ -96,6 +70,37 @@ def clean_site(path, t, title, subtitle):
 
 
 v6.site = clean_site
+
+
+_founder_base = v6.founder
+
+
+def professional_founder(t, close=False):
+    if close:
+        return _founder_base(t, True)
+
+    im = _founder_base(t, False)
+    d = v6.ImageDraw.Draw(im)
+    # Rebuild only the copy area; retain the original portrait, logo and fade.
+    d.rectangle((70, 300, 935, 900), fill=v6.BG)
+    d.text((95, 325), "MERAJ ASARI", font=v6.font(72, True), fill=v6.CYAN)
+    d.text((98, 420), "FOUNDER  •  LEAD ENGINEER  •  CEO", font=v6.font(27, True), fill=v6.TEXT)
+    d.line((98, 477, 770, 477), fill=v6.CYAN, width=3)
+    d.text((98, 535), "BUILDING DATA SHEPHERD ENGINEERING", font=v6.font(24, True), fill=v6.GOLD)
+    d.multiline_text(
+        (98, 600),
+        "An end-to-end market intelligence platform\nbuilt around trusted data and responsible AI.",
+        font=v6.font(38, True), fill=v6.TEXT, spacing=13,
+    )
+    d.multiline_text(
+        (100, 760),
+        "Data engineering • distributed processing •\nmachine learning • model governance",
+        font=v6.font(25), fill=v6.MUTED, spacing=10,
+    )
+    return im
+
+
+v6.founder = professional_founder
 
 
 def two_generation_frame(t):
@@ -208,6 +213,16 @@ for scene in v6.SC:
     rebuilt.append(scene)
 
 v6.SC[:] = rebuilt
+
+# Give the opening a concise, senior introduction that establishes Meraj's
+# engineering background and the purpose of the platform before the tour begins.
+for i, scene in enumerate(v6.SC):
+    if scene[0] == "founder":
+        v6.SC[i] = (
+            "founder", None,
+            "Meet Meraj Asari, founder, lead engineer and CEO of Data Shepherd Engineering. Drawing on nearly two decades across data platforms, database engineering, cloud systems and technical leadership, he designed and built Data Shepherd as an end-to-end market intelligence platform. The work is guided by one question: what does it take to build a machine-learning system whose data, decisions and results can be trusted?",
+        )
+        break
 
 
 def main():
