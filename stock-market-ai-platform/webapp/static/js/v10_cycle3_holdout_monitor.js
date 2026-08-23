@@ -31,6 +31,8 @@
       <div class="c3-metric"><span>Completed</span><strong data-c3-exits>—</strong></div>
       <div class="c3-metric"><span>Cycle 3 Return</span><strong data-c3-return>—</strong></div>
       <div class="c3-metric"><span>SPY Return</span><strong data-c3-spy>—</strong></div>
+      <div class="c3-metric"><span>Operations</span><strong data-c3-operations>—</strong></div>
+      <div class="c3-metric"><span>Last Health Check</span><strong data-c3-health-time>—</strong></div>
     </div>
     <div data-c3-chart></div>
     <div class="c3-note" data-c3-note>Loading frozen holdout status…</div>
@@ -60,7 +62,11 @@
       set('[data-c3-exits]', data.completed_cohorts ?? 0);
       set('[data-c3-return]', pct(data.strategy_total_return));
       set('[data-c3-spy]', pct(data.spy_total_return));
-      set('[data-c3-note]', `${data.method_note} Frozen SHA: ${data.frozen_sha256}. Brokerage orders: OFF.`);
+      set('[data-c3-operations]', String(data.operational_status||'UNKNOWN').replaceAll('_',' '));
+      const healthTime=data.operational_checked_at_utc ? new Date(data.operational_checked_at_utc).toLocaleString() : '—';
+      set('[data-c3-health-time]', healthTime);
+      const failures=(data.operational_failures||[]).length;
+      set('[data-c3-note]', `${data.method_note} Operations: ${data.operational_status||'UNKNOWN'}${failures ? ` · ${failures} active alert(s)` : ''} · scheduler every 5 minutes. Frozen SHA: ${data.frozen_sha256}. Brokerage orders: OFF.`);
       renderChart(data.curve);
     })
     .catch(error => {
