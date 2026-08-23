@@ -34,7 +34,25 @@ EOF
 
 plutil -lint "$PLIST"
 launchctl bootout "gui/$UID_VALUE/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$UID_VALUE" "$PLIST"
+
+BOOTSTRAPPED=false
+for ATTEMPT in 1 2 3; do
+  if launchctl bootstrap "gui/$UID_VALUE" "$PLIST"; then
+    BOOTSTRAPPED=true
+    break
+  fi
+  echo "LaunchAgent registration attempt $ATTEMPT failed; retrying..." >&2
+  launchctl bootout "gui/$UID_VALUE/$LABEL" 2>/dev/null || true
+  launchctl bootout "gui/$UID_VALUE" "$PLIST" 2>/dev/null || true
+  sleep 1
+done
+
+if [[ "$BOOTSTRAPPED" != true ]]; then
+  echo "Unable to register $LABEL after 3 attempts" >&2
+  exit 1
+fi
+
+launchctl kickstart -k "gui/$UID_VALUE/$LABEL"
 
 echo "Installed $LABEL"
 echo "Bind: 127.0.0.1:5001"
