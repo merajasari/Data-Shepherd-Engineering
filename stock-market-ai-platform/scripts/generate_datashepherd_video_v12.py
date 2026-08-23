@@ -11,13 +11,15 @@ Changes over V11:
 - reveals the GitHub repository content already embedded in the engineering artwork
 - gives the founder introduction a more polished executive-engineering treatment
 - expands the model chapter with V8 operations, V10 research mechanics and a direct comparison
-- uses a warmer, slower and kinder British-female narration profile
+- uses a warm, measured American "friendly instructor" narration profile
 """
 from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -30,17 +32,39 @@ v10 = v11.v10
 v6 = v11.v6
 
 
-# V11 already provides the most natural clause-based British-female narration
-# in the generator chain.  V12 gives that voice a kinder delivery by slowing it
-# slightly and retaining the softer Martha/Serena/Kate preference order.  A
-# caller can still override DS_RATE or DS_VOICE explicitly on the Mac.
+# V11 provides clause-based narration and light mastering.  V12 steers that
+# engine toward the warm American-male "friendly instructor" character in the
+# supplied Frankie reference: confident, approachable and deliberately paced.
+# A caller can still override DS_RATE or DS_VOICE explicitly on the Mac.
 _natural_voice = v6.voice
+
+
+def choose_friendly_instructor_voice():
+    requested = os.environ.get("DS_VOICE", "").strip()
+    if requested:
+        return requested
+    try:
+        listing = subprocess.check_output(["say", "-v", "?"], text=True)
+    except Exception:
+        listing = ""
+    # Prefer warm US male voices commonly available in current macOS releases.
+    # The ordered fallback keeps the render portable across different Macs.
+    for name in ("Evan", "Aaron", "Alex", "Reed", "Nathan", "Tom"):
+        if re.search(rf"(?m)^{re.escape(name)}\s+", listing):
+            return name
+    for line in listing.splitlines():
+        if "en_US" in line:
+            return line.split()[0]
+    return "Alex"
 
 
 def kinder_voice(text, path):
     previous_rate = os.environ.get("DS_RATE")
+    previous_voice = os.environ.get("DS_VOICE")
     if previous_rate is None:
-        os.environ["DS_RATE"] = "178"
+        os.environ["DS_RATE"] = "170"
+    if previous_voice is None:
+        os.environ["DS_VOICE"] = choose_friendly_instructor_voice()
     try:
         return _natural_voice(text, path)
     finally:
@@ -48,6 +72,10 @@ def kinder_voice(text, path):
             os.environ.pop("DS_RATE", None)
         else:
             os.environ["DS_RATE"] = previous_rate
+        if previous_voice is None:
+            os.environ.pop("DS_VOICE", None)
+        else:
+            os.environ["DS_VOICE"] = previous_voice
 
 
 v6.voice = kinder_voice
