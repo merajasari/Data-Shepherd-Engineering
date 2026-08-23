@@ -1,0 +1,25 @@
+{
+  "contract": "V10_CYCLE3_FROZEN_FRESH_FORWARD_HOLDOUT_OPERATIONAL_CHANGE_CONTROL",
+  "locked_at_utc": "2026-08-24T00:00:00+00:00",
+  "holdout_start_utc": "2027-01-04T00:00:00+00:00",
+  "frozen_candidate_sha256": "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38",
+  "candidate_id": "c3_confirm2_blend50",
+  "rules": {
+    "top_n": 10,
+    "weighting": "equal_weight",
+    "entry": "next_session_open",
+    "holding_sessions": 5,
+    "cost_bps_per_dollar_traded": 10,
+    "fresh_holdout_start_utc": "2027-01-04T00:00:00+00:00",
+    "modify_v8": false,
+    "brokerage_orders": false
+  },
+  "protected_files": [
+    {"path": "ml/v10/cycle3_holdout_runner.py", "sha256": "f173ec3986804dd58093cd6a635bea73d68bcdc76661ffa20c52dabed94833cb"},
+    {"path": "ml/v10/cycle3_scheduled_entrypoint.py", "sha256": "1ea123522aa4c5b24c2a127cc02077c37c984ff21e8c2698ccdf2e9902ec3c0a"},
+    {"path": "ml/v10/cycle3_operational_monitor.py", "sha256": "982278b68e440332d009dc56cc96bc0ff62435c82ccb678982b44febf5b5ba93"},
+    {"path": "ml/v10/cycle3_production_preflight.py", "sha256": "3978b104168c8d4f2c2cd3d3f4bd98a6e38d1b0d2d512497c26b828e20064590"},
+    {"path": "scripts/mac/install_v10_cycle3.sh", "sha256": "8f57c3ac33426db856444a6b8d19ce99a116c16eda04614561d042fd06eae2a9"}
+  ],
+  "change_policy": "Any hash mismatch blocks operation. Changes require explicit review, a complete validation-suite pass, and deliberate manifest re-locking. Original November or fresh January holdout outcomes must never justify a runtime change."
+}
