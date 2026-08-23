@@ -44,7 +44,6 @@ def _dashboard_signature():
         _file_signature(STATUS_PATH),
         _file_signature(READINESS_PATH),
         _file_signature(JOURNAL_PATH),
-        _file_signature(V8_RANKED_PATH),
     )
 
 
@@ -99,49 +98,13 @@ def _event_history(events):
 
 
 def _latest_v8_rankings():
-    signature = _file_signature(V8_RANKED_PATH)
-    if signature is None:
-        return {"timestamp_utc": None, "rows": []}
+    """Avoid loading the large historical Phase-4 Parquet in web workers.
 
-    if _rankings_cache["signature"] == signature and _rankings_cache["payload"] is not None:
-        return _rankings_cache["payload"]
-
-    try:
-        panel = pd.read_parquet(
-            V8_RANKED_PATH,
-            columns=["timestamp_utc", "symbol", "score", "score_id", "rank_descending"],
-        )
-        panel["timestamp_utc"] = pd.to_datetime(panel["timestamp_utc"], utc=True, errors="coerce")
-        panel = panel[
-            (panel["score_id"] == "DISTANCE_ONLY")
-            & panel["timestamp_utc"].notna()
-            & (panel["timestamp_utc"] < HOLDOUT_START)
-        ].copy()
-        if panel.empty:
-            payload = {"timestamp_utc": None, "rows": []}
-        else:
-            latest_ts = panel["timestamp_utc"].max()
-            latest = panel[panel["timestamp_utc"] == latest_ts].sort_values(
-                ["rank_descending", "symbol"], ascending=[True, True]
-            )
-            rows = []
-            for _, row in latest.iterrows():
-                rank = int(row["rank_descending"])
-                rows.append({
-                    "rank": rank,
-                    "symbol": str(row["symbol"]),
-                    "score": float(row["score"]),
-                    "selected_top10": rank <= 10,
-                    "target_weight": 0.10 if rank <= 10 else 0.0,
-                })
-            payload = {"timestamp_utc": latest_ts.isoformat(), "rows": rows}
-
-        _rankings_cache["signature"] = signature
-        _rankings_cache["payload"] = payload
-        return payload
-    except Exception:
-        return {"timestamp_utc": None, "rows": []}
-
+    The lightweight readiness artifact is the source for the current frozen
+    Top-10 snapshot. Full historical ranking data remains available to offline
+    research jobs, but is intentionally excluded from request-time serving.
+    """
+    return {"timestamp_utc": None, "rows": []}
 
 def _curve(exits):
     if not exits:
