@@ -2,6 +2,13 @@
   const card = document.querySelector('.v4-chart-card');
   if (!card) return;
 
+  const comparisonGrid = card.closest('.v4-main');
+  if (comparisonGrid) {
+    comparisonGrid.classList.add('smc-single-column');
+    comparisonGrid.insertAdjacentElement('afterend', card);
+    card.classList.add('smc-full-width-card');
+  }
+
   const DATA_URL = '/static/generated/stock_model_comparison.json';
   const COLORS = { V4:'#39e3a1', V5:'#36d8ff', V8:'#efc56b', V10:'#ff7ad9', SPY:'#a78bfa' };
   const ORDER = ['V4','V5','V8','V10','SPY'];
@@ -9,6 +16,7 @@
   const style = document.createElement('style');
   style.id = 'stock-model-comparison-style';
   style.textContent = `
+    .v4-main.smc-single-column{grid-template-columns:1fr}.smc-full-width-card{width:100%;margin-top:20px}
     .smc-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}.smc-title{font-size:1.2rem;font-weight:900}.smc-subtitle{color:var(--muted);font-size:.88rem;margin-top:4px;line-height:1.5;max-width:900px}
     .smc-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}.smc-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0}.smc-btn{padding:9px 13px;border-radius:999px;border:1px solid var(--border);background:var(--panel);color:var(--muted);font-weight:850;cursor:pointer}.smc-btn:hover,.smc-btn.active{color:#06151d;background:linear-gradient(90deg,var(--cyan),var(--green));border-color:transparent}
     .smc-models{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 14px}.smc-model{display:flex;gap:8px;align-items:center;padding:8px 11px;border:1px solid var(--border);border-radius:12px;background:rgba(8,20,36,.5);cursor:pointer;font-weight:850}.smc-model.off{opacity:.42}.smc-dot{width:10px;height:10px;border-radius:50%;display:inline-block}.smc-model-value{color:var(--muted);font-size:.78rem;font-weight:750;margin-left:2px}
