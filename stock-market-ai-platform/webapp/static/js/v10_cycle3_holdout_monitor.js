@@ -1,7 +1,10 @@
 (() => {
   const money = value => value == null ? '—' : '$' + Number(value).toLocaleString(undefined,{maximumFractionDigits:0});
   const pct = value => value == null ? '—' : (Number(value) >= 0 ? '+' : '') + (Number(value) * 100).toFixed(2) + '%';
-  const root = document.querySelector('#v8-holdout-monitor');
+  const root = document.querySelector('#v10-confirmation-card') ||
+    document.querySelector('#v8-launch-readiness-card') ||
+    document.querySelector('#v8-holdout-monitor') ||
+    document.querySelector('footer');
   if (!root || document.querySelector('#v10-cycle3-holdout-monitor')) return;
 
   const section = document.createElement('section');
