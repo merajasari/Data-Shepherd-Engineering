@@ -1,7 +1,7 @@
 """Build a single comparable stock-model performance artifact for the dashboard.
 
 The comparison intentionally excludes V6 and V7. It contains V4, V5, the
-exact frozen V8 candidate, and SPY. Every line is independently normalized to
+exact frozen V8 candidate, the locked V10 primary challenger, and SPY. Every line is independently normalized to
 the same hypothetical $100,000 starting capital at its own first scientifically
 eligible observation. Live paper-account balances are never appended to these
 historical strategy curves.
@@ -26,12 +26,16 @@ V4_PATH = Path("data/model/v4/full_history_equity.json")
 V5_PATH = Path("data/model/v5/phase3/portfolio_daily.csv")
 V8_PATH = Path("data/model/v8/phase5/economic_period_results.csv")
 V8_FREEZE_PATH = Path("data/model/v8/phase7/frozen_candidate_spec.json")
+V10_PATH = Path("data/model/v10/phase3/economic_period_results.csv")
 OUTPUT_PATH = Path("webapp/static/generated/stock_model_comparison.json")
 
 V5_COST_BPS = 10.0
 V5_HOLD_SESSIONS = 5
 V8_COST_BPS = 10
 V8_SCORE_ID = "DISTANCE_ONLY"
+V10_CANDIDATE_ID = "switch_on_negative_spy20"
+V10_COST_BPS = 10
+V10_HOLDOUT_START_UTC = pd.Timestamp("2026-11-02T00:00:00Z")
 V8_EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 
 
@@ -185,6 +189,52 @@ def _load_v8():
     )
 
 
+def _load_v10():
+    if not V10_PATH.exists():
+        raise FileNotFoundError(f"Missing {V10_PATH}; run python -m ml.v10.phase3")
+
+    p = pd.read_csv(V10_PATH)
+    required = {
+        "candidate_id", "cohort_offset", "entry_timestamp_utc",
+        "exit_timestamp_utc", "net_portfolio_return",
+    }
+    missing = sorted(required - set(p.columns))
+    if missing:
+        raise ValueError("V10 economic-period file missing: " + ", ".join(missing))
+
+    p = p[p["candidate_id"] == V10_CANDIDATE_ID].copy()
+    p["entry_timestamp_utc"] = pd.to_datetime(p["entry_timestamp_utc"], utc=True)
+    p["exit_timestamp_utc"] = pd.to_datetime(p["exit_timestamp_utc"], utc=True)
+    p["net_portfolio_return"] = pd.to_numeric(p["net_portfolio_return"], errors="coerce")
+    p = p[
+        np.isfinite(p["net_portfolio_return"])
+        & (p["exit_timestamp_utc"] < V10_HOLDOUT_START_UTC)
+    ].sort_values(["exit_timestamp_utc", "cohort_offset"])
+    if p.empty:
+        raise ValueError(f"No pre-holdout V10 {V10_CANDIDATE_ID} periods found")
+    if p["cohort_offset"].nunique() != 5:
+        raise ValueError("V10 reconstruction requires all five cohort offsets")
+
+    cohort_equity = {offset: STARTING_CAPITAL / 5.0 for offset in range(5)}
+    first_entry = p["entry_timestamp_utc"].min()
+    rows = [{"timestamp": _iso(first_entry), "equity": STARTING_CAPITAL, "source": "V10 starting capital"}]
+    for exit_ts, g in p.groupby("exit_timestamp_utc", sort=True):
+        for row in g.itertuples(index=False):
+            offset = int(row.cohort_offset)
+            if offset in cohort_equity:
+                cohort_equity[offset] *= 1.0 + float(row.net_portfolio_return)
+        rows.append({
+            "timestamp": _iso(exit_ts),
+            "equity": float(sum(cohort_equity.values())),
+            "source": "V10 locked regime-conditioned challenger aggregate of five equal staggered cohorts",
+        })
+    return _series_record(
+        "V10", "V10 reconstructed", rows,
+        "Locked switch_on_negative_spy20 challenger: frozen V8 distance-only ranking when SPY trailing 20-session return is non-negative; fixed 50/50 defensive rank blend when negative. Five equal staggered cohort sleeves, Top-10, next-open entry, 5-session hold, and 10-bps transaction-cost contract.",
+        "development reconstruction; confirmation and future holdout remain separate",
+    )
+
+
 def _load_spy(start_ts):
     df = _spy_frame()
     df = df[df["timestamp_utc"] >= start_ts].copy()
@@ -206,9 +256,10 @@ def main():
     v4 = _load_v4()
     v5 = _load_v5()
     v8 = _load_v8()
-    earliest = min(pd.Timestamp(v4["start_timestamp"]), pd.Timestamp(v5["start_timestamp"]), pd.Timestamp(v8["start_timestamp"]))
+    v10 = _load_v10()
+    earliest = min(pd.Timestamp(s["start_timestamp"]) for s in [v4, v5, v8, v10])
     spy = _load_spy(earliest)
-    series = [v4, v5, v8, spy]
+    series = [v4, v5, v8, v10, spy]
     latest = max(pd.Timestamp(s["end_timestamp"]) for s in series)
 
     payload = {
@@ -220,13 +271,15 @@ def main():
         "excluded_models": ["V6", "V7"],
         "latest_timestamp": latest.isoformat(),
         "comparison_policy": "Each model is shown as its own historical strategy curve on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; no history is backfilled before eligibility.",
-        "holdout_note": "V8 historical reconstruction is development-era evidence only. The genuine 2026-09-01+ forward holdout remains a separate append-only evidence stream and is not retroactively represented as holdout performance.",
+        "holdout_note": "V8 and V10 lines are development-era historical reconstructions only. Genuine V8 forward evidence beginning 2026-09-01 and V10 confirmation/future holdout evidence (formal holdout begins 2026-11-02) remain separate and are never backfilled.",
         "series": series,
         "research_safety": {
             "paper_portfolio_modified": False,
             "paper_journal_modified": False,
             "v8_frozen_spec_modified": False,
             "v8_future_holdout_scored": False,
+            "v10_future_holdout_scored": False,
+            "v10_confirmation_history_modified": False,
             "brokerage_orders": False,
         },
     }
@@ -238,7 +291,7 @@ def main():
     print(f"Output: {OUTPUT_PATH}")
     for s in series:
         print(f"{s['model_id']:>3}: {s['start_timestamp']} -> {s['end_timestamp']} | obs={s['observations']:,} | ${s['ending_equity']:,.2f} | {s['total_return_pct']:+.2f}%")
-    print("V6/V7 excluded. Live paper balance excluded. No orders or state changes.")
+    print("V6/V7 excluded. V8/V10 holdouts and live paper balance excluded. No orders or state changes.")
 
 
 if __name__ == "__main__":
