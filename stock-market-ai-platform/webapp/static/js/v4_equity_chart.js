@@ -61,7 +61,7 @@
     set('smc-visible-range',`${date(a)} → ${date(b)}`);set('smc-model-count',String(active.size));set('smc-latest-date',date(endTime()));set('smc-zoom-status',zoomLevel>1?`${zoomLevel.toFixed(1)}× ZOOM`:'FULL RANGE');set('smc-range-message',`${range} selected — ${active.size} comparison lines shown.`);
     set('smc-scale-note',mode==='normalized'?'Normalized growth index: each model starts at 100 on its own first eligible date.':'Equity USD: every model starts with the same hypothetical $100,000 capital.');
 
-    const W=1200,H=520,p={l:92,r:38,t:30,b:62};const activeSeries=ORDER.filter(id=>active.has(id)&&series[id]);const vis={};let vals=[];
+    const W=1200,H=520,p={l:92,r:128,t:30,b:62};const activeSeries=ORDER.filter(id=>active.has(id)&&series[id]);const vis={};let vals=[];
     activeSeries.forEach(id=>{vis[id]=rowsInDomain(series[id],a,b);vals.push(...vis[id].map(r=>value(series[id],r)));});
     if(!vals.length){const n=el('text',{x:W/2,y:H/2,'text-anchor':'middle',fill:'#91a6c2'});n.textContent='No model observations in this range.';svg.appendChild(n);return;}
     let minV=Math.min(...vals),maxV=Math.max(...vals),span=Math.max(maxV-minV,mode==='equity'?1000:1);minV-=span*.1;maxV+=span*.1;
