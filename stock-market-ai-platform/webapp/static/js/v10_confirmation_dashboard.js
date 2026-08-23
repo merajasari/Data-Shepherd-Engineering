@@ -17,11 +17,11 @@
     card.style.marginTop = '18px';
     card.innerHTML = `
       <div style="padding:22px">
-        <div class="label">V10 RESEARCH DISPOSITION</div>
+        <div class="label">ORIGINAL V10 RESEARCH DISPOSITION</div>
         <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:6px">
           <div>
-            <h2 style="margin:0 0 7px">Development Challenger — Not Frozen</h2>
-            <p style="margin:0;opacity:.74;max-width:850px">V10 remains reconstructed development evidence only. It did not qualify for a genuine November holdout, and it has no production or brokerage authority.</p>
+            <h2 style="margin:0 0 7px">Original Challenger — Rejected</h2>
+            <p style="margin:0;opacity:.74;max-width:850px">The original V10 and Cycle 2 remain reconstructed development evidence only. They did not qualify for the November holdout and have no production or brokerage authority.</p>
           </div>
           <div style="font-size:20px;font-weight:900;color:#ff8d8d">DO NOT FREEZE</div>
         </div>
@@ -29,7 +29,7 @@
           <div class="metric"><span>ORIGINAL V10</span><strong>12 / 13 GATES</strong></div>
           <div class="metric"><span>V10 CYCLE 2</span><strong>12 / 13 GATES</strong></div>
           <div class="metric"><span>FAILED GATE</span><strong>POSITIVE-REGIME NONINFERIORITY</strong></div>
-          <div class="metric"><span>CANDIDATE FROZEN</span><strong>NO</strong></div>
+          <div class="metric"><span>ORIGINAL CANDIDATE FROZEN</span><strong>NO</strong></div>
           <div class="metric"><span>NOVEMBER HOLDOUT</span><strong>NOT ACTIVATED</strong></div>
           <div class="metric"><span>ORDERS</span><strong>DISABLED</strong></div>
         </div>
@@ -37,8 +37,8 @@
           V10 improved negative-market regimes but failed the predeclared positive-regime relative-noninferiority gate. The one-session Cycle-2 exit buffer failed the same gate. The gate was not weakened after results were observed.
         </div>
         <div style="margin-top:12px;font-size:13px;opacity:.75">
-          <strong style="color:var(--green)">Frozen V8 remains the sole genuine forward model.</strong>
-          V10 may remain visible in historical comparison charts only when labeled reconstructed development evidence.
+          <strong style="color:var(--green)">Frozen V8 remains the current forward model.</strong>
+          The separately preregistered Cycle 3 candidate passed 13/13 development gates and is frozen for a fresh Jan 4, 2027 holdout; it has no forward results yet. Historical V10 curves remain reconstructed development evidence.
         </div>
       </div>`;
     if (!existing) anchorElement.insertAdjacentElement('afterend', card);
