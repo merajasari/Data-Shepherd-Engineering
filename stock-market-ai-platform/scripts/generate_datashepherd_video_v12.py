@@ -6,7 +6,8 @@ Changes over V11:
 - folds the retained V9 auto-tuning and Cycle 2 capabilities into V10
 - removes the rejected-winner explanation scene
 - removes every floating detail viewport from the product and engineering scenes
-- keeps the original phone artwork completely untouched
+- preserves the original phone artwork, bezel, angle and placement
+- replaces only the phone's existing screen content with an in-perspective market chart
 - reveals the GitHub repository content already embedded in the engineering artwork
 - gives the founder introduction a more polished executive-engineering treatment
 - expands the model chapter with V8 operations, V10 research mechanics and a direct comparison
@@ -76,6 +77,48 @@ def clean_site(path, t, title, subtitle):
             for y in range(y0 + 34, y1, 70):
                 sd.line((x0, y, x1, y), fill=(7, 25, 40), width=1)
 
+        elif path == v6.ASSETS["overview"]:
+            # The phone is already part of the source artwork.  Its inner screen
+            # is a perspective quadrilateral, not an axis-aligned card.  Paint
+            # directly inside those four corners so the original bezel, tilt,
+            # placement and surrounding artwork remain untouched.
+            quad = [
+                (int(sw * 0.258), int(sh * 0.593)),  # top-left
+                (int(sw * 0.313), int(sh * 0.602)),  # top-right
+                (int(sw * 0.297), int(sh * 0.791)),  # bottom-right
+                (int(sw * 0.244), int(sh * 0.784)),  # bottom-left
+            ]
+            sd.polygon(quad, fill=(3, 13, 23))
+
+            def qpoint(u, v):
+                top_x = quad[0][0] + (quad[1][0] - quad[0][0]) * u
+                top_y = quad[0][1] + (quad[1][1] - quad[0][1]) * u
+                bot_x = quad[3][0] + (quad[2][0] - quad[3][0]) * u
+                bot_y = quad[3][1] + (quad[2][1] - quad[3][1]) * u
+                return (int(top_x + (bot_x - top_x) * v), int(top_y + (bot_y - top_y) * v))
+
+            # Subtle chart grid follows the same phone perspective.
+            for v in (0.25, 0.45, 0.65, 0.85):
+                sd.line((qpoint(0.08, v), qpoint(0.92, v)), fill=(18, 45, 62), width=max(1, sw // 1200))
+            for u in (0.18, 0.38, 0.58, 0.78):
+                sd.line((qpoint(u, 0.18), qpoint(u, 0.88)), fill=(12, 34, 50), width=max(1, sw // 1400))
+
+            values = [0.76, 0.69, 0.72, 0.58, 0.62, 0.47, 0.52, 0.36, 0.40, 0.25, 0.30, 0.16]
+            points = [qpoint(0.09 + i * 0.075, value) for i, value in enumerate(values)]
+            sd.line(points, fill=(20, 92, 111), width=max(4, sw // 310))
+            sd.line(points, fill=v6.GREEN, width=max(2, sw // 600))
+            pulse_index = min(len(points) - 1, int(t * len(points)))
+            px, py = points[pulse_index]
+            pr = max(3, sw // 420)
+            sd.ellipse((px - pr, py - pr, px + pr, py + pr), fill=v6.CYAN)
+
+            # Small volume bars remain inside the original screen.
+            for i, height in enumerate((0.08, 0.13, 0.10, 0.18, 0.15, 0.22, 0.17, 0.27)):
+                left = qpoint(0.10 + i * 0.105, 0.93)
+                top = qpoint(0.10 + i * 0.105, 0.93 - height)
+                right = qpoint(0.15 + i * 0.105, 0.93)
+                sd.polygon([top, qpoint(0.15 + i * 0.105, 0.93 - height), right, left], fill=(31, 119, 139))
+
         im.paste(
             v6.cover(source, (1780, 815), 1 + 0.09 * v6.ease(t), 0.5 + 0.05 * v6.math.sin(t * v6.math.pi), 0.47),
             (70, 200),
@@ -105,24 +148,90 @@ def professional_founder(t, close=False):
     if close:
         return _founder_base(t, True)
 
-    im = _founder_base(t, False)
+    # Build a dedicated Data Shepherd opening rather than covering the original
+    # founder frame.  The portrait is intentionally a small supporting element;
+    # the platform's data/AI story owns the canvas.
+    im = v6.bg()
     d = v6.ImageDraw.Draw(im)
-    # Rebuild only the copy area; retain the original portrait, logo and fade.
-    d.rectangle((70, 300, 935, 900), fill=v6.BG)
-    d.text((95, 325), "MERAJ ASARI", font=v6.font(72, True), fill=v6.CYAN)
-    d.text((98, 420), "FOUNDER  •  LEAD ENGINEER  •  CEO", font=v6.font(27, True), fill=v6.TEXT)
-    d.line((98, 477, 770, 477), fill=v6.CYAN, width=3)
-    d.text((98, 535), "BUILDING DATA SHEPHERD ENGINEERING", font=v6.font(24, True), fill=v6.GOLD)
+
+    # Layered cyan/green glows create depth while retaining the site's dark navy
+    # palette.  They are drawn as translucent rings so the grid remains visible.
+    glow = v6.Image.new("RGBA", (v6.W, v6.H), (0, 0, 0, 0))
+    gd = v6.ImageDraw.Draw(glow)
+    core_x, core_y = 1270, 610
+    for radius in range(470, 90, -38):
+        alpha = max(3, int(27 * (1 - radius / 520)))
+        colour = (*v6.CYAN, alpha) if (radius // 38) % 2 else (*v6.GREEN, alpha)
+        gd.ellipse((core_x - radius, core_y - radius, core_x + radius, core_y + radius), outline=colour, width=3)
+    im = v6.Image.alpha_composite(im.convert("RGBA"), glow).convert("RGB")
+    d = v6.ImageDraw.Draw(im)
+
+    v6.logo(im, 62, 38, 300, 112)
+    d.text((100, 250), "MERAJ ASARI", font=v6.font(68, True), fill=v6.TEXT)
+    d.text((103, 336), "FOUNDER  •  LEAD ENGINEER  •  CEO", font=v6.font(25, True), fill=v6.CYAN)
+    d.line((103, 395, 700, 395), fill=v6.CYAN, width=3)
+    d.text((103, 455), "BUILDING TRUSTED", font=v6.font(54, True), fill=v6.TEXT)
+    d.text((103, 520), "DATA & AI SYSTEMS", font=v6.font(54, True), fill=v6.GREEN)
     d.multiline_text(
-        (98, 600),
-        "An end-to-end market intelligence platform\nbuilt around trusted data and responsible AI.",
-        font=v6.font(38, True), fill=v6.TEXT, spacing=13,
+        (105, 610),
+        "Governed pipelines. Transparent machine learning.\nEvidence that earns its way into the platform.",
+        font=v6.font(25), fill=v6.MUTED, spacing=13,
     )
-    d.multiline_text(
-        (100, 760),
-        "Data engineering • distributed processing •\nmachine learning • model governance",
-        font=v6.font(25), fill=v6.MUTED, spacing=10,
-    )
+
+    # Animated neural/data graph.  Fixed geometry makes every render
+    # reproducible; the travelling pulses supply restrained motion.
+    nodes = [
+        (1020, 475), (1155, 385), (1320, 420), (1445, 520),
+        (1045, 650), (1195, 565), (1350, 610), (1490, 690),
+        (1110, 790), (1290, 760), (1430, 830),
+    ]
+    edges = [
+        (0, 1), (0, 4), (1, 2), (1, 5), (2, 3), (2, 6),
+        (3, 6), (4, 5), (4, 8), (5, 6), (5, 8), (5, 9),
+        (6, 7), (6, 9), (7, 10), (8, 9), (9, 10),
+    ]
+    for a, b in edges:
+        d.line((*nodes[a], *nodes[b]), fill=(24, 86, 111), width=2)
+        phase = (t * 1.8 + (a * 0.13 + b * 0.07)) % 1.0
+        px = int(nodes[a][0] + (nodes[b][0] - nodes[a][0]) * phase)
+        py = int(nodes[a][1] + (nodes[b][1] - nodes[a][1]) * phase)
+        d.ellipse((px - 5, py - 5, px + 5, py + 5), fill=v6.GREEN)
+    for i, (x, y) in enumerate(nodes):
+        r = 9 if i not in (5, 6) else 13
+        d.ellipse((x - r - 7, y - r - 7, x + r + 7, y + r + 7), outline=(26, 105, 132), width=2)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=v6.CYAN if i % 3 else v6.GREEN)
+
+    d.ellipse((1195, 535, 1405, 745), fill=(7, 24, 42), outline=v6.CYAN, width=5)
+    d.ellipse((1220, 560, 1380, 720), outline=v6.GREEN, width=2)
+    ai_box = d.textbbox((0, 0), "AI", font=v6.font(66, True))
+    d.text((1300 - (ai_box[2] - ai_box[0]) / 2, 595), "AI", font=v6.font(66, True), fill=v6.TEXT)
+    d.text((1240, 680), "ML CORE", font=v6.font(19, True), fill=v6.GREEN)
+
+    # Compact portrait in the top-right.  It is part of the composition rather
+    # than a full-height split screen, leaving the AI scene visually dominant.
+    card = (1535, 52, 1840, 360)
+    d.rounded_rectangle(card, 26, fill=(7, 22, 38), outline=v6.CYAN, width=3)
+    portrait_path = v6.fp()
+    if portrait_path:
+        portrait = v6.cover(v6.load(portrait_path), (267, 267), 1.05, 0.5, 0.22)
+        mask = v6.Image.new("L", portrait.size, 0)
+        v6.ImageDraw.Draw(mask).rounded_rectangle((0, 0, 266, 266), 20, fill=255)
+        im.paste(portrait, (1554, 71), mask)
+    else:
+        d.ellipse((1625, 105, 1750, 230), outline=v6.CYAN, width=5)
+        d.arc((1592, 190, 1783, 350), 190, 350, fill=v6.CYAN, width=5)
+
+    # A concise governed-data path anchors the lower third without competing
+    # with the narration or portrait.
+    labels = [("BRONZE", v6.GOLD), ("SILVER", v6.MUTED), ("GOLD", v6.GOLD), ("SPARK", v6.CYAN), ("V8", v6.GREEN), ("V10", v6.CYAN)]
+    x0, y0, gap = 115, 885, 277
+    for i, (label, colour) in enumerate(labels):
+        x = x0 + i * gap
+        d.rounded_rectangle((x, y0, x + 208, y0 + 72), 18, fill=(7, 24, 41), outline=colour, width=2)
+        box = d.textbbox((0, 0), label, font=v6.font(21, True))
+        d.text((x + 104 - (box[2] - box[0]) / 2, y0 + 23), label, font=v6.font(21, True), fill=colour)
+        if i < len(labels) - 1:
+            d.line((x + 211, y0 + 36, x + gap - 10, y0 + 36), fill=v6.BORDER, width=3)
     return im
 
 
@@ -314,13 +423,12 @@ for scene in v6.SC:
 
 v6.SC[:] = rebuilt
 
-# Give the opening a concise, senior introduction that establishes Meraj's
-# engineering background and the purpose of the platform before the tour begins.
+# Give the opening a concise, senior introduction before the platform tour.
 for i, scene in enumerate(v6.SC):
     if scene[0] == "founder":
         v6.SC[i] = (
             "founder", None,
-            "Meet Meraj Asari, founder, lead engineer and CEO of Data Shepherd Engineering. Drawing on nearly two decades across data platforms, database engineering, cloud systems and technical leadership, he designed and built Data Shepherd as an end-to-end market intelligence platform. The work is guided by one question: what does it take to build a machine-learning system whose data, decisions and results can be trusted?",
+            "Meet Meraj Asari, founder, lead engineer and CEO of Data Shepherd Engineering. With nearly two decades in data and cloud engineering, he built Data Shepherd to turn governed market data into transparent, testable artificial intelligence.",
         )
         break
 
