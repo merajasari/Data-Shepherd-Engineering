@@ -108,9 +108,33 @@ def openai_female_voice(text, path):
         _openai_tts_used = True
         print(f"Narration voice: OpenAI {voice_name} ({model}, speed {speed:.2f})")
         return True
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, subprocess.CalledProcessError) as exc:
-        detail = f"HTTP {exc.code}" if isinstance(exc, urllib.error.HTTPError) else type(exc).__name__
-        print(f"OpenAI narration unavailable ({detail}); using the Zoe/macOS female fallback.")
+    except urllib.error.HTTPError as exc:
+        error_code = f"http_{exc.code}"
+        error_message = "OpenAI rejected the speech request."
+        try:
+            body = json.loads(exc.read().decode("utf-8"))
+            error = body.get("error", {})
+            error_code = error.get("code") or error.get("type") or error_code
+            error_message = error.get("message") or error_message
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            pass
+        print(f"OpenAI narration unavailable: {error_code} — {error_message}")
+        if provider == "openai":
+            raise RuntimeError(
+                "OpenAI narration was explicitly required. Resolve the API billing/rate-limit "
+                "error above, then rerun; no macOS fallback was generated."
+            ) from None
+        print("Using the Zoe/macOS female fallback because DS_TTS_PROVIDER is auto.")
+        return False
+    except (urllib.error.URLError, TimeoutError, subprocess.CalledProcessError) as exc:
+        detail = type(exc).__name__
+        print(f"OpenAI narration unavailable ({detail}).")
+        if provider == "openai":
+            raise RuntimeError(
+                "OpenAI narration was explicitly required. Resolve the connection/audio error "
+                "above, then rerun; no macOS fallback was generated."
+            ) from None
+        print("Using the Zoe/macOS female fallback because DS_TTS_PROVIDER is auto.")
         return False
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
