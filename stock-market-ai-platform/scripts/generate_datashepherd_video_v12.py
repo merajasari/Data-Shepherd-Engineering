@@ -9,6 +9,7 @@ Changes over V11:
 - keeps the original phone artwork completely untouched
 - reveals the GitHub repository content already embedded in the engineering artwork
 - gives the founder introduction a more polished executive-engineering treatment
+- expands the model chapter with V8 operations, V10 research mechanics and a direct comparison
 """
 from __future__ import annotations
 
@@ -105,16 +106,16 @@ v6.founder = professional_founder
 
 def two_generation_frame(t):
     im = v6.bg()
-    v6.head(im, "THE MODEL GENERATIONS", "Two model systems: frozen V8 and the integrated V10 research challenger")
+    v6.head(im, "THE MODEL GENERATIONS", "V8 operates the frozen reference; V10 tests whether a challenger can earn promotion")
     d = v6.ImageDraw.Draw(im)
     cards = [
         (
             170, 310, 870, 845, "V8", "FROZEN PRODUCTION MODEL", "Production reference",
-            ["100-stock ranking", "Portfolio signals", "Frozen model contract", "Website + scheduler integration"], v6.GREEN,
+            ["Validated Spark features", "Deterministic 100-stock ranking", "Frozen model + feature contract", "Dashboard + paper monitoring"], v6.GREEN,
         ),
         (
             1050, 310, 1750, 845, "V10", "INTEGRATED ML RESEARCH", "Next-generation challenger",
-            ["Bounded auto-tuning engine", "Cycle 2 expanded search", "Regime-conditioned ranking", "Independent confirmation + holdout"], v6.CYAN,
+            ["Bounded automatic tuning", "Chronological folds + Cycle 2", "Regime and cost robustness", "Independent confirmation + holdout"], v6.CYAN,
         ),
     ]
     active = min(1, int(t * 2))
@@ -131,7 +132,42 @@ def two_generation_frame(t):
             d.text((x0 + 86, yy), bullet, font=v6.font(22, True), fill=v6.TEXT)
         d.rounded_rectangle((x0 + 46, y1 - 82, x1 - 46, y1 - 34), 14, fill=(6, 20, 34), outline=outline, width=2)
         d.text((x0 + 80, y1 - 69), "MACHINE LEARNING / AI", font=v6.font(18, True), fill=colour)
-    d.text((470, 920), "V10 INHERITS EVERY RETAINED CHALLENGER CAPABILITY.", font=v6.font(28, True), fill=v6.GOLD)
+    d.text((305, 920), "V8 OPERATES.  V10 CHALLENGES.  RESEARCH CANNOT SILENTLY CHANGE THE REFERENCE.", font=v6.font(25, True), fill=v6.GOLD)
+    return im
+
+
+def v8_operation_frame(t):
+    im = v6.bg()
+    v6.head(im, "HOW V8 WORKS", "A frozen, deterministic path from validated features to ranked portfolio signals")
+    d = v6.ImageDraw.Draw(im)
+    steps = [
+        ("VALIDATED", "Spark features", "✓"),
+        ("FIXED MODEL", "Frozen artifacts", "◆"),
+        ("SCORE", "Each stock", "▥"),
+        ("RANK", "100-stock universe", "↕"),
+        ("PUBLISH", "Dashboard + monitor", "▣"),
+    ]
+    xs = [205, 570, 935, 1300, 1665]
+    for i, (label, detail, icon) in enumerate(steps):
+        on = i <= int(t * len(steps))
+        v6.node(d, xs[i], 515, label, icon, v6.GREEN, on)
+        box = d.textbbox((0, 0), detail, font=v6.font(17, True))
+        d.text((xs[i] - (box[2] - box[0]) / 2, 625), detail, font=v6.font(17, True), fill=v6.MUTED)
+        if i < len(xs) - 1:
+            d.line((xs[i] + 130, 515, xs[i + 1] - 130, 515), fill=v6.GREEN, width=4)
+
+    d.rounded_rectangle((165, 735, 1755, 905), 26, fill=(6, 25, 34), outline=v6.GREEN, width=3)
+    guards = [
+        ("FIXED INPUT CONTRACT", "same feature meaning"),
+        ("NO AUTO-RETUNING", "artifacts stay locked"),
+        ("FAIL-CLOSED", "no ranking on bad data"),
+        ("REPRODUCIBLE", "same inputs, same result"),
+    ]
+    for i, (label, detail) in enumerate(guards):
+        x = 215 + i * 390
+        d.text((x, 770), label, font=v6.font(18, True), fill=v6.CYAN)
+        d.text((x, 815), detail, font=v6.font(17), fill=v6.TEXT)
+    d.text((580, 945), "V8'S RESPONSIBILITY IS CONSISTENCY — NOT EXPERIMENTATION.", font=v6.font(25, True), fill=v6.GREEN)
     return im
 
 
@@ -170,14 +206,45 @@ def integrated_v10_frame(mode, t):
     return im
 
 
+def model_comparison_frame(t):
+    im = v6.bg()
+    v6.head(im, "V8 AND V10 — DIFFERENT BY DESIGN", "The active reference and the research challenger have separate responsibilities")
+    d = v6.ImageDraw.Draw(im)
+    rows = [
+        ("ROLE", "Stable platform reference", "Research challenger"),
+        ("MODEL CONTRACT", "Frozen and deterministic", "Preregistered bounded search"),
+        ("CORE BEHAVIOR", "Score and rank 100 stocks", "Tune, test and stress challengers"),
+        ("EVALUATION", "Paper monitoring", "Folds, regimes, costs, holdout"),
+        ("CHANGE POLICY", "Never changes silently", "Must pass every gate to advance"),
+    ]
+    d.rounded_rectangle((120, 285, 1800, 855), 28, fill=v6.PANEL, outline=v6.BORDER, width=3)
+    d.text((180, 320), "RESPONSIBILITY", font=v6.font(19, True), fill=v6.MUTED)
+    d.text((690, 315), "V8 — FROZEN REFERENCE", font=v6.font(24, True), fill=v6.GREEN)
+    d.text((1250, 315), "V10 — CHALLENGER", font=v6.font(24, True), fill=v6.CYAN)
+    d.line((160, 370, 1760, 370), fill=v6.BORDER, width=2)
+    for i, (label, v8_text, v10_text) in enumerate(rows):
+        y = 405 + i * 88
+        if i <= int(t * len(rows)):
+            d.rounded_rectangle((150, y - 12, 1770, y + 60), 12, fill=(7, 22, 39))
+        d.text((180, y), label, font=v6.font(17, True), fill=v6.MUTED)
+        d.text((690, y), v8_text, font=v6.font(19, True), fill=v6.TEXT)
+        d.text((1250, y), v10_text, font=v6.font(19, True), fill=v6.TEXT)
+    d.text((345, 920), "V10 MAY STUDY A BETTER PATH.  IT CANNOT MODIFY V8 OR PROMOTE ITSELF.", font=v6.font(27, True), fill=v6.GOLD)
+    return im
+
+
 _frame_base = v6.frame
 
 
 def frame_v12(scene, t):
     if scene[0] == "model_lineage_v12":
         return two_generation_frame(t)
+    if scene[0] == "v8_operation":
+        return v8_operation_frame(t)
     if scene[0] == "v10_integrated":
         return integrated_v10_frame(scene[1], t)
+    if scene[0] == "model_comparison":
+        return model_comparison_frame(t)
     return _frame_base(scene, t)
 
 
@@ -195,15 +262,23 @@ for scene in v6.SC:
             rebuilt.extend([
                 (
                     "model_lineage_v12", None,
-                    "V8 and V10 are the two machine-learning model systems shown here. V8 is the frozen production reference. V10 is the integrated research challenger, carrying forward every retained capability from the earlier research generation, including the automatic-tuning engine, the expanded Cycle Two search, regime-aware ranking, independent confirmation and formal holdout protection.",
+                    "V8 and V10 are separate machine-learning systems with different responsibilities. V8 is the frozen platform reference: stable, deterministic and protected from research changes. V10 is the integrated research challenger. It can search and test new configurations within declared boundaries, but it cannot silently change V8 or promote itself.",
+                ),
+                (
+                    "v8_operation", None,
+                    "V8 begins only after the Spark feature universe passes its validation contract. It applies fixed preprocessing and frozen model artifacts to score each stock, ranks the one-hundred-stock universe cross-sectionally, derives portfolio signals and publishes the result to the scheduler, paper monitor and secure dashboard. The feature definitions, model artifacts and decision rules stay locked. If the data contract fails, V8 does not run. Its responsibility is consistent, reproducible operation — not experimentation.",
                 ),
                 (
                     "v10_integrated", "autotune",
-                    "V10 includes the bounded automatic-tuning engine. Candidate configurations are declared before evaluation, tested across five chronological folds, and the development winner is locked before independent confirmation. The process can search, but it cannot rewrite its rules after seeing the result.",
+                    "V10 works differently. It is allowed to search, but only inside a bounded, preregistered research contract. Candidate configurations are declared before evaluation, tested across five chronological folds, and compared using fixed metrics. A development winner can be identified, but it is then locked before independent confirmation. V10 can explore alternatives; it cannot rewrite its rules after seeing the result.",
                 ),
                 (
                     "v10_integrated", "cycle2",
-                    "V10 also includes the expanded Cycle Two research design: fifty-four deterministic candidate configurations across portfolio size, holding period, trend-controlled exposure and transaction-cost assumptions, together with regime-conditioned ranking and a fixed comparison against frozen V8.",
+                    "The expanded V10 Cycle Two design evaluates fifty-four deterministic candidates across portfolio size, holding period, trend-controlled exposure and transaction-cost assumptions. It also examines regime-conditioned ranking and robustness. Every candidate is measured against the same fixed standard and compared with frozen V8; research results remain isolated from the active reference.",
+                ),
+                (
+                    "model_comparison", None,
+                    "The difference is responsibility. V8 answers: what does the frozen system rank today, using the same validated pipeline and fixed model contract? V10 asks: can a rigorously defined challenger demonstrate a reliable improvement across time, market regimes, trading costs and unseen evidence? Only preregistered gates, a locked winner, independent confirmation and the untouched future holdout could justify a later promotion. Until then, V8 remains unchanged and V10 remains research only.",
                 ),
             ])
             inserted = True
