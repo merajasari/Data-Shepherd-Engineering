@@ -82,7 +82,11 @@ def _verify_freeze():
         spec.get("candidate_id") == CANDIDATE_ID,
         signal.get("v8_signal") == "distance_from_low_20d",
         signal.get("negative_entry") == "two consecutive completed negative_spy20 decisions",
-        signal.get("negative_score") == (\n            "0.5 * percentile_rank(distance_from_low_20d) + "\n            "0.5 * defensive_signal"\n        ),\n        signal.get("positive_score") == "exact V8 raw distance_from_low_20d score",
+        signal.get("negative_score") == (
+            "0.5 * percentile_rank(distance_from_low_20d) + "
+            "0.5 * defensive_signal"
+        ),
+        signal.get("positive_score") == "exact V8 raw distance_from_low_20d score",
         portfolio.get("top_n") == TOP_N,
         portfolio.get("weighting") == "equal_weight",
         portfolio.get("entry") == "next_session_open",
