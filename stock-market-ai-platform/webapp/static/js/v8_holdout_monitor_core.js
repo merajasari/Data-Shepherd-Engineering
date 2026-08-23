@@ -175,8 +175,11 @@
   setInterval(load,30000);
 })();
 
-/* Additive latest-model (frozen V8) equity chart. Inserted above the existing compact V4 chart. */
+/* The standalone latest-model equity chart is superseded by the full-width model comparison. */
 (() => {
+  document.getElementById('v8-compact-equity-card')?.remove();
+  return;
+
   const metrics = document.querySelector('.v4-dashboard .v4-small-metrics');
   if (!metrics || document.getElementById('v8-compact-equity-card')) return;
 
