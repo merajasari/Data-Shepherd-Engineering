@@ -283,3 +283,32 @@ the fixed cost, hit rate, Sharpe, drawdown, and volatility.
 Reconstructed V4/V5/V8/V10 comparisons remain separate from this genuine V8
 forward evidence. Forward results are not a guarantee, forecast, or instruction
 to trade.
+
+
+## Operational change control
+
+The protected runtime source hashes are registered in:
+
+```text
+ml/v8/operational_lock_manifest.json
+```
+
+Verify them with:
+
+```bash
+python -m ml.v8.operational_change_control
+```
+
+Any mismatch produces `Status: BLOCKED`. A protected runtime change is not
+authorized merely because it appears reasonable or passes an isolated test.
+It requires explicit review, a complete suite pass, and deliberate re-locking.
+Holdout outcomes must never be used to justify such a change.
+
+Run the complete release gate with:
+
+```bash
+python -m ml.v8.complete_validation_suite
+```
+
+The suite must report `Status: PASSED` before the operational state can be
+considered verified.
