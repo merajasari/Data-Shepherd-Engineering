@@ -16,10 +16,14 @@ Changes over V11:
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
 import subprocess
+import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -37,6 +41,7 @@ v6 = v11.v6
 # approachable and deliberately paced. A caller can still override DS_RATE or
 # DS_VOICE explicitly on the Mac.
 _natural_voice = v6.voice
+_openai_tts_used = False
 
 
 def choose_friendly_female_voice():
@@ -55,7 +60,65 @@ def choose_friendly_female_voice():
     return "Samantha"
 
 
+def openai_female_voice(text, path):
+    """Generate natural female narration through OpenAI when locally enabled."""
+    global _openai_tts_used
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    provider = os.environ.get("DS_TTS_PROVIDER", "auto").strip().lower()
+    if provider not in {"auto", "openai"} or not api_key:
+        if provider == "openai" and not api_key:
+            print("OPENAI_API_KEY is not set; using the Zoe/macOS female fallback.")
+        return False
+
+    model = os.environ.get("DS_OPENAI_TTS_MODEL", "gpt-4o-mini-tts").strip()
+    voice_name = os.environ.get("DS_OPENAI_VOICE", "coral").strip()
+    speed = float(os.environ.get("DS_OPENAI_SPEED", "0.96"))
+    payload = json.dumps({
+        "model": model,
+        "voice": voice_name,
+        "input": text,
+        "instructions": (
+            "Speak as a warm, natural, professional female narrator and friendly instructor. "
+            "Sound conversational, confident and kind, with clear technical pronunciation, "
+            "gentle emphasis, natural pauses and restrained enthusiasm. Never sound theatrical, "
+            "sales-driven, rushed or robotic."
+        ),
+        "response_format": "wav",
+        "speed": speed,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/audio/speech",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    tmp = Path(tempfile.mkdtemp(prefix="ds_openai_tts_"))
+    try:
+        wav_path = tmp / "speech.wav"
+        with urllib.request.urlopen(request, timeout=180) as response:
+            wav_path.write_bytes(response.read())
+        subprocess.check_call([
+            v6.ff(), "-y", "-i", str(wav_path),
+            "-af", "highpass=f=60,lowpass=f=15000,loudnorm=I=-19:TP=-1.5:LRA=11",
+            "-ar", "22050", "-ac", "1", "-c:a", "pcm_s16be", str(path),
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _openai_tts_used = True
+        print(f"Narration voice: OpenAI {voice_name} ({model}, speed {speed:.2f})")
+        return True
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, subprocess.CalledProcessError) as exc:
+        detail = f"HTTP {exc.code}" if isinstance(exc, urllib.error.HTTPError) else type(exc).__name__
+        print(f"OpenAI narration unavailable ({detail}); using the Zoe/macOS female fallback.")
+        return False
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def kinder_voice(text, path):
+    if openai_female_voice(text, path):
+        return
     previous_rate = os.environ.get("DS_RATE")
     previous_voice = os.environ.get("DS_VOICE")
     if previous_rate is None:
@@ -171,7 +234,14 @@ _founder_base = v6.founder
 
 def professional_founder(t, close=False):
     if close:
-        return _founder_base(t, True)
+        im = _founder_base(t, True)
+        if _openai_tts_used:
+            d = v6.ImageDraw.Draw(im)
+            d.text(
+                (1390, 1015), "AI-GENERATED NARRATION • OPENAI TTS",
+                font=v6.font(14, True), fill=v6.MUTED,
+            )
+        return im
 
     # Build a dedicated Data Shepherd opening rather than covering the original
     # founder frame.  The portrait is intentionally a small supporting element;
