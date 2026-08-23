@@ -121,27 +121,34 @@ def _feature_files():
 def _load_symbol_frame(path):
     data = pd.read_parquet(path).copy()
     ts_col = "timestamp_utc" if "timestamp_utc" in data.columns else "timestamp"
-    required = {
-        ts_col, "open", "close", "downside_vol_ratio_20", "volume_trend_5_20"
-    }
+    required = {ts_col, "open", "close", "volume"}
     if not required.issubset(data.columns):
-        raise ValueError(f"{path} missing required Cycle 3 feature columns")
+        raise ValueError(
+            f"{path} missing timestamp/open/close/volume required to "
+            "reproduce the frozen Cycle 3 signals"
+        )
     frame = pd.DataFrame({
         "timestamp_utc": pd.to_datetime(data[ts_col], utc=True),
         "open": pd.to_numeric(data["open"], errors="coerce"),
         "close": pd.to_numeric(data["close"], errors="coerce"),
-        "downside_vol_ratio_20": pd.to_numeric(
-            data["downside_vol_ratio_20"], errors="coerce"
-        ),
-        "volume_trend_5_20": pd.to_numeric(
-            data["volume_trend_5_20"], errors="coerce"
-        ),
+        "volume": pd.to_numeric(data["volume"], errors="coerce"),
     }).sort_values("timestamp_utc").drop_duplicates("timestamp_utc", keep="last")
-    frame["ret1"] = frame["close"].pct_change()
-    low20 = frame["close"].rolling(20, min_periods=20).min()
-    frame["distance_from_low_20d"] = frame["close"] / low20 - 1.0
-    return frame.set_index("timestamp_utc")
 
+    # Exact causal definitions from ml.v9.phase1._read_symbol, which produced
+    # the development panel used to select and freeze Cycle 3.
+    frame["ret1"] = frame["close"].pct_change()
+    vol20 = frame["ret1"].rolling(20, min_periods=20).std(ddof=0)
+    downside20 = (
+        frame["ret1"].clip(upper=0).rolling(20, min_periods=20).std(ddof=0)
+    )
+    volume5 = frame["volume"].rolling(5, min_periods=5).mean()
+    volume20 = frame["volume"].rolling(20, min_periods=20).mean()
+    low20 = frame["close"].rolling(20, min_periods=20).min()
+
+    frame["distance_from_low_20d"] = frame["close"] / low20 - 1.0
+    frame["downside_vol_ratio_20"] = downside20 / vol20
+    frame["volume_trend_5_20"] = volume5 / volume20 - 1.0
+    return frame.set_index("timestamp_utc")
 
 def _universe():
     if not V8_UNIVERSE_PANEL.exists():
