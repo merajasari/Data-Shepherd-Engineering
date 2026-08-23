@@ -127,7 +127,7 @@ def natural_british_voice(text, path):
             print("Narration mastering unavailable; using clean unmastered AIFF fallback.")
     finally:
         shutil.rmtree(tmp,ignore_errors=True)
-    print(f"Narration voice: {voice_name} (natural British female, ~{base} wpm)")
+    print(f"Narration voice: {voice_name} (natural clause-paced delivery, ~{base} wpm)")
 
 v6.voice = natural_british_voice
 
