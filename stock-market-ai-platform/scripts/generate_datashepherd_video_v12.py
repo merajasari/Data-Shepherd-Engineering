@@ -10,10 +10,12 @@ Changes over V11:
 - reveals the GitHub repository content already embedded in the engineering artwork
 - gives the founder introduction a more polished executive-engineering treatment
 - expands the model chapter with V8 operations, V10 research mechanics and a direct comparison
+- uses a warmer, slower and kinder British-female narration profile
 """
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 from pathlib import Path
 
@@ -25,6 +27,29 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(v11)
 v10 = v11.v10
 v6 = v11.v6
+
+
+# V11 already provides the most natural clause-based British-female narration
+# in the generator chain.  V12 gives that voice a kinder delivery by slowing it
+# slightly and retaining the softer Martha/Serena/Kate preference order.  A
+# caller can still override DS_RATE or DS_VOICE explicitly on the Mac.
+_natural_voice = v6.voice
+
+
+def kinder_voice(text, path):
+    previous_rate = os.environ.get("DS_RATE")
+    if previous_rate is None:
+        os.environ["DS_RATE"] = "178"
+    try:
+        return _natural_voice(text, path)
+    finally:
+        if previous_rate is None:
+            os.environ.pop("DS_RATE", None)
+        else:
+            os.environ["DS_RATE"] = previous_rate
+
+
+v6.voice = kinder_voice
 
 
 # Render site imagery directly instead of calling the V8/V10 site wrappers.
@@ -262,15 +287,15 @@ for scene in v6.SC:
             rebuilt.extend([
                 (
                     "model_lineage_v12", None,
-                    "V8 and V10 are separate machine-learning systems with different responsibilities. V8 is the frozen platform reference: stable, deterministic and protected from research changes. V10 is the integrated research challenger. It can search and test new configurations within declared boundaries, but it cannot silently change V8 or promote itself.",
+                    "V8 and V10 are separate machine-learning systems with different responsibilities. V8 is the frozen platform reference: stable, deterministic and protected from research changes. V10 is the integrated research challenger. It can explore new configurations within declared boundaries, while remaining carefully separated from V8 until every required promotion gate has been satisfied.",
                 ),
                 (
                     "v8_operation", None,
-                    "V8 begins only after the Spark feature universe passes its validation contract. It applies fixed preprocessing and frozen model artifacts to score each stock, ranks the one-hundred-stock universe cross-sectionally, derives portfolio signals and publishes the result to the scheduler, paper monitor and secure dashboard. The feature definitions, model artifacts and decision rules stay locked. If the data contract fails, V8 does not run. Its responsibility is consistent, reproducible operation — not experimentation.",
+                    "V8 begins after the Spark feature universe passes its validation contract. It applies fixed preprocessing and frozen model artifacts to score each stock, ranks the one-hundred-stock universe cross-sectionally, derives portfolio signals and publishes the result to the scheduler, paper monitor and secure dashboard. The feature definitions, model artifacts and decision rules stay locked. If the data contract is not satisfied, V8 simply waits rather than publishing a ranking. Its responsibility is consistent and reproducible operation.",
                 ),
                 (
                     "v10_integrated", "autotune",
-                    "V10 works differently. It is allowed to search, but only inside a bounded, preregistered research contract. Candidate configurations are declared before evaluation, tested across five chronological folds, and compared using fixed metrics. A development winner can be identified, but it is then locked before independent confirmation. V10 can explore alternatives; it cannot rewrite its rules after seeing the result.",
+                    "V10 works differently. It can search, but only inside a bounded, preregistered research contract. Candidate configurations are declared before evaluation, tested across five chronological folds, and compared using fixed metrics. A development winner can be identified and is then carefully locked, unchanged, for independent confirmation. V10 can explore alternatives, while its rules remain fixed once evaluation begins.",
                 ),
                 (
                     "v10_integrated", "cycle2",
@@ -278,7 +303,7 @@ for scene in v6.SC:
                 ),
                 (
                     "model_comparison", None,
-                    "The difference is responsibility. V8 answers: what does the frozen system rank today, using the same validated pipeline and fixed model contract? V10 asks: can a rigorously defined challenger demonstrate a reliable improvement across time, market regimes, trading costs and unseen evidence? Only preregistered gates, a locked winner, independent confirmation and the untouched future holdout could justify a later promotion. Until then, V8 remains unchanged and V10 remains research only.",
+                    "The difference is responsibility. V8 answers: what does the frozen system rank today, using the same validated pipeline and fixed model contract? V10 asks: can a carefully defined challenger demonstrate a reliable improvement across time, market regimes, trading costs and unseen evidence? Preregistered gates, a locked winner, independent confirmation and the untouched future holdout provide the path toward any later promotion. Until that evidence is complete, V8 remains unchanged and V10 remains safely within research.",
                 ),
             ])
             inserted = True
