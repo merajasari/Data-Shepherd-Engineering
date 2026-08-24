@@ -150,6 +150,6 @@ const selectorForm=document.getElementById('stock-selector-form'),stockSelect=do
   <div class="v8h-note">Only completed post-boundary cohorts enter these metrics. No reconstructed results, paper-account balances, or pre-September observations are included. Diagnostic monitoring only; overlapping five-session cohorts are not independent. No brokerage orders.</div>
 </section>
 
-<script src="/static/js/v8_holdout_monitor.js"></script>
+{% if not live_view %}<script src="/static/js/v8_holdout_monitor.js"></script>{% endif %}
 </body>
 </html>
