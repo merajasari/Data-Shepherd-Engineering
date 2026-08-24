@@ -32,8 +32,8 @@
   launcher.setAttribute('aria-label', 'Open Data Shepherd AI assistant');
   launcher.innerHTML = `
     <svg viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M7.5 5.5h17a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H15l-6.4 4.1.9-4.1h-2a3 3 0 0 1-3-3v-11a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
-      <path d="m18.2 9.1.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Zm-6.4 5.6.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7Z" fill="currentColor"/>
+      <path d="M16 3.5c.8 6.9 4.6 11 11.5 12.5C20.6 17.5 16.8 21.6 16 28.5 15.2 21.6 11.4 17.5 4.5 16 11.4 14.5 15.2 10.4 16 3.5Z" fill="currentColor"/>
+      <path d="M25.2 4.6c.25 2.15 1.45 3.35 3.6 3.8-2.15.45-3.35 1.65-3.6 3.8-.25-2.15-1.45-3.35-3.6-3.8 2.15-.45 3.35-1.65 3.6-3.8ZM7.3 22.6c.2 1.65 1.1 2.55 2.75 2.9-1.65.35-2.55 1.25-2.75 2.9-.2-1.65-1.1-2.55-2.75-2.9 1.65-.35 2.55-1.25 2.75-2.9Z" fill="currentColor" opacity=".82"/>
     </svg>`;
   document.body.appendChild(launcher);
 
