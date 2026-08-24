@@ -61,7 +61,8 @@ COMPARISON_STATIC_INPUTS = (
     PROJECT_ROOT / "data/model/v5/phase3/portfolio_daily.csv",
     PROJECT_ROOT / "data/model/v8/phase5/economic_period_results.csv",
     PROJECT_ROOT / "data/model/v8/phase7/frozen_candidate_spec.json",
-    PROJECT_ROOT / "data/model/v10/phase3/economic_period_results.csv",
+    PROJECT_ROOT / "data/model/v10/cycle3/economic_period_results.csv",
+    PROJECT_ROOT / "data/model/v10/cycle3/freeze/frozen_candidate_spec.json",
 )
 
 
@@ -225,7 +226,7 @@ def refresh_stock_model_comparison_if_stale():
     The SPY feature parquet is intentionally included because it supplies the
     comparison calendar and benchmark curve. Rebuilding this artifact does not
     rerun V8 research phases or create holdout evidence; frozen historical model
-    curves remain sourced from their existing development artifacts.
+    curves remain sourced from their existing development artifacts. The V10 inputs are the separately frozen Cycle 3 development results and frozen specification.
     """
     sources = [*COMPARISON_STATIC_INPUTS, feature_path("SPY")]
     missing = [
