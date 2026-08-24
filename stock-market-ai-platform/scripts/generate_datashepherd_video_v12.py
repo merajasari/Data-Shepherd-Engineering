@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Data Shepherd Engineering showcase V12.
+"""Data Shepherd Engineering IntroVideo12 (legacy filename compatibility).
+
+The historical ``video_v12`` filename predates the IntroVideo naming rule.
+New marketing videos must use ``IntroVideo<N>`` so they cannot be confused
+with ML model generations such as V8 and V10.
 
 Changes over V11:
 - presents only V8 and V10 as model generations
@@ -39,7 +43,8 @@ v6 = v11.v6
 from platform_icon_assets import ICON_BASE64
 
 
-# V11 provides clause-based narration and light mastering.  V12 steers that
+# The legacy IntroVideo11 engine provides clause-based narration and light
+# mastering. IntroVideo12 steers that
 # engine toward a warm female "friendly instructor" character: confident,
 # approachable and deliberately paced. A caller can still override DS_RATE or
 # DS_VOICE explicitly on the Mac.
