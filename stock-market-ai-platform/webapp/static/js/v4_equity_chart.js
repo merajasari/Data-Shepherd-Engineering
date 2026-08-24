@@ -1,11 +1,19 @@
 (() => {
   const card = document.querySelector('.v4-chart-card');
   if (!card) return;
+  const liveStockView = new URLSearchParams(window.location.search).get('view') === 'live';
+  if (liveStockView) {
+    card.remove();
+    return;
+  }
 
   const comparisonGrid = card.closest('.v4-main');
   if (comparisonGrid) comparisonGrid.classList.add('smc-single-column');
+  const dashboardTabs = document.querySelector('.shell > .ds-dashboard-tabs');
   const pageHeader = document.querySelector('.shell > header');
-  if (pageHeader) {
+  if (dashboardTabs) {
+    dashboardTabs.insertAdjacentElement('afterend', card);
+  } else if (pageHeader) {
     pageHeader.insertAdjacentElement('afterend', card);
   } else if (comparisonGrid) {
     comparisonGrid.insertAdjacentElement('afterend', card);
