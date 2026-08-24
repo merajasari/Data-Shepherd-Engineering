@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -71,10 +72,11 @@ def _service(label):
 
 
 def _endpoint(url):
+    started = time.perf_counter()
     try:
         with urlopen(url, timeout=15) as response:
             payload = json.loads(response.read().decode("utf-8"))
-            return response.status, payload
+            return response.status, payload, (time.perf_counter() - started) * 1000.0
     except (OSError, URLError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"{url}: {type(exc).__name__}: {exc}") from exc
 
@@ -121,9 +123,10 @@ def main():
     responses = {}
     for name, url in ENDPOINTS.items():
         try:
-            status, payload = _endpoint(url)
+            status, payload, elapsed_ms = _endpoint(url)
             responses[name] = payload
             _check(status == 200, f"API {name}", f"HTTP {status}", failures)
+            _check(elapsed_ms < 2000.0, f"API {name} latency", f"{elapsed_ms:.1f} ms (<2000 ms)", failures)
         except RuntimeError as exc:
             responses[name] = {}
             _check(False, f"API {name}", str(exc), failures)
@@ -136,6 +139,11 @@ def main():
            "V8 API frozen identity", str(v8_api.get("frozen_sha256")), failures)
     _check(v8_api.get("brokerage_orders") is False,
            "V8 API brokerage authority", "OFF", failures)
+    v8_ops = v8_api.get("launch_operations") or {}
+    _check(v8_ops.get("request_time_historical_parquet_load") is False,
+           "V8 API historical Parquet load", "DISABLED", failures)
+    _check(float(v8_ops.get("response_cache_ttl_seconds") or 0) >= 10.0,
+           "V8 API response cache", f"{v8_ops.get('response_cache_ttl_seconds')} seconds", failures)
 
     v10_api = responses.get("v10_cycle3", {})
     _check(v10_api.get("frozen_sha256") == V10_SHA,
