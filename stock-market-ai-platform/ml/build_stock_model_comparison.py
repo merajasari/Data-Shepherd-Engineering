@@ -1,7 +1,7 @@
 """Build a single comparable stock-model performance artifact for the dashboard.
 
 The comparison intentionally excludes V6 and V7. It contains V4, V5, the
-exact frozen V8 candidate, the locked V10 primary challenger, and SPY. Every line is independently normalized to
+exact frozen V8 candidate, the separately frozen V10 Cycle 3 candidate, and SPY. Every line is independently normalized to
 the same hypothetical $100,000 starting capital at its own first scientifically
 eligible observation. Live paper-account balances are never appended to these
 historical strategy curves.
@@ -26,16 +26,18 @@ V4_PATH = Path("data/model/v4/full_history_equity.json")
 V5_PATH = Path("data/model/v5/phase3/portfolio_daily.csv")
 V8_PATH = Path("data/model/v8/phase5/economic_period_results.csv")
 V8_FREEZE_PATH = Path("data/model/v8/phase7/frozen_candidate_spec.json")
-V10_PATH = Path("data/model/v10/phase3/economic_period_results.csv")
+V10_PATH = Path("data/model/v10/cycle3/economic_period_results.csv")
+V10_FREEZE_PATH = Path("data/model/v10/cycle3/freeze/frozen_candidate_spec.json")
 OUTPUT_PATH = Path("webapp/static/generated/stock_model_comparison.json")
 
 V5_COST_BPS = 10.0
 V5_HOLD_SESSIONS = 5
 V8_COST_BPS = 10
 V8_SCORE_ID = "DISTANCE_ONLY"
-V10_CANDIDATE_ID = "switch_on_negative_spy20"
+V10_CANDIDATE_ID = "c3_confirm2_blend50"
 V10_COST_BPS = 10
-V10_HOLDOUT_START_UTC = pd.Timestamp("2026-11-02T00:00:00Z")
+V10_HOLDOUT_START_UTC = pd.Timestamp("2027-01-04T00:00:00Z")
+V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
 V8_EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 
 
@@ -189,9 +191,26 @@ def _load_v8():
     )
 
 
+def _validate_v10_freeze():
+    if not V10_FREEZE_PATH.exists():
+        raise FileNotFoundError(
+            f"Missing {V10_FREEZE_PATH}; run python -m ml.v10.cycle3_freeze_audit"
+        )
+    spec = json.loads(V10_FREEZE_PATH.read_text(encoding="utf-8"))
+    digest = str(spec.get("spec_sha256") or "")
+    if digest != V10_EXPECTED_SHA:
+        raise RuntimeError(f"V10 Cycle 3 frozen SHA mismatch: {digest} != {V10_EXPECTED_SHA}")
+    if str(spec.get("candidate_id") or "") != V10_CANDIDATE_ID:
+        raise RuntimeError(
+            f"V10 Cycle 3 candidate mismatch: {spec.get('candidate_id')} != {V10_CANDIDATE_ID}"
+        )
+    return spec
+
+
 def _load_v10():
+    spec = _validate_v10_freeze()
     if not V10_PATH.exists():
-        raise FileNotFoundError(f"Missing {V10_PATH}; run python -m ml.v10.phase3")
+        raise FileNotFoundError(f"Missing {V10_PATH}; run python -m ml.v10.cycle3")
 
     p = pd.read_csv(V10_PATH)
     required = {
@@ -226,12 +245,12 @@ def _load_v10():
         rows.append({
             "timestamp": _iso(exit_ts),
             "equity": float(sum(cohort_equity.values())),
-            "source": "V10 locked regime-conditioned challenger aggregate of five equal staggered cohorts",
+            "source": "Frozen V10 Cycle 3 aggregate of five equal staggered cohorts",
         })
     return _series_record(
-        "V10", "V10 reconstructed", rows,
-        "Locked switch_on_negative_spy20 challenger: frozen V8 distance-only ranking when SPY trailing 20-session return is non-negative; fixed 50/50 defensive rank blend when negative. Five equal staggered cohort sleeves, Top-10, next-open entry, 5-session hold, and 10-bps transaction-cost contract.",
-        "development reconstruction; confirmation and future holdout remain separate",
+        "V10", "V10 Cycle 3 frozen", rows,
+        f"Frozen Cycle 3 candidate {spec.get('candidate_id')}, SHA {V10_EXPECTED_SHA}: exact V8 raw distance score outside confirmed negative regimes; fixed 50/50 percentile-rank distance and defensive-signal blend after two consecutive completed negative-SPY20 decisions. Five equal staggered cohort sleeves, Top-10, next-open entry, 5-session hold, and 10-bps transaction-cost contract.",
+        "frozen Cycle 3 development reconstruction; January 2027 forward holdout remains separate",
     )
 
 
@@ -271,7 +290,7 @@ def main():
         "excluded_models": ["V6", "V7"],
         "latest_timestamp": latest.isoformat(),
         "comparison_policy": "Each model is shown as its own historical strategy curve on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; no history is backfilled before eligibility.",
-        "holdout_note": "V8 and V10 lines are development-era historical reconstructions only. Genuine V8 forward evidence beginning 2026-09-01 and V10 confirmation/future holdout evidence (formal holdout begins 2026-11-02) remain separate and are never backfilled.",
+        "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. Genuine V8 forward evidence beginning 2026-09-01 and genuine V10 Cycle 3 forward evidence beginning 2027-01-04 remain separate and are never backfilled.",
         "series": series,
         "research_safety": {
             "paper_portfolio_modified": False,
@@ -279,7 +298,8 @@ def main():
             "v8_frozen_spec_modified": False,
             "v8_future_holdout_scored": False,
             "v10_future_holdout_scored": False,
-            "v10_confirmation_history_modified": False,
+            "v10_cycle3_frozen_spec_modified": False,
+            "v10_cycle3_forward_holdout_scored": False,
             "brokerage_orders": False,
         },
     }
@@ -291,7 +311,7 @@ def main():
     print(f"Output: {OUTPUT_PATH}")
     for s in series:
         print(f"{s['model_id']:>3}: {s['start_timestamp']} -> {s['end_timestamp']} | obs={s['observations']:,} | ${s['ending_equity']:,.2f} | {s['total_return_pct']:+.2f}%")
-    print("V6/V7 excluded. V8/V10 holdouts and live paper balance excluded. No orders or state changes.")
+    print("V6/V7 excluded. Frozen V8 and V10 Cycle 3 forward holdouts and live paper balance excluded. No orders or state changes.")
 
 
 if __name__ == "__main__":
