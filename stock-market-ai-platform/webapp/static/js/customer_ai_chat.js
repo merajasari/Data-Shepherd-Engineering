@@ -19,6 +19,9 @@
     .ds-chat-message{max-width:88%;padding:10px 12px;border-radius:14px;line-height:1.45;font-size:.88rem;white-space:pre-wrap}
     .ds-chat-assistant{align-self:flex-start;background:#10223b;border:1px solid rgba(54,216,255,.18)}
     .ds-chat-user{align-self:flex-end;background:rgba(57,227,161,.12);border:1px solid rgba(57,227,161,.25)}
+    .ds-chat-suggestions{display:flex;flex-wrap:wrap;gap:7px;padding:0 16px 12px}
+    .ds-chat-suggestion{padding:7px 9px;border:1px solid rgba(54,216,255,.28);border-radius:999px;background:rgba(54,216,255,.07);color:#bfefff;font-size:.72rem;font-weight:750;cursor:pointer;text-align:left}
+    .ds-chat-suggestion:hover,.ds-chat-suggestion:focus-visible{background:rgba(54,216,255,.16);outline:none}
     .ds-chat-compose{display:grid;grid-template-columns:1fr auto;gap:9px;padding:12px;border-top:1px solid rgba(120,155,205,.16)}
     #ds-chat-input{min-width:0;resize:none;padding:11px 12px;border:1px solid #244261;border-radius:12px;background:#0d1c31;color:#f2f6ff;font:inherit}
     #ds-chat-send{padding:10px 14px;border:0;border-radius:12px;background:linear-gradient(90deg,#36d8ff,#39e3a1);color:#06151d;font-weight:950;cursor:pointer}
@@ -38,17 +41,60 @@
     </svg>`;
   document.body.appendChild(launcher);
 
+  const pageKey = (() => {
+    if (window.location.pathname === '/') return 'landing';
+    if (window.location.pathname === '/dashboard' && new URLSearchParams(window.location.search).get('view') === 'live') return 'live';
+    if (window.location.pathname === '/dashboard') return 'research';
+    if (window.location.pathname === '/crypto-visual') return 'crypto_visual';
+    if (window.location.pathname === '/crypto') return 'crypto';
+    return 'platform';
+  })();
+  const pageGuides = {
+    landing: {
+      label: 'Platform introduction',
+      welcome: 'Hi! I can explain what Data Shepherd Engineering does, how model evidence is validated, and what frozen holdouts mean.',
+      prompts: ['What is Data Shepherd?', 'How are results validated?', 'What is a frozen holdout?']
+    },
+    research: {
+      label: 'Model Research guide',
+      welcome: 'Hi! I can explain the model comparison, frozen V8, V10 Cycle 3, and the difference between reconstructed and genuine forward evidence.',
+      prompts: ['Explain the model comparison', 'What is frozen V8?', 'What is V10 Cycle 3?']
+    },
+    live: {
+      label: 'Live Stock Viewer guide',
+      welcome: 'Hi! I can help you read the live stock charts, rankings, indicators, and provisional live-data labels.',
+      prompts: ['How do I read this chart?', 'What does a V8 rank mean?', 'Why is live data provisional?']
+    },
+    crypto: {
+      label: 'Crypto dashboard guide',
+      welcome: 'Hi! I can explain the crypto dashboard, data freshness, monitoring states, and research terminology.',
+      prompts: ['Explain this crypto dashboard', 'What does data freshness mean?', 'Are these live trading signals?']
+    },
+    crypto_visual: {
+      label: 'Crypto Visual guide',
+      welcome: 'Hi! I can explain the crypto visualizations, ranges, comparisons, and evidence labels.',
+      prompts: ['How do I read this visual?', 'What do the ranges change?', 'What evidence is forward-only?']
+    },
+    platform: {
+      label: 'Platform guide',
+      welcome: 'Hi! I can explain the platform, model evidence, dashboards, and terminology.',
+      prompts: ['Explain this page', 'What is forward evidence?', 'How are models validated?']
+    }
+  };
+  const guide = pageGuides[pageKey];
+
   const panel = document.createElement('section');
   panel.id = 'ds-ai-chat-panel';
   panel.setAttribute('aria-label', 'Data Shepherd AI assistant');
   panel.innerHTML = `
     <div class="ds-chat-head">
-      <div><strong>Data Shepherd AI</strong><div style="color:#91a6c2;font-size:.72rem;margin-top:3px">Platform guide · not financial advice</div></div>
+      <div><strong>Data Shepherd AI</strong><div style="color:#91a6c2;font-size:.72rem;margin-top:3px">${guide.label} · not financial advice</div></div>
       <button type="button" data-chat-close aria-label="Close chat">×</button>
     </div>
     <div id="ds-chat-messages" aria-live="polite">
-      <div class="ds-chat-message ds-chat-assistant">Hi! I can explain the dashboard, model comparisons, frozen holdouts, rankings, and platform terminology. What would you like to understand?</div>
+      <div class="ds-chat-message ds-chat-assistant">${guide.welcome}</div>
     </div>
+    <div class="ds-chat-suggestions" aria-label="Suggested questions">${guide.prompts.map(prompt => `<button type="button" class="ds-chat-suggestion">${prompt}</button>`).join('')}</div>
     <form class="ds-chat-compose">
       <textarea id="ds-chat-input" rows="2" maxlength="2000" placeholder="Ask about the platform…" aria-label="Message"></textarea>
       <button id="ds-chat-send" type="submit">SEND</button>
@@ -71,6 +117,12 @@
     if (panel.classList.contains('open')) input.focus();
   });
   panel.querySelector('[data-chat-close]').addEventListener('click', () => panel.classList.remove('open'));
+  panel.querySelectorAll('.ds-chat-suggestion').forEach(button => {
+    button.addEventListener('click', () => {
+      input.value = button.textContent;
+      panel.querySelector('form').requestSubmit();
+    });
+  });
 
   panel.querySelector('form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -86,7 +138,7 @@
         credentials: 'same-origin',
         cache: 'no-store',
         headers: {'Content-Type':'application/json','Accept':'application/json'},
-        body: JSON.stringify({message, page: window.location.pathname + window.location.search})
+        body: JSON.stringify({message, page: pageKey})
       });
       if (response.status === 401) {
         window.location.assign('/?reason=inactive');
