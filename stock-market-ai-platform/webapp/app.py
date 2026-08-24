@@ -46,7 +46,11 @@ def inject_dashboard_modules(response):
         if request.path in {"/dashboard","/crypto","/crypto-visual"}:
             scripts.append('<script src="/static/js/session_idle_timeout.js" defer></script>')
         if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
-        if request.path=="/dashboard": scripts.extend(['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>'])
+        if request.path=="/dashboard":
+            shared=['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
+            scripts.extend(shared)
+            if request.args.get("view")!="live":
+                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>'])
         if marker in html:
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
@@ -180,7 +184,7 @@ def dashboard():
             try:
                 market=get_market_summary(row["symbol"]);live=get_live_quote(row["symbol"]);row=dict(row);row["display_price"]=live["reference_price"] if live["available"] else market["close"];row["eod_change_pct"]=market["price_change_pct"];row["rsi_14"]=market["rsi_14"];top10_rows.append(row)
             except Exception as exc:print(f"[V8 TOP10 ERROR] {row['symbol']}: {exc}")
-    return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top10=top10,top10_rows=top10_rows,stock_symbols=V5_SYMBOL_OPTIONS,v8=rankings_payload)
+    return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top10=top10,top10_rows=top10_rows,stock_symbols=V5_SYMBOL_OPTIONS,v8=rankings_payload,live_view=live_view)
 @app.route("/crypto")
 @login_required
 def crypto_dashboard():return render_template("crypto.html",crypto=get_crypto_dashboard_payload())
