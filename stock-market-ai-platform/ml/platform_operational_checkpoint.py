@@ -29,6 +29,7 @@ ENDPOINTS = {
     "web_health": "http://127.0.0.1:5001/health",
     "v8_holdout": "http://127.0.0.1:5001/api/v8/holdout",
     "v10_cycle3": "http://127.0.0.1:5001/api/v10/cycle3/holdout",
+    "performance": "http://127.0.0.1:5001/api/operations/performance",
 }
 
 
@@ -154,6 +155,16 @@ def main():
            "V10 API brokerage authority", "OFF", failures)
     _check(v10_api.get("v8_modified") is False,
            "V10 API V8 isolation", "V8 modified: NO", failures)
+
+    performance = responses.get("performance", {})
+    _check(performance.get("status") == "ok",
+           "Endpoint timing telemetry", str(performance.get("status")), failures)
+    _check(performance.get("brokerage_orders") is False,
+           "Performance endpoint brokerage authority", "OFF", failures)
+    _check((performance.get("sample_limit_per_endpoint") or 0) == 200,
+           "Timing memory bound", "200 samples per endpoint", failures)
+    _check("startup_policy" in performance,
+           "Gunicorn lazy research-service policy", str(performance.get("startup_policy")), failures)
 
     print("\n" + "=" * 88)
     if failures:
