@@ -251,10 +251,27 @@ def clean_site(path, t, title, subtitle):
                 right = qpoint(0.15 + i * 0.105, 0.93)
                 sd.polygon([top, qpoint(0.15 + i * 0.105, 0.93 - height), right, left], fill=(31, 119, 139))
 
-        im.paste(
-            v6.cover(source, (1780, 815), 1 + 0.09 * v6.ease(t), 0.5 + 0.05 * v6.math.sin(t * v6.math.pi), 0.47),
-            (70, 200),
-        )
+        if path == v6.ASSETS["dashboard"]:
+            # Begin with the complete engineering artwork visible. Hold that
+            # full-frame reveal before applying a gentle centered zoom, so the
+            # header and lower architecture are seen before any edge can crop.
+            fit = v6.Image.new("RGB", (1780, 815), (3, 13, 23))
+            scale = min(1780 / sw, 815 / sh)
+            fitted = source.resize(
+                (max(1, int(sw * scale)), max(1, int(sh * scale))),
+                v6.Image.Resampling.LANCZOS,
+            )
+            fit.paste(fitted, ((1780 - fitted.width) // 2, (815 - fitted.height) // 2))
+            zoom_phase = max(0.0, min(1.0, (t - .28) / .72))
+            rendered = v6.cover(fit, (1780, 815), 1 + .055 * v6.ease(zoom_phase), .5, .5)
+        else:
+            rendered = v6.cover(
+                source, (1780, 815),
+                1 + .09 * v6.ease(t),
+                .5 + .05 * v6.math.sin(t * v6.math.pi),
+                .47,
+            )
+        im.paste(rendered, (70, 200))
 
     # One browser frame around the main image only—never extra inset boxes.
     bx0, by0, bx1 = 120, 205, 1800
