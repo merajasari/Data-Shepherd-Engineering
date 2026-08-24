@@ -282,7 +282,7 @@ def main():
     latest = max(pd.Timestamp(s["end_timestamp"]) for s in series)
 
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "title": "Stock model performance comparison",
         "starting_capital": STARTING_CAPITAL,
@@ -291,6 +291,18 @@ def main():
         "latest_timestamp": latest.isoformat(),
         "comparison_policy": "Each model is shown as its own historical strategy curve on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; no history is backfilled before eligibility.",
         "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. Genuine V8 forward evidence beginning 2026-09-01 and genuine V10 Cycle 3 forward evidence beginning 2027-01-04 remain separate and are never backfilled.",
+        "lineage": {
+            "v8_candidate_id": V8_SCORE_ID,
+            "v8_frozen_sha256": V8_EXPECTED_SHA,
+            "v8_forward_holdout_start_utc": "2026-09-01T00:00:00+00:00",
+            "v10_candidate_id": V10_CANDIDATE_ID,
+            "v10_frozen_sha256": V10_EXPECTED_SHA,
+            "v10_forward_holdout_start_utc": V10_HOLDOUT_START_UTC.isoformat(),
+            "v10_classification": "FROZEN_CYCLE3_DEVELOPMENT_RECONSTRUCTION",
+            "forward_evidence_included": False,
+            "live_paper_balances_included": False,
+            "brokerage_orders": False,
+        },
         "series": series,
         "research_safety": {
             "paper_portfolio_modified": False,
