@@ -198,6 +198,18 @@ def clean_site(path, t, title, subtitle):
                 sd.line((x0, y, x1, y), fill=(7, 25, 40), width=1)
 
         elif path == v6.ASSETS["overview"]:
+            # Remove the embedded phone-build sentence from the source artwork.
+            # Keep this edit in the source pixels so zooming cannot reveal it.
+            sd.rectangle(
+                (0, int(sh * .449), int(sw * .285), int(sh * .493)),
+                fill=(3, 13, 25),
+            )
+            sd.text(
+                (int(sw * .025), int(sh * .458)),
+                "Governed engineering from market data to model evidence.",
+                font=v6.font(max(11, int(sw * .0105)), True),
+                fill=(165, 185, 207),
+            )
             # The phone is already part of the source artwork.  Its inner screen
             # is a perspective quadrilateral, not an axis-aligned card.  Paint
             # directly inside those four corners so the original bezel, tilt,
