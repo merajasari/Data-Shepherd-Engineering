@@ -49,6 +49,7 @@
 
     try {
       await loadScript('/static/js/stock_operations_health.js');
+      await loadScript('/static/js/v8_launch_day_operations.js');
       await loadScript('/static/js/v8_pnl_visual.js');
       await loadScript('/static/js/v8_leaders.js');
       await loadScript('/static/js/v8_ranking_board.js');
