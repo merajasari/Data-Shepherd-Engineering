@@ -254,7 +254,7 @@ def refresh_stock_model_comparison_if_stale():
         return False
 
     print("Stock model comparison artifact is stale; rebuilding read-only dashboard artifact.")
-    run_command([sys.executable, "-u", "-m", "ml.build_stock_model_comparison"])
+    run_command([sys.executable, "-u", "-m", "ml.stock_model_comparison_regression"])
     return True
 
 
