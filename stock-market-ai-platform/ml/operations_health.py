@@ -18,7 +18,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = PROJECT_ROOT / "webapp/static/generated/stock_operations_health.json"
 LEDGER = PROJECT_ROOT / "data/live/v5_tiingo_request_ledger.json"
 V8_GUARD = PROJECT_ROOT / "data/model/v8/eod_guard/status.json"
-V10_STATUS = PROJECT_ROOT / "webapp/static/generated/v10_confirmation_status.json"
+V10_MONITOR = PROJECT_ROOT / "data/model/v10/cycle3/monitor/alert_state.json"
+V10_SPEC = PROJECT_ROOT / "data/model/v10/cycle3/freeze/frozen_candidate_spec.json"
+V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
 CONVERGENCE_STATUS = PROJECT_ROOT / "webapp/static/generated/stock_data_convergence.json"
 ERR_LOG = PROJECT_ROOT / "logs/v5_refresh.err.log"
 FEATURE_ROOT = PROJECT_ROOT / "data/features/stocks"
@@ -90,7 +92,9 @@ def main():
     now = _now()
     used = _active_quota(now)
     v8 = _json(V8_GUARD)
-    v10 = _json(V10_STATUS)
+    v10_monitor = _json(V10_MONITOR)
+    v10_spec = _json(V10_SPEC)
+    v10_identity_ok = v10_spec.get("spec_sha256") == V10_EXPECTED_SHA
     convergence = _json(CONVERGENCE_STATUS)
     common_latest, feature_files = _feature_common_latest()
     err_size = ERR_LOG.stat().st_size if ERR_LOG.exists() else 0
@@ -135,10 +139,14 @@ def main():
             "ranking_timestamp_utc": v8.get("ranking_timestamp_utc"),
         },
         "v10": {
-            "status": v10.get("status", "UNKNOWN"),
-            "decision": v10.get("decision", "PENDING"),
-            "confirmation_start_utc": v10.get("confirmation_start_utc"),
-            "formal_holdout_start_utc": v10.get("formal_holdout_start_utc"),
+            "status": v10_monitor.get("status", "UNKNOWN"),
+            "decision": "FROZEN_FRESH_HOLDOUT_AUTHORIZED" if v10_identity_ok else "FROZEN_IDENTITY_MISMATCH",
+            "candidate_id": v10_spec.get("candidate_id"),
+            "frozen_sha256": v10_spec.get("spec_sha256"),
+            "formal_holdout_start_utc": (v10_spec.get("holdout_contract") or {}).get("fresh_holdout_start_utc"),
+            "journal_events": v10_monitor.get("journal_events", 0),
+            "brokerage_orders": False,
+            "v8_modified": False,
         },
         "error_log": {
             "path": "logs/v5_refresh.err.log",
@@ -162,7 +170,7 @@ def main():
     print(f"Features: {feature_files}/{EXPECTED_SYMBOLS} | common latest={common_latest}")
     print(f"Convergence: {payload['convergence']['status']} | verification={payload['convergence']['verification']}")
     print(f"V8 guard: {payload['v8']['guard_status']} | gate={payload['v8']['decision_gate_open']}")
-    print(f"V10: {payload['v10']['status']} | decision={payload['v10']['decision']}")
+    print(f"V10 Cycle 3: {payload['v10']['status']} | decision={payload['v10']['decision']}")
     print(f"Output: {OUTPUT.relative_to(PROJECT_ROOT)}")
 
 
