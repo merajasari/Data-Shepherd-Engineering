@@ -41,8 +41,10 @@ def inject_dashboard_modules(response):
             prelayout='''<style id="ds-live-prelayout-style">html.ds-live-prelayout .card:has(#stock-select){display:none!important}html.ds-live-prelayout .card.ds-live-viewer-card:has(#stock-select){display:block!important}</style><script>document.documentElement.classList.add("ds-live-prelayout")</script>'''
             if head_marker in html and 'ds-live-prelayout-style' not in html:
                 html=html.replace(head_marker,prelayout+"\n"+head_marker,1)
-        if request.path in {"/","/dashboard","/crypto","/crypto-visual"}: scripts.append('<script src="/static/js/signup_button.js" defer></script>')
-        if request.path in {"/dashboard","/crypto","/crypto-visual"}: scripts.extend(['<script src="/static/js/session_idle_timeout.js" defer></script>','<script src="/static/js/customer_ai_chat.js" defer></script>'])
+        if request.path in {"/","/dashboard","/crypto","/crypto-visual"}:
+            scripts.extend(['<script src="/static/js/signup_button.js" defer></script>','<script src="/static/js/customer_ai_chat.js" defer></script>'])
+        if request.path in {"/dashboard","/crypto","/crypto-visual"}:
+            scripts.append('<script src="/static/js/session_idle_timeout.js" defer></script>')
         if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
         if request.path=="/dashboard": scripts.extend(['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>'])
         if marker in html:
@@ -144,8 +146,11 @@ def _customer_chat_fallback(message):
     return "I can explain the model comparison, V8 and V10 frozen holdouts, ranking signals, forward evidence, dashboard controls, and platform terminology. Please ask about one of those areas."
 
 @app.post("/api/customer-chat")
-@login_required
 def api_customer_chat():
+    now=datetime.now(timezone.utc).timestamp()
+    recent=[float(stamp) for stamp in session.get("customer_chat_requests",[]) if now-float(stamp)<60]
+    if len(recent)>=10:return jsonify({"error":"Please wait a moment before sending another message."}),429
+    recent.append(now);session["customer_chat_requests"]=recent
     body=request.get_json(silent=True) or {};message=str(body.get("message") or "").strip();page=str(body.get("page") or "")[:300]
     if not message:return jsonify({"error":"message is required"}),400
     if len(message)>2000:return jsonify({"error":"message is too long"}),400
