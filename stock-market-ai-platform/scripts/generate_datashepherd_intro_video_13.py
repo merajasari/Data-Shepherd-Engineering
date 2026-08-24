@@ -84,37 +84,48 @@ def prepare_overview_artwork(source, t):
 
 
 def cinematic_open(t):
-    """Platform-first opening with no generic AI orb or icon-card pipeline."""
-    source = prepare_overview_artwork(v6.load(v6.ASSETS["overview"]), t)
-    im = v6.cover(source, (v6.W, v6.H), 1.03 + .035 * v6.ease(t), .50, .45)
-    overlay = v6.Image.new("RGBA", (v6.W, v6.H), (2, 10, 21, 0))
-    od = v6.ImageDraw.Draw(overlay)
-    od.rectangle((0, 0, v6.W, v6.H), fill=(2, 9, 20, 145))
-    for x in range(0, 1280):
-        alpha = int(205 * (1 - x / 1280))
-        od.line((x, 0, x, v6.H), fill=(2, 9, 20, alpha))
-    im = v6.Image.alpha_composite(im.convert("RGBA"), overlay).convert("RGB")
+    """Clean platform-first opening; copy never floats over the hero artwork."""
+    im = v6.bg()
     d = v6.ImageDraw.Draw(im)
-    v6.logo(im, 72, 44, 360, 140)
-    d.text((105, 280), "DATA SHEPHERD", font=v6.font(68, True), fill=v6.TEXT)
-    d.text((108, 362), "ENGINEERING", font=v6.font(68, True), fill=v6.GREEN)
-    d.text((110, 470), "GOVERNED DATA  •  TESTABLE ML  •  VISIBLE EVIDENCE", font=v6.font(22, True), fill=v6.CYAN)
+    # Quiet branded field on the left, real platform in its own browser surface.
+    for x in range(0, v6.W, 96):
+        d.line((x, 0, x, v6.H), fill=(5, 24, 39), width=1)
+    for y in range(0, v6.H, 96):
+        d.line((0, y, v6.W, y), fill=(5, 24, 39), width=1)
+    v6.logo(im, 70, 44, 390, 148)
+    d.text((92, 270), "DATA SHEPHERD", font=v6.font(60, True), fill=v6.TEXT)
+    d.text((94, 344), "ENGINEERING", font=v6.font(60, True), fill=v6.GREEN)
+    d.text((96, 450), "GOVERNED DATA", font=v6.font(22, True), fill=v6.CYAN)
+    d.text((96, 494), "TESTABLE MACHINE LEARNING", font=v6.font(22, True), fill=(190, 116, 255))
+    d.text((96, 538), "VISIBLE EVIDENCE", font=v6.font(22, True), fill=v6.GREEN)
+    d.line((96, 600, 485, 600), fill=v6.CYAN, width=3)
     d.multiline_text(
-        (110, 540),
-        "A production-minded research platform for stocks, crypto,\nmodel governance and forward paper monitoring.",
-        font=v6.font(28), fill=v6.TEXT, spacing=14,
+        (96, 640),
+        "Stocks, crypto, model governance\nand forward monitoring in one\nobservable engineering platform.",
+        font=v6.font(25), fill=v6.MUTED, spacing=14,
     )
+
+    source = prepare_overview_artwork(v6.load(v6.ASSETS["overview"]), t)
+    panel = v6.cover(source, (1260, 715), 1.0 + .025 * v6.ease(t), .51, .47)
+    d.rounded_rectangle((575, 245, 1860, 995), 30, fill=(5, 18, 31), outline=v6.CYAN, width=4)
+    im.paste(panel, (588, 267))
+    d.rounded_rectangle((588, 267, 1848, 315), 15, fill=(7, 20, 34))
+    for n, colour in enumerate(((255, 95, 86), (255, 189, 46), (39, 201, 63))):
+        cx = 618 + n * 28
+        d.ellipse((cx - 7, 284, cx + 7, 298), fill=colour)
+    d.rounded_rectangle((720, 278, 1810, 305), 9, fill=(11, 31, 49))
+    d.text((745, 279), "datashepherdengineering.com", font=v6.font(14, True), fill=v6.MUTED)
+
     portrait_path = v6.fp()
     if portrait_path:
-        d.rounded_rectangle((1550, 55, 1840, 345), 24, fill=(6, 20, 35), outline=v6.CYAN, width=3)
-        portrait = v6.cover(v6.load(portrait_path), (254, 254), 1.04, .5, .22)
+        d.rounded_rectangle((1550, 45, 1845, 225), 22, fill=(6, 20, 35), outline=v6.CYAN, width=3)
+        portrait = v6.cover(v6.load(portrait_path), (142, 142), 1.04, .5, .22)
         mask = v6.Image.new("L", portrait.size, 0)
-        v6.ImageDraw.Draw(mask).rounded_rectangle((0, 0, 253, 253), 18, fill=255)
-        im.paste(portrait, (1568, 73), mask)
-        d.text((1546, 366), "MERAJ ASARI  •  FOUNDER · CEO", font=v6.font(17, True), fill=v6.TEXT)
+        v6.ImageDraw.Draw(mask).rounded_rectangle((0, 0, 141, 141), 16, fill=255)
+        im.paste(portrait, (1570, 64), mask)
+        d.text((1730, 87), "MERAJ ASARI", font=v6.font(18, True), fill=v6.TEXT)
+        d.text((1730, 128), "FOUNDER · CEO", font=v6.font(16, True), fill=v6.CYAN)
     return im
-
-
 def track_card(im, d, box, title, status, colour, icon_kind, artwork=None):
     x0, y0, x1, y1 = box
     d.rounded_rectangle(box, 28, fill=(8, 24, 42), outline=colour, width=4)
@@ -157,48 +168,55 @@ def platform_tracks(t):
 
 
 def cycle3_selection(t):
-    im = v6.bg(); v6.head(im, "V10 CYCLE 3 — PREREGISTERED BEFORE EVALUATION", "Three locked transition-efficiency candidates; one fixed selection rule")
+    im = v6.bg()
     d = v6.ImageDraw.Draw(im)
-    # Two locked signal sources fan into three preregistered blends.
-    source_x = 240
-    for y, label, art, colour in ((410, "V8 SIGNAL", "feature_table", v6.GREEN), (680, "DEFENSIVE SIGNAL", "ai_brain", (190, 116, 255))):
-        d.rounded_rectangle((95, y - 100, 385, y + 100), 26, fill=v6.PANEL, outline=colour, width=4)
-        intro12.paste_reference_icon(im, art, source_x, y - 20, 105)
-        center_text(d, (source_x, y + 56), label, v6.font(18, True), colour)
-    candidates = [
-        ("FULL DEFENSIVE", "0% V8  +  100% DEF", v6.CYAN),
-        ("BLEND 50", "50% V8  +  50% DEF", v6.GREEN),
-        ("BLEND 25", "75% V8  +  25% DEF", v6.CYAN),
+    # A large branded header replaces the inherited thumbnail-size logo.
+    v6.logo(im, 48, 32, 330, 124)
+    d.text((415, 48), "V10 CYCLE 3 — PREREGISTERED BEFORE EVALUATION", font=v6.font(38, True), fill=v6.TEXT)
+    d.text((418, 112), "Three declared blends. Thirteen fixed gates. One selection rule.", font=v6.font(21), fill=v6.MUTED)
+    d.line((415, 160, 1825, 160), fill=v6.BORDER, width=2)
+
+    # Signal sources are rendered as dimensional research inputs.
+    sources = [
+        (250, 395, "V8 RANKED SIGNAL", "feature_table", v6.GREEN),
+        (250, 690, "DEFENSIVE SIGNAL", "ai_brain", (190, 116, 255)),
     ]
-    for i, (name, formula, colour) in enumerate(candidates):
-        y = 350 + i * 210; active = i <= int(t * 3)
-        d.line((390, 410, 615, y), fill=(24, 87, 110), width=3)
-        d.line((390, 680, 615, y), fill=(55, 64, 104), width=3)
-        d.rounded_rectangle((615, y - 72, 1110, y + 72), 24, fill=(7, 24, 42), outline=colour if active else v6.BORDER, width=4)
-        d.text((660, y - 40), name, font=v6.font(24, True), fill=colour)
-        d.text((660, y + 5), formula, font=v6.font(19, True), fill=v6.TEXT)
-        if active:
-            for p in range(5):
-                px = 780 + p * 48
-                d.ellipse((px - 5, y + 48, px + 5, y + 58), fill=colour)
-    # Fixed gate engine receives all candidates.
-    d.rounded_rectangle((1270, 330, 1785, 805), 34, fill=(5, 28, 35), outline=v6.GREEN, width=5)
-    intro12.draw_tech_icon(d, "gate", 1528, 470, 126, v6.GREEN)
-    center_text(d, (1528, 570), "13 FIXED GATES", v6.font(32, True), v6.GREEN)
-    center_text(d, (1528, 630), "Lowest transition notional", v6.font(19, True), v6.TEXT)
-    center_text(d, (1528, 673), "Lexical tie-break", v6.font(19, True), v6.MUTED)
-    for y in (350, 560, 770): d.line((1115, y, 1265, 520), fill=v6.GREEN, width=3)
-    d.text((535, 925), "CANDIDATES, WEIGHTS AND GATES WERE LOCKED BEFORE RESULTS.", font=v6.font(24, True), fill=v6.GOLD)
+    for cx, cy, label, art, colour in sources:
+        d.ellipse((cx - 118, cy - 118, cx + 118, cy + 118), fill=(6, 23, 39), outline=colour, width=5)
+        intro12.paste_reference_icon(im, art, cx, cy - 18, 125)
+        center_text(d, (cx, cy + 78), label, v6.font(17, True), colour)
+
+    candidates = [
+        (365, "FULL DEFENSIVE", "0% V8  +  100% DEF", v6.CYAN),
+        (565, "BLEND 50", "50% V8  +  50% DEF", v6.GREEN),
+        (765, "BLEND 25", "75% V8  +  25% DEF", v6.CYAN),
+    ]
+    for i, (cy, name, formula, colour) in enumerate(candidates):
+        active = i <= int(t * 3)
+        d.line((370, 395, 565, cy), fill=(28, 105, 118), width=4)
+        d.line((370, 690, 565, cy), fill=(85, 54, 125), width=4)
+        d.rounded_rectangle((565, cy - 72, 1125, cy + 72), 25, fill=(7, 24, 42), outline=colour if active else v6.BORDER, width=5)
+        intro12.draw_tech_icon(d, "network", 625, cy, 58, colour if active else v6.BORDER)
+        d.text((690, cy - 39), name, font=v6.font(25, True), fill=colour if active else v6.MUTED)
+        d.text((690, cy + 8), formula, font=v6.font(19, True), fill=v6.TEXT)
+
+    d.rounded_rectangle((1275, 285, 1785, 845), 38, fill=(5, 27, 37), outline=v6.GREEN, width=6)
+    intro12.draw_tech_icon(d, "gate", 1530, 430, 145, v6.GREEN)
+    center_text(d, (1530, 545), "13 / 13", v6.font(56, True), v6.GREEN)
+    center_text(d, (1530, 620), "FIXED GATES REQUIRED", v6.font(20, True), v6.TEXT)
+    d.line((1340, 680, 1720, 680), fill=v6.BORDER, width=2)
+    center_text(d, (1530, 715), "LOWEST TRANSITION NOTIONAL", v6.font(17, True), v6.CYAN)
+    center_text(d, (1530, 758), "LEXICAL TIE-BREAK ONLY IF NEEDED", v6.font(15, True), v6.MUTED)
+    for cy, _, _, _ in candidates:
+        d.line((1135, cy, 1265, 565), fill=v6.GREEN, width=4)
+    center_text(d, (960, 930), "CANDIDATES, WEIGHTS AND GATES WERE LOCKED BEFORE RESULTS.", v6.font(23, True), v6.GOLD)
     return im
-
-
 def cycle3_winner(t):
-    im = v6.bg(); v6.head(im, "CYCLE 3 FREEZE AUDIT", "The selected challenger earned a fresh, separate future holdout")
+    im = v6.bg(); v6.head(im, "V10 CYCLE 3 FREEZE AUDIT", "The selected challenger earned a fresh, separate future holdout")
     d = v6.ImageDraw.Draw(im)
     d.rounded_rectangle((105, 245, 1815, 905), 38, fill=(7, 23, 40), outline=v6.CYAN, width=4)
     d.text((175, 300), "c3_confirm2_blend50", font=v6.font(48, True), fill=v6.CYAN)
     d.text((177, 370), "FROZEN FRESH-HOLDOUT CANDIDATE", font=v6.font(21, True), fill=v6.GREEN)
-    # Selected ML artifact and gate result dominate the composition.
     intro12.paste_reference_icon(im, "ai_brain", 355, 590, 230)
     d.ellipse((205, 440, 505, 740), outline=(190, 116, 255), width=5)
     d.ellipse((520, 430, 820, 730), outline=v6.GREEN, width=8)
@@ -218,79 +236,133 @@ def cycle3_winner(t):
     d.rounded_rectangle((265, 790, 1655, 865), 18, fill=(5, 28, 35), outline=v6.GREEN, width=2)
     center_text(d, (960, 814), "IMMUTABLE CONTRACT  →  FRESH EVIDENCE  →  EARNED DEPLOYMENT", v6.font(23, True), v6.GOLD)
     return im
-
-
 def holdout13(t):
-    im = v6.bg(); v6.head(im, "FRESH FORWARD HOLDOUT", "Cycle 3 waits for genuinely unseen evidence by design")
-    d = v6.ImageDraw.Draw(im); y = 600; boundary = 1240
-    d.line((180, y, 1740, y), fill=v6.BORDER, width=8)
-    d.line((180, y, boundary, y), fill=v6.GREEN, width=11)
-    d.line((boundary, 330, boundary, 855), fill=v6.RED, width=7)
-    for x, label in ((315, "PREREGISTER"), (640, "EVALUATE"), (930, "FREEZE AUDIT")):
-        d.ellipse((x - 10, y - 10, x + 10, y + 10), fill=v6.GREEN)
-        center_text(d, (x, y - 70), label, v6.font(16, True), v6.MUTED)
-    d.text((1080, 355), "JANUARY 4, 2027", font=v6.font(38, True), fill=v6.RED)
-    intro12.draw_tech_icon(d, "lock", 1485, 520, 120, v6.RED)
-    center_text(d, (1485, 680), "FUTURE OUTCOMES", v6.font(21, True), v6.TEXT)
-    center_text(d, (1485, 720), "UNREAD • UNSCORED", v6.font(21, True), v6.RED)
-    d.text((205, 740), "DEVELOPMENT + IMMUTABLE FREEZE", font=v6.font(25, True), fill=v6.GREEN)
-    d.text((410, 930), "NO PEEKING. NO BACKFILLING. ONLY COMPLETED POST-BOUNDARY COHORTS COUNT.", font=v6.font(25, True), fill=v6.TEXT)
-    return im
-
-
-def monitoring13(t):
-    im = v6.bg(); v6.head(im, "READ-ONLY OPERATIONS", "Monitoring observes the frozen contract; dashboard requests never run research")
+    im = v6.bg(); v6.head(im, "FRESH FORWARD HOLDOUT", "A sealed evidence boundary protects genuinely unseen outcomes")
     d = v6.ImageDraw.Draw(im)
-    # A realistic monitoring surface replaces the four generic icon cards.
-    d.rounded_rectangle((110, 270, 1810, 900), 28, fill=(6, 19, 34), outline=v6.CYAN, width=3)
-    d.rounded_rectangle((110, 270, 1810, 325), 18, fill=(8, 27, 46))
+    # Large evidence vault and a two-zone timeline make the scientific boundary visible.
+    d.rounded_rectangle((105, 255, 1815, 900), 34, fill=(6, 20, 35), outline=v6.BORDER, width=3)
+    boundary = 1190
+    d.rounded_rectangle((145, 300, 1135, 845), 28, fill=(5, 29, 35), outline=v6.GREEN, width=3)
+    d.rounded_rectangle((1245, 300, 1775, 845), 28, fill=(28, 12, 28), outline=v6.RED, width=3)
+    d.text((195, 340), "LOCKED RESEARCH HISTORY", font=v6.font(24, True), fill=v6.GREEN)
+    d.text((1295, 340), "SEALED FUTURE EVIDENCE", font=v6.font(24, True), fill=v6.RED)
+
+    stages = [
+        (280, "PREREGISTER", "candidate + rule", "features"),
+        (555, "EVALUATE", "13 fixed gates", "gate"),
+        (830, "FREEZE AUDIT", "immutable SHA", "lock"),
+    ]
+    for i, (cx, label, detail, icon) in enumerate(stages):
+        active = i <= int(t * 3)
+        colour = v6.GREEN if active else v6.BORDER
+        d.ellipse((cx - 75, 455, cx + 75, 605), fill=(7, 24, 40), outline=colour, width=5)
+        intro12.draw_tech_icon(d, icon, cx, 530, 65, colour)
+        center_text(d, (cx, 645), label, v6.font(18, True), colour)
+        center_text(d, (cx, 685), detail.upper(), v6.font(14, True), v6.MUTED)
+        if i < len(stages) - 1:
+            d.line((cx + 82, 530, stages[i + 1][0] - 82, 530), fill=v6.GREEN, width=5)
+
+    d.line((boundary, 275, boundary, 875), fill=v6.RED, width=7)
+    d.polygon([(boundary - 12, 290), (boundary + 12, 290), (boundary, 315)], fill=v6.RED)
+    center_text(d, (boundary, 215), "JANUARY 4, 2027", v6.font(30, True), v6.RED)
+    intro12.draw_tech_icon(d, "lock", 1510, 525, 150, v6.RED)
+    center_text(d, (1510, 645), "OUTCOMES REMAIN SEALED", v6.font(22, True), v6.TEXT)
+    center_text(d, (1510, 690), "UNREAD  •  UNSCORED", v6.font(21, True), v6.RED)
+    center_text(d, (1510, 755), "APPEND-ONLY JOURNAL", v6.font(16, True), v6.MUTED)
+    center_text(d, (960, 940), "NO PEEKING  •  NO BACKFILLING  •  ONLY COMPLETED POST-BOUNDARY COHORTS COUNT", v6.font(22, True), v6.TEXT)
+    return im
+def monitoring13(t):
+    im = v6.bg(); v6.head(im, "READ-ONLY OPERATIONS", "A production-style monitor for evidence, health and forward comparison")
+    d = v6.ImageDraw.Draw(im)
+    d.rounded_rectangle((90, 245, 1830, 925), 30, fill=(5, 18, 32), outline=v6.CYAN, width=3)
+    d.rounded_rectangle((90, 245, 1830, 305), 18, fill=(8, 28, 47))
     for n, col in enumerate(((255,95,86),(255,189,46),(39,201,63))):
-        x=145+n*30; d.ellipse((x-7,291,x+7,305),fill=col)
-    d.text((245, 286), "V10 CYCLE 3  •  FRESH FORWARD HOLDOUT MONITOR", font=v6.font(17, True), fill=v6.TEXT)
-    metrics=[("STATE","WAITING FOR HOLDOUT",v6.CYAN),("EVIDENCE","NO COMPLETED COHORTS",v6.MUTED),("SCHEDULER","5 MINUTES",v6.GREEN),("HEALTH","READY",v6.GREEN)]
+        x=128+n*30; d.ellipse((x-7,268,x+7,282),fill=col)
+    d.text((230, 262), "V10 CYCLE 3  /  FORWARD EVIDENCE MONITOR", font=v6.font(18, True), fill=v6.TEXT)
+    d.rounded_rectangle((1450, 257, 1785, 293), 10, fill=(5, 35, 34), outline=v6.GREEN, width=2)
+    center_text(d, (1618, 265), "SYSTEM READY", v6.font(14, True), v6.GREEN)
+
+    metrics=[("STATE","WAITING FOR HOLDOUT",v6.CYAN),("COHORTS","0 COMPLETED",v6.MUTED),("BOUNDARY","JAN 4, 2027",v6.RED),("HEALTH","READY",v6.GREEN)]
     for i,(label,value,col) in enumerate(metrics):
-        x=155+i*405
-        d.rounded_rectangle((x,365,x+360,485),18,fill=(8,26,44),outline=v6.BORDER,width=2)
-        d.text((x+22,385),label,font=v6.font(13,True),fill=v6.MUTED)
-        d.text((x+22,425),value,font=v6.font(19,True),fill=col)
-    # Animated diagnostic curve area.
-    d.rounded_rectangle((155,525,1250,825),20,fill=(4,16,29),outline=v6.BORDER,width=2)
-    d.text((185,548),"FORWARD EQUITY VS SPY",font=v6.font(15,True),fill=v6.MUTED)
-    for yy in range(610,800,55): d.line((185,yy,1220,yy),fill=(12,35,54),width=1)
-    values=[.52,.49,.54,.51,.59,.57,.65,.62,.70,.76,.73,.82]
-    spy=[.50,.51,.52,.54,.55,.56,.58,.59,.60,.62,.64,.65]
-    upto=max(2,min(len(values),int(2+t*len(values))))
+        x=135+i*420
+        d.rounded_rectangle((x,335,x+385,445),17,fill=(8,27,46),outline=v6.BORDER,width=2)
+        d.text((x+22,354),label,font=v6.font(13,True),fill=v6.MUTED)
+        d.text((x+22,394),value,font=v6.font(20,True),fill=col)
+
+    # Larger, more legible graph with axes, legend, glow and an honest empty state.
+    gx0,gy0,gx1,gy1=145,490,1315,850
+    d.rounded_rectangle((gx0,gy0,gx1,gy1),22,fill=(3,15,28),outline=(26,71,94),width=2)
+    d.text((gx0+28,gy0+22),"FORWARD EQUITY VS SPY",font=v6.font(19,True),fill=v6.TEXT)
+    d.text((gx0+28,gy0+58),"UI PREVIEW — HOLDOUT RESULTS NOT YET AVAILABLE",font=v6.font(13,True),fill=v6.RED)
+    for j,label in enumerate(("1.10","1.05","1.00","0.95")):
+        yy=gy0+115+j*64
+        d.line((gx0+90,yy,gx1-30,yy),fill=(13,39,58),width=1)
+        d.text((gx0+28,yy-10),label,font=v6.font(12),fill=v6.MUTED)
+    for i,label in enumerate(("START","20","40","60","80","100")):
+        xx=gx0+100+i*195
+        d.line((xx,gy0+105,xx,gy1-38),fill=(10,31,48),width=1)
+        center_text(d,(xx,gy1-28),label,v6.font(11),v6.MUTED)
+    preview=[.58,.55,.60,.57,.66,.63,.72,.69,.77,.83,.80,.88]
+    spy=[.56,.57,.59,.61,.62,.64,.66,.67,.69,.71,.73,.75]
+    upto=max(2,min(len(preview),int(2+t*len(preview))))
     pts=[]; spypts=[]
     for i in range(upto):
-        x=205+i*88; pts.append((x,int(790-values[i]*230))); spypts.append((x,int(790-spy[i]*230)))
-    d.line(pts,fill=v6.CYAN,width=5); d.line(spypts,fill=v6.GOLD,width=3)
-    side=[("STATUS.JSON","current state"),("JOURNAL.JSONL","append-only evidence"),("ALERT STATE","operational health"),("API CACHE","10 seconds")]
-    for i,(label,detail) in enumerate(side):
-        y=535+i*72
-        d.rounded_rectangle((1310,y,1765,y+55),13,fill=(8,26,44),outline=v6.BORDER,width=2)
-        d.text((1330,y+10),label,font=v6.font(14,True),fill=v6.GREEN)
-        d.text((1510,y+10),detail,font=v6.font(14),fill=v6.TEXT)
-    d.text((410, 940), "LIGHTWEIGHT OBSERVABILITY • IMMUTABLE RESEARCH • DEPLOYMENT READINESS", font=v6.font(22, True), fill=v6.GOLD)
+        x=gx0+105+i*95
+        pts.append((x,int(gy1-70-preview[i]*245)))
+        spypts.append((x,int(gy1-70-spy[i]*245)))
+    if len(pts)>1:
+        glow=[(x,y+8) for x,y in pts]
+        d.line(glow,fill=(6,45,58),width=12)
+        d.line(pts,fill=v6.CYAN,width=6)
+        d.line(spypts,fill=v6.GOLD,width=4)
+        px,py=pts[-1]; d.ellipse((px-8,py-8,px+8,py+8),fill=v6.CYAN)
+    d.line((gx1-340,gy0+34,gx1-285,gy0+34),fill=v6.CYAN,width=5)
+    d.text((gx1-275,gy0+22),"CANDIDATE",font=v6.font(13,True),fill=v6.TEXT)
+    d.line((gx1-170,gy0+34,gx1-115,gy0+34),fill=v6.GOLD,width=4)
+    d.text((gx1-105,gy0+22),"SPY",font=v6.font(13,True),fill=v6.TEXT)
+
+    side=[("STATUS.JSON","current state",v6.CYAN),("JOURNAL.JSONL","append-only evidence",v6.GREEN),("ALERT STATE","operational health",v6.GOLD),("API CACHE","10-second response",v6.CYAN)]
+    for i,(label,detail,col) in enumerate(side):
+        y=500+i*86
+        d.rounded_rectangle((1365,y,1780,y+68),15,fill=(8,27,46),outline=col,width=2)
+        d.text((1387,y+12),label,font=v6.font(14,True),fill=col)
+        d.text((1535,y+12),detail,font=v6.font(14),fill=v6.TEXT)
+    center_text(d, (960, 960), "OBSERVABILITY WITHOUT MUTATING THE RESEARCH CONTRACT", v6.font(21, True), v6.GOLD)
     return im
-
-
 def close13(t):
-    source = v6.load(v6.ASSETS["engineering"])
-    im = v6.cover(source, (v6.W, v6.H), 1.02 + .025 * v6.ease(t), .5, .45)
-    shade = v6.Image.new("RGBA", (v6.W, v6.H), (2, 9, 20, 175))
-    im = v6.Image.alpha_composite(im.convert("RGBA"), shade).convert("RGB")
-    d = v6.ImageDraw.Draw(im); v6.logo(im, 690, 90, 540, 205)
-    center_text(d, (960, 390), "DATA SHEPHERD ENGINEERING", v6.font(58, True), v6.TEXT)
-    center_text(d, (960, 485), "EVIDENCE OVER PROMISES.", v6.font(36, True), v6.CYAN)
-    center_text(d, (960, 545), "REPRODUCIBILITY OVER HINDSIGHT.", v6.font(36, True), v6.GREEN)
-    d.rounded_rectangle((470, 685, 1450, 785), 20, fill=(4, 17, 31), outline=v6.CYAN, width=2)
-    center_text(d, (960, 715), "STOCKS  •  CRYPTO  •  DATA ENGINEERING  •  MACHINE LEARNING", v6.font(21, True), v6.TEXT)
-    center_text(d, (960, 865), "VISION: AUTONOMOUS, EVIDENCE-DRIVEN TRADING", v6.font(27, True), v6.GOLD)
-    center_text(d, (960, 915), "PURSUE STRONG RETURNS  •  CONTROL RISK  •  COMPOUND OVER TIME", v6.font(20, True), v6.TEXT)
-    center_text(d, (960, 980), "datashepherdengineering.com", v6.font(22, True), v6.CYAN)
+    # Purpose-built closing tableau: no text is floated over a busy source image.
+    im = v6.bg()
+    d = v6.ImageDraw.Draw(im)
+    for x in range(0, v6.W, 96):
+        d.line((x, 0, x, v6.H), fill=(5, 24, 39), width=1)
+    for y in range(0, v6.H, 96):
+        d.line((0, y, v6.W, y), fill=(5, 24, 39), width=1)
+    v6.logo(im, 690, 55, 540, 205)
+    center_text(d, (960, 275), "FROM GOVERNED EVIDENCE TO AUTONOMOUS EXECUTION", v6.font(34, True), v6.TEXT)
+
+    stages = [
+        (250, "GOVERNED DATA", "cloud", v6.CYAN, "trusted inputs"),
+        (720, "TESTABLE ML", "ai_brain", (190, 116, 255), "reproducible models"),
+        (1200, "RISK CONTROL", "gate", v6.GREEN, "earned deployment"),
+        (1670, "USER + SYSTEM", "prediction", v6.GOLD, "disciplined execution"),
+    ]
+    cy=585
+    for i,(cx,label,art,colour,detail) in enumerate(stages):
+        active=i<=int(t*4)
+        d.ellipse((cx-125,cy-125,cx+125,cy+125),fill=(6,22,38),outline=colour if active else v6.BORDER,width=5)
+        if art in ("cloud","ai_brain","prediction"):
+            intro12.paste_reference_icon(im,art,cx,cy-18,135)
+        else:
+            intro12.draw_tech_icon(d,art,cx,cy-18,90,colour)
+        center_text(d,(cx,cy+155),label,v6.font(20,True),colour)
+        center_text(d,(cx,cy+198),detail.upper(),v6.font(14,True),v6.MUTED)
+        if i<len(stages)-1:
+            d.line((cx+132,cy,stages[i+1][0]-132,cy),fill=v6.GREEN,width=5)
+            d.polygon([(stages[i+1][0]-148,cy-10),(stages[i+1][0]-148,cy+10),(stages[i+1][0]-130,cy)],fill=v6.GREEN)
+
+    center_text(d, (960, 875), "EVIDENCE OVER PROMISES  •  REPRODUCIBILITY OVER HINDSIGHT", v6.font(24, True), v6.CYAN)
+    center_text(d, (960, 945), "datashepherdengineering.com", v6.font(23, True), v6.GREEN)
     return im
-
-
 base_frame = v6.frame
 
 
