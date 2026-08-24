@@ -27,9 +27,65 @@ def center_text(d, xy, text, font, fill):
     d.text((xy[0] - (box[2] - box[0]) / 2, xy[1]), text, font=font, fill=fill)
 
 
+def prepare_overview_artwork(source, t):
+    """Remove phone-build copy and turn the existing phone screen into a chart."""
+    source = source.copy().convert("RGB")
+    d = v6.ImageDraw.Draw(source)
+    sw, sh = source.size
+
+    # Replace the source artwork's phone-build sentence without introducing a
+    # floating label or a new card over the platform image.
+    d.rectangle(
+        (0, int(sh * .449), int(sw * .285), int(sh * .493)),
+        fill=(3, 13, 25),
+    )
+    d.text(
+        (int(sw * .025), int(sh * .458)),
+        "Governed engineering from market data to model evidence.",
+        font=v6.font(max(11, int(sw * .0105)), True),
+        fill=(165, 185, 207),
+    )
+
+    # The phone and bezel remain part of the original artwork. Only the inner
+    # screen pixels are repainted, following its existing perspective.
+    quad = [
+        (int(sw * .258), int(sh * .593)),
+        (int(sw * .313), int(sh * .602)),
+        (int(sw * .297), int(sh * .791)),
+        (int(sw * .244), int(sh * .784)),
+    ]
+    d.polygon(quad, fill=(3, 13, 23))
+
+    def qpoint(u, v):
+        tx = quad[0][0] + (quad[1][0] - quad[0][0]) * u
+        ty = quad[0][1] + (quad[1][1] - quad[0][1]) * u
+        bx = quad[3][0] + (quad[2][0] - quad[3][0]) * u
+        by = quad[3][1] + (quad[2][1] - quad[3][1]) * u
+        return int(tx + (bx - tx) * v), int(ty + (by - ty) * v)
+
+    for v in (.24, .43, .62, .81):
+        d.line((qpoint(.08, v), qpoint(.92, v)), fill=(18, 45, 62), width=max(1, sw // 1200))
+    for u in (.18, .38, .58, .78):
+        d.line((qpoint(u, .16), qpoint(u, .90)), fill=(12, 34, 50), width=max(1, sw // 1400))
+    values = [.76, .69, .72, .58, .62, .47, .52, .36, .40, .25, .30, .16]
+    points = [qpoint(.09 + i * .075, value) for i, value in enumerate(values)]
+    d.line(points, fill=(20, 92, 111), width=max(4, sw // 310))
+    d.line(points, fill=v6.GREEN, width=max(2, sw // 600))
+    pulse = points[min(len(points) - 1, int(t * len(points)))]
+    radius = max(3, sw // 420)
+    d.ellipse((pulse[0] - radius, pulse[1] - radius, pulse[0] + radius, pulse[1] + radius), fill=v6.CYAN)
+    for i, height in enumerate((.08, .13, .10, .18, .15, .22, .17, .27)):
+        u0 = .10 + i * .105
+        d.polygon(
+            [qpoint(u0, .93 - height), qpoint(u0 + .05, .93 - height), qpoint(u0 + .05, .93), qpoint(u0, .93)],
+            fill=(31, 119, 139),
+        )
+    return source
+
+
 def cinematic_open(t):
     """Platform-first opening with no generic AI orb or icon-card pipeline."""
-    source = v6.load(v6.ASSETS["overview"])
+    source = prepare_overview_artwork(v6.load(v6.ASSETS["overview"]), t)
     im = v6.cover(source, (v6.W, v6.H), 1.03 + .035 * v6.ease(t), .50, .45)
     overlay = v6.Image.new("RGBA", (v6.W, v6.H), (2, 10, 21, 0))
     od = v6.ImageDraw.Draw(overlay)
@@ -48,9 +104,6 @@ def cinematic_open(t):
         "A production-minded research platform for stocks, crypto,\nmodel governance and forward paper monitoring.",
         font=v6.font(28), fill=v6.TEXT, spacing=14,
     )
-    d.rounded_rectangle((108, 740, 975, 820), 18, fill=(4, 17, 31), outline=v6.CYAN, width=2)
-    d.text((145, 764), "DEVELOPMENT & PROOF OF CONCEPT  →  AUTONOMOUS TRADING VISION", font=v6.font(19, True), fill=v6.GOLD)
-
     portrait_path = v6.fp()
     if portrait_path:
         d.rounded_rectangle((1550, 55, 1840, 345), 24, fill=(6, 20, 35), outline=v6.CYAN, width=3)
@@ -58,7 +111,7 @@ def cinematic_open(t):
         mask = v6.Image.new("L", portrait.size, 0)
         v6.ImageDraw.Draw(mask).rounded_rectangle((0, 0, 253, 253), 18, fill=255)
         im.paste(portrait, (1568, 73), mask)
-        d.text((1560, 366), "MERAJ ASARI  •  FOUNDER", font=v6.font(17, True), fill=v6.TEXT)
+        d.text((1546, 366), "MERAJ ASARI  •  FOUNDER · CEO", font=v6.font(17, True), fill=v6.TEXT)
     return im
 
 
@@ -255,7 +308,7 @@ def frame13(scene, t):
 
 v6.frame = frame13
 v6.SC[:] = [
-    ("intro13", None, "Data Shepherd Engineering is a production-minded research platform built by Meraj Asari. It connects governed market data, distributed processing, transparent machine learning and forward monitoring in one observable system. Today it is in development and proof-of-concept stages. The long-term vision is a secure autonomous trading system that works alongside Meraj, pursues substantial returns and earns real deployment through evidence and disciplined risk controls."),
+    ("intro13", None, "Data Shepherd Engineering is a production-minded research platform founded by Meraj Asari. It connects governed market data, distributed processing, transparent machine learning and forward monitoring in one observable system. Today it is in development and proof-of-concept stages. The long-term vision is a secure autonomous trading system that works alongside the user, pursues substantial returns and earns real deployment through evidence and disciplined risk controls."),
     ("site", ("overview", "THE REAL PLATFORM", "Live product and engineering surfaces—not a notebook demonstration"), "The platform makes the complete system visible: stock and crypto research, model rankings, market context, operational health, protected holdouts and the evidence behind every frozen candidate."),
     ("site", ("engineering", "END-TO-END ENGINEERING", "Ingestion, medallion layers, features, models and prediction"), "Market observations move from ingestion through immutable Bronze storage, cleansed Silver data, curated Gold datasets and model-ready features. Python, PySpark, Pandas and Parquet support the path, while validation stops downstream work when the contract is incomplete."),
     ("tracks13", None, "Data Shepherd now contains three governed research tracks. Stocks use V8 as the frozen active reference. Shared Crypto Fifteen-Minute V2 evaluates BTC, ALT and CASH in shadow mode. XRP remains a separate Ridge-based exploratory track because its history and policy require independent treatment. Each track develops independently while contributing to one long-term autonomous-trading vision."),
@@ -264,7 +317,7 @@ v6.SC[:] = [
     ("holdout13", None, "Cycle Three now waits for a fresh forward holdout beginning January fourth, twenty twenty-seven. Original V10 holdout outcomes were not used, and the new future outcomes remain unread and unscored. The journal is append-only, missed decisions are never backfilled, and only genuinely completed post-boundary cohorts may enter performance evidence."),
     ("monitoring13", None, "Operations are intentionally lightweight and read-only. The dashboard reads small status and journal files, caches the response, and displays decisions, entries, completed cohorts, returns, SPY comparison and health alerts. A web request never reads Parquet and never invokes a research or holdout runner."),
     ("site", ("dashboard", "ENGINEERING MADE OBSERVABLE", "Research state, model evidence and safeguards in the product"), "The result is more than a prediction. It is an inspectable engineering system with frozen contracts, verification hashes, service health, separate evidence boundaries and explicit no-order safeguards."),
-    ("close13", None, "Data Shepherd Engineering is built around a simple standard: evidence over promises, and reproducibility over hindsight. The goal is to turn governed data and testable machine learning into a secure autonomous system that can trade alongside Meraj, pursue strong returns, manage risk and compound wealth over time. Engineered for the markets, and built for the future."),
+    ("close13", None, "Data Shepherd Engineering is built around a simple standard: evidence over promises, and reproducibility over hindsight. The goal is to turn governed data and testable machine learning into a secure autonomous system that can trade alongside the user, pursue strong returns, manage risk and compound wealth over time. Engineered for the markets, and built for the future."),
 ]
 
 
