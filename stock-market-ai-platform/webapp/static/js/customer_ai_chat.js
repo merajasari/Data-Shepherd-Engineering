@@ -4,7 +4,12 @@
   const style = document.createElement('style');
   style.id = 'ds-ai-chat-style';
   style.textContent = `
-    #ds-ai-chat-launcher{position:fixed;right:22px;bottom:22px;z-index:90000;width:58px;height:58px;border:1px solid rgba(54,216,255,.48);border-radius:50%;background:linear-gradient(145deg,#163455,#0b1b30);color:#36d8ff;font-weight:950;cursor:pointer;box-shadow:0 18px 42px rgba(0,0,0,.42)}
+    #ds-ai-chat-launcher{position:fixed;right:22px;bottom:22px;z-index:90000;display:grid;place-items:center;width:62px;height:62px;padding:0;border:1px solid rgba(54,216,255,.7);border-radius:20px;background:linear-gradient(145deg,#36d8ff 0%,#28c9d8 45%,#39e3a1 100%);color:#06151d;cursor:pointer;box-shadow:0 18px 44px rgba(0,0,0,.46),0 0 0 5px rgba(54,216,255,.09);transition:transform .18s ease,box-shadow .18s ease}
+    #ds-ai-chat-launcher:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 22px 50px rgba(0,0,0,.5),0 0 0 7px rgba(54,216,255,.12)}
+    #ds-ai-chat-launcher:focus-visible{outline:3px solid #f2f6ff;outline-offset:4px}
+    #ds-ai-chat-launcher svg{width:34px;height:34px;display:block}
+    #ds-ai-chat-launcher::after{content:"Ask Data Shepherd";position:absolute;right:72px;top:50%;transform:translateY(-50%) translateX(7px);width:max-content;padding:8px 11px;border:1px solid #244261;border-radius:10px;background:#10223b;color:#f2f6ff;font-size:.76rem;font-weight:850;letter-spacing:.02em;box-shadow:0 10px 28px rgba(0,0,0,.35);opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility .16s ease;pointer-events:none}
+    #ds-ai-chat-launcher:hover::after,#ds-ai-chat-launcher:focus-visible::after{opacity:1;visibility:visible;transform:translateY(-50%) translateX(0)}
     #ds-ai-chat-panel{position:fixed;right:22px;bottom:92px;z-index:90000;display:none;flex-direction:column;width:min(390px,calc(100vw - 28px));height:min(560px,calc(100vh - 125px));border:1px solid #244261;border-radius:20px;background:#091628;color:#f2f6ff;box-shadow:0 28px 80px rgba(0,0,0,.58);overflow:hidden}
     #ds-ai-chat-panel.open{display:flex}
     .ds-chat-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid rgba(120,155,205,.16);background:#10223b}
@@ -17,7 +22,7 @@
     #ds-chat-input{min-width:0;resize:none;padding:11px 12px;border:1px solid #244261;border-radius:12px;background:#0d1c31;color:#f2f6ff;font:inherit}
     #ds-chat-send{padding:10px 14px;border:0;border-radius:12px;background:linear-gradient(90deg,#36d8ff,#39e3a1);color:#06151d;font-weight:950;cursor:pointer}
     #ds-chat-send:disabled{opacity:.55;cursor:wait}
-    @media(max-width:520px){#ds-ai-chat-launcher{right:14px;bottom:14px}#ds-ai-chat-panel{right:14px;bottom:82px}}
+    @media(max-width:520px){#ds-ai-chat-launcher{right:14px;bottom:14px;width:58px;height:58px;border-radius:18px}#ds-ai-chat-launcher::after{display:none}#ds-ai-chat-panel{right:14px;bottom:82px}}
   `;
   document.head.appendChild(style);
 
@@ -25,7 +30,11 @@
   launcher.id = 'ds-ai-chat-launcher';
   launcher.type = 'button';
   launcher.setAttribute('aria-label', 'Open Data Shepherd AI assistant');
-  launcher.textContent = 'AI';
+  launcher.innerHTML = `
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M7.5 5.5h17a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H15l-6.4 4.1.9-4.1h-2a3 3 0 0 1-3-3v-11a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="m18.2 9.1.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Zm-6.4 5.6.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7Z" fill="currentColor"/>
+    </svg>`;
   document.body.appendChild(launcher);
 
   const panel = document.createElement('section');
