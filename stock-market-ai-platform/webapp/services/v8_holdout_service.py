@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 import statistics
 import time
@@ -20,6 +21,7 @@ ROOT = Path("data/model/v8/holdout")
 JOURNAL_PATH = ROOT / "journal.jsonl"
 STATUS_PATH = ROOT / "status.json"
 READINESS_PATH = Path("data/model/v8/readiness/status.json")
+MONITOR_ALERT_PATH = Path("data/model/v8/monitor/alert_state.json")
 V8_RANKED_PATH = Path("data/model/v8/phase4/fixed_complementarity_ranked_panel.parquet")
 
 # A dashboard page currently has multiple independently loaded V8 widgets.  A
@@ -44,6 +46,7 @@ def _dashboard_signature():
         _file_signature(STATUS_PATH),
         _file_signature(READINESS_PATH),
         _file_signature(JOURNAL_PATH),
+        _file_signature(MONITOR_ALERT_PATH),
     )
 
 
@@ -207,6 +210,67 @@ def _performance_metrics(exits, curve):
     }
 
 
+def _first_present(payload, *keys):
+    for key in keys:
+        value = payload.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _launch_operations(status, readiness, events, now):
+    monitor = _read_json(MONITOR_ALERT_PATH)
+    checked_raw = monitor.get("checked_at_utc")
+    monitor_fresh = False
+    if checked_raw:
+        try:
+            checked = pd.Timestamp(checked_raw)
+            if checked.tzinfo is None:
+                checked = checked.tz_localize("UTC")
+            monitor_fresh = (now - checked).total_seconds() <= 15 * 60
+        except Exception:
+            monitor_fresh = False
+
+    last_success = _first_present(
+        status,
+        "completed_at_utc",
+        "updated_at_utc",
+        "checked_at_utc",
+        "last_success_utc",
+        "last_run_utc",
+    ) or readiness.get("updated_at_utc")
+    if now < HOLDOUT_START:
+        next_expected = HOLDOUT_START.isoformat()
+    else:
+        latest_decision = next(
+            (event.get("decision_timestamp_utc") for event in reversed(events)
+             if event.get("event_type") == "DECISION"),
+            None,
+        )
+        next_expected = "NEXT_ELIGIBLE_MARKET_CLOSE" if latest_decision else "FIRST_ELIGIBLE_MARKET_CLOSE"
+
+    journal_parent = JOURNAL_PATH.parent
+    return {
+        "frozen_sha_verified": readiness.get("frozen_sha256") == EXPECTED_SHA
+        and bool((readiness.get("checks") or {}).get("frozen_contract_verified")),
+        "scheduler_healthy": monitor.get("status") == "HEALTHY" and monitor_fresh,
+        "monitor_status": monitor.get("status", "UNKNOWN"),
+        "monitor_checked_at_utc": checked_raw,
+        "monitor_failures": monitor.get("failures", []),
+        "market_data_current": readiness.get("status") == "READY",
+        "journal_writable": journal_parent.exists() and os.access(journal_parent, os.W_OK),
+        "journal_duplicate_safe": len({
+            (e.get("event_type"), e.get("decision_timestamp_utc"), e.get("cohort_offset"))
+            for e in events
+        }) == len(events),
+        "last_successful_orchestration_utc": last_success,
+        "next_expected_decision": next_expected,
+        "brokerage_orders": False,
+        "request_time_historical_parquet_load": False,
+        "response_cache_ttl_seconds": _DASHBOARD_TTL_SECONDS,
+    }
+
+
 def get_v8_holdout_dashboard():
     signature = _dashboard_signature()
     now_monotonic = time.monotonic()
@@ -280,6 +344,7 @@ def get_v8_holdout_dashboard():
         "latest_exit": exits[-1] if exits else None,
         "curve": curve,
         "event_history": _event_history(events),
+        "launch_operations": _launch_operations(status, readiness, events, now),
         "latest_research_top10_timestamp_utc": checks.get("ranking_timestamp_utc") or latest_rankings["timestamp_utc"],
         "latest_research_top10": latest_top10,
         "latest_research_top10_note": "Latest frozen-model readiness rehearsal; not forward holdout evidence." if (rehearsal_details or rehearsal_symbols) else "Latest eligible frozen-model development snapshot; not forward holdout evidence.",
