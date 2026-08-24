@@ -49,6 +49,24 @@ def _sha256(path):
     return digest.hexdigest()
 
 
+def _status_safety_snapshot(path):
+    """Return evidence-bearing status fields while ignoring run metadata.
+
+    The scheduler may atomically refresh status.json while this read-only checkpoint
+    runs. updated_at_utc and appended_this_run describe that invocation; they are
+    not holdout evidence or frozen-contract state.
+    """
+    path = Path(path)
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in {"updated_at_utc", "appended_this_run"}
+    }
+
+
 def _atomic_write_json(path, payload):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,6 +125,7 @@ def main():
     print("=" * 92)
     journal_before = _sha256(PROJECT_ROOT / prod.JOURNAL_PATH)
     status_before = _sha256(PROJECT_ROOT / prod.STATUS_PATH)
+    status_safety_before = _status_safety_snapshot(PROJECT_ROOT / prod.STATUS_PATH)
 
     validations = [_run_module(label, module) for label, module in VALIDATION_MODULES]
 
@@ -133,10 +152,12 @@ def main():
 
     journal_after = _sha256(PROJECT_ROOT / prod.JOURNAL_PATH)
     status_after = _sha256(PROJECT_ROOT / prod.STATUS_PATH)
+    status_safety_after = _status_safety_snapshot(PROJECT_ROOT / prod.STATUS_PATH)
     if journal_before != journal_after:
         raise RuntimeError("production holdout journal changed during day-zero validation")
-    if status_before != status_after:
-        raise RuntimeError("production holdout status changed during day-zero validation")
+    if status_safety_before != status_safety_after:
+        raise RuntimeError("production holdout safety state changed during day-zero validation")
+    status_file_refreshed = status_before != status_after
 
     now = datetime.now(timezone.utc)
     checkpoint = {
@@ -152,6 +173,9 @@ def main():
             "production_journal_sha256_after": journal_after,
             "production_status_sha256_before": status_before,
             "production_status_sha256_after": status_after,
+            "production_status_safety_before": status_safety_before,
+            "production_status_safety_after": status_safety_after,
+            "production_status_file_refreshed": status_file_refreshed,
             "production_evidence_modified": False,
         },
         "v10_cycle3_reference": {
@@ -191,7 +215,9 @@ def main():
     print(f"V10 Cycle 3 reference SHA: {EXPECTED_V10_SHA}")
     print(f"Operational protected files: {len(protected)}")
     print(f"Required services registered: {len(services)}/{len(REQUIRED_SERVICES)}")
-    print("Production journal/status unchanged: True/True")
+    print("Production journal unchanged: True")
+    print("Production status safety state unchanged: True")
+    print(f"Production status file refreshed: {status_file_refreshed}")
     print("Frozen models modified: NO")
     print("Brokerage orders: OFF")
 
