@@ -2,7 +2,7 @@
   const IDLE_MS = 5 * 60 * 1000;
   const WARNING_MS = 30 * 1000;
   const WARNING_AT_MS = IDLE_MS - WARNING_MS;
-  const PING_MIN_MS = 30 * 1000;
+  const PING_MIN_MS = 1000;
   let lastActivity = Date.now();
   let lastPing = 0;
   let warningTimer = null;
