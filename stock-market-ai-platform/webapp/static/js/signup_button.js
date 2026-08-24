@@ -163,12 +163,19 @@
 
     const hideV8HoldoutFromLiveViewer = () => {
       if (!liveStockView) return;
-      const root = document.getElementById('v8-holdout-monitor');
-      if (root) root.style.setProperty('display', 'none', 'important');
-      for (const section of document.querySelectorAll('.shell section')) {
+      const researchOnlyIds = [
+        'stock-model-comparison',
+        'v8-holdout-monitor',
+        'v8-launch-readiness-card',
+        'v8-launch-day-operations',
+        'v10-confirmation-card',
+        'v10-cycle3-holdout-monitor'
+      ];
+      researchOnlyIds.forEach(id => document.getElementById(id)?.style.setProperty('display','none','important'));
+      for (const section of document.querySelectorAll('.shell section, .shell .panel')) {
         const label = section.querySelector('.label')?.textContent?.trim() || '';
         const heading = section.querySelector('h2,h3')?.textContent?.trim() || '';
-        if (/V8 FROZEN FORWARD HOLDOUT/i.test(`${label} ${heading}`)) {
+        if (/MODEL PERFORMANCE COMPARISON|V8 HOLDOUT|V8 FROZEN FORWARD|V8 HOLDOUT LAUNCH READINESS|ORIGINAL V10 RESEARCH|V10 CYCLE 3 FRESH FORWARD/i.test(`${label} ${heading}`)) {
           section.style.setProperty('display', 'none', 'important');
         }
       }
