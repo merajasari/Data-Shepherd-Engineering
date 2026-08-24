@@ -1,4 +1,25 @@
 (() => {
+  const CURRENT_COMPARISON_NOTE =
+    'Each model is shown as its own historical strategy curve on the same hypothetical $100,000 basis. ' +
+    'Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; no history is backfilled before eligibility. ' +
+    'Frozen V8 and the original V10 curves are development-era historical reconstructions only. Genuine V8 forward evidence beginning 2026-09-01 remains separate. ' +
+    'Original V10 and Cycle 2 were rejected for the November holdout; the separately preregistered and frozen V10 Cycle 3 fresh holdout begins 2027-01-04 and has no forward results yet.';
+
+  function correctLegacyComparisonCopy() {
+    if (!document.body) return;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.nodeValue || '';
+      if (
+        text.includes('formal holdout begins 2026-11-02') ||
+        text.includes('V10 confirmation/future holdout evidence')
+      ) {
+        node.nodeValue = CURRENT_COMPARISON_NOTE;
+      }
+    }
+  }
+
   function anchor() {
     return document.getElementById('v8-launch-readiness-card') ||
       [...document.querySelectorAll('section,article,div')].find(el =>
@@ -8,6 +29,7 @@
   }
 
   function render() {
+    correctLegacyComparisonCopy();
     const existing = document.getElementById('v10-confirmation-card');
     const anchorElement = anchor();
     if (!anchorElement && !existing) return false;
@@ -49,9 +71,13 @@
   const boot = () => {
     if (!render() && attempts++ < 30) setTimeout(boot, 400);
   };
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot, {once:true});
-  } else {
+  const start = () => {
     boot();
+    [500, 1500, 3000].forEach(delay => setTimeout(correctLegacyComparisonCopy, delay));
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, {once:true});
+  } else {
+    start();
   }
 })();
