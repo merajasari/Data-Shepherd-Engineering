@@ -30,7 +30,8 @@ from webapp.services.v4_realtime_equity_journal_service import get_v4_realtime_e
 from webapp.services.v4_reconstructed_history_service import get_v4_reconstructed_history  # noqa: E402
 app=Flask(__name__); app.secret_key=os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key: raise RuntimeError("FLASK_SECRET_KEY is not configured")
-app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12)); initialize_account_store()\nIDLE_TIMEOUT_SECONDS=300
+app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12)); initialize_account_store()
+IDLE_TIMEOUT_SECONDS=300
 @app.after_request
 def inject_dashboard_modules(response):
     if response.mimetype=="text/html" and response.status_code==200:
