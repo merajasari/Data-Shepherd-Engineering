@@ -150,13 +150,26 @@ def api_session_activity():
     session["last_activity_utc"]=datetime.now(timezone.utc).isoformat()
     return jsonify({"status":"active","idle_timeout_seconds":IDLE_TIMEOUT_SECONDS})
 
-def _customer_chat_fallback(message):
-    text=message.lower()
+CUSTOMER_CHAT_PAGES={"landing":"landing page","research":"Model Research","live":"Live Stock Viewer","crypto":"Crypto dashboard","crypto_visual":"Crypto Visual","platform":"platform"}
+CUSTOMER_CHAT_ADVICE_PHRASES=("should i buy","should i sell","what should i buy","what stock should","recommend a stock","recommend stocks","good investment","price target","guaranteed return","tell me what to trade","invest my money")
+
+def _customer_chat_page(raw):
+    return str(raw or "").strip().lower() if str(raw or "").strip().lower() in CUSTOMER_CHAT_PAGES else "platform"
+
+def _customer_chat_is_advice_request(message):
+    text=" ".join(str(message or "").lower().split())
+    return any(phrase in text for phrase in CUSTOMER_CHAT_ADVICE_PHRASES)
+
+def _customer_chat_fallback(message,page="platform"):
+    text=message.lower();location=CUSTOMER_CHAT_PAGES[_customer_chat_page(page)]
+    if _customer_chat_is_advice_request(message):
+        return "I can explain Data Shepherd's research evidence, rankings, and risk labels, but I cannot recommend buying or selling an asset, set a price target, or provide personalized financial advice. You can ask me how a model score or chart should be interpreted."
     if "v10" in text:return "V10 Cycle 3 is the frozen c3_confirm2_blend50 candidate. Its chart line is reconstructed development evidence; genuine fresh forward evidence begins January 4, 2027 and remains separate."
     if "v8" in text or "holdout" in text:return "V8 is the sole frozen near-term forward model. Its formal holdout begins September 1, 2026 using Top 10 equal weights, next-open entry, a five-session hold, and 10-bps modeled trading cost."
     if "comparison" in text or "chart" in text:return "The Model Performance Comparison places V4, V5, frozen V8, frozen V10 Cycle 3 reconstruction, and SPY on the same hypothetical $100,000 basis. It excludes live balances and genuine forward evidence."
-    if "rank" in text or "signal" in text:return "The ranking score orders stocks cross-sectionally. It is not a probability, guaranteed return, or individualized trade recommendation."
-    return "I can explain the model comparison, V8 and V10 frozen holdouts, ranking signals, forward evidence, dashboard controls, and platform terminology. Please ask about one of those areas."
+    if "rank" in text or "signal" in text:return "The ranking score orders stocks cross-sectionally. It is not a probability, guaranteed return, price forecast, or individualized trade recommendation."
+    if "provisional" in text or "live data" in text:return "A provisional live value uses the newest intraday reference price and can change before the session closes. Completed-session indicators remain labeled separately so live and finalized evidence are not mixed."
+    return f"I can explain the {location}, model comparisons, frozen holdouts, ranking signals, forward evidence, dashboard controls, and platform terminology. Please ask about one of those areas."
 
 @app.post("/api/customer-chat")
 def api_customer_chat():
@@ -164,13 +177,15 @@ def api_customer_chat():
     recent=[float(stamp) for stamp in session.get("customer_chat_requests",[]) if now-float(stamp)<60]
     if len(recent)>=10:return jsonify({"error":"Please wait a moment before sending another message."}),429
     recent.append(now);session["customer_chat_requests"]=recent
-    body=request.get_json(silent=True) or {};message=str(body.get("message") or "").strip();page=str(body.get("page") or "")[:300]
+    body=request.get_json(silent=True) or {};message=str(body.get("message") or "").strip();page=_customer_chat_page(body.get("page"))
     if not message:return jsonify({"error":"message is required"}),400
     if len(message)>2000:return jsonify({"error":"message is too long"}),400
+    if _customer_chat_is_advice_request(message):return jsonify({"reply":_customer_chat_fallback(message,page),"mode":"safety_guide"})
     key=os.environ.get("OPENAI_API_KEY","").strip()
-    if not key:return jsonify({"reply":_customer_chat_fallback(message),"mode":"platform_guide"})
+    if not key:return jsonify({"reply":_customer_chat_fallback(message,page),"mode":"platform_guide"})
     instructions=("You are the Data Shepherd Engineering customer platform guide. Explain only the dashboard, data pipeline, model research, frozen holdouts, and terminology. "
                   "Never give personalized financial advice, tell users to buy or sell, promise returns, or describe reconstructed results as live performance. "
+                  "Do not provide current prices, price targets, forecasts, or claims outside the supplied platform context. Explain that ranking scores are ordering signals, not probabilities. "
                   "Be concise and clearly distinguish development reconstruction from genuine forward evidence.")
     try:
         response=requests.post("https://api.openai.com/v1/responses",headers={"Authorization":f"Bearer {key}","Content-Type":"application/json"},json={"model":os.environ.get("DS_CHAT_MODEL","gpt-5-mini"),"instructions":instructions,"input":f"Current page: {page}\\nCustomer: {message}","max_output_tokens":500},timeout=25)
@@ -181,7 +196,7 @@ def api_customer_chat():
         return jsonify({"reply":reply,"mode":"ai"})
     except Exception as exc:
         print(f"[CUSTOMER CHAT ERROR] {type(exc).__name__}: {exc}")
-        return jsonify({"reply":_customer_chat_fallback(message),"mode":"platform_guide"})
+        return jsonify({"reply":_customer_chat_fallback(message,page),"mode":"platform_guide"})
 @app.route("/dashboard")
 @login_required
 def dashboard():
