@@ -2,6 +2,7 @@ from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
 from webapp.services.v10_cycle3_holdout_service import get_v10_cycle3_holdout_dashboard
 """Data Shepherd Engineering presentation layer."""
 import os, sys, time
+from collections import defaultdict, deque
 import requests
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -11,27 +12,41 @@ from werkzeug.security import check_password_hash
 load_dotenv(); sys.path.append("data-ingestion")
 from v5_symbols import get_v5_company_name, get_v5_sector, get_v5_symbol_options, get_v5_symbols  # noqa: E402
 from webapp.services.account_service import authenticate_account, begin_signup, change_password, complete_account_setup, get_account_setup_context, initialize_account_store, send_verification_email, verify_email_token  # noqa: E402
-from webapp.services.crypto_dashboard_service import get_crypto_dashboard_payload  # noqa: E402
-from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
-from webapp.services.stock_stream_health_service import get_stock_stream_health  # noqa: E402
-from webapp.services.crypto_live_market_service import get_all_crypto_live_tickers  # noqa: E402
-from webapp.services.crypto_history_service import get_crypto_history_payload  # noqa: E402
-from webapp.services.crypto_history_web_cache_service import get_crypto_history_cache_path, normalize_history_range  # noqa: E402
-from webapp.services.market_service import get_market_summary, get_recent_prices  # noqa: E402
-from webapp.services.fast_market_history_service import get_recent_prices_local  # noqa: E402
-from webapp.services.bulk_local_history_service import get_bulk_local_history  # noqa: E402
-from webapp.services.today_intraday_service import get_symbol_24h_intraday, get_today_top10_intraday  # noqa: E402
-from webapp.services.prediction_service import get_latest_prediction, get_v8_rankings  # noqa: E402
-from webapp.services.paper_trading_service import get_pnl_attribution, get_portfolio_summary  # noqa: E402
-from webapp.services.paper_journal_reader import summarize_journal  # noqa: E402
-from webapp.services.v5_shadow_portfolio_service import get_v5_shadow_comparison  # noqa: E402
-from webapp.services.v5_shadow_history_service import get_v5_shadow_history  # noqa: E402
-from webapp.services.v4_realtime_equity_journal_service import get_v4_realtime_equity_history  # noqa: E402
-from webapp.services.v4_reconstructed_history_service import get_v4_reconstructed_history  # noqa: E402
+# Dashboard research/data services are intentionally imported on first use.
+# This keeps health and lightweight holdout requests from loading Pandas/PyArrow
+# into a fresh Gunicorn worker and avoids multiplying startup memory.
+def _lazy(module,name,*args,**kwargs):
+    from importlib import import_module
+    return getattr(import_module(module),name)(*args,**kwargs)
+
+def get_crypto_dashboard_payload(*a,**k):return _lazy("webapp.services.crypto_dashboard_service","get_crypto_dashboard_payload",*a,**k)
+def get_all_live_quotes(*a,**k):return _lazy("webapp.services.live_market_service","get_all_live_quotes",*a,**k)
+def get_live_quote(*a,**k):return _lazy("webapp.services.live_market_service","get_live_quote",*a,**k)
+def get_stock_stream_health(*a,**k):return _lazy("webapp.services.stock_stream_health_service","get_stock_stream_health",*a,**k)
+def get_all_crypto_live_tickers(*a,**k):return _lazy("webapp.services.crypto_live_market_service","get_all_crypto_live_tickers",*a,**k)
+def get_crypto_history_payload(*a,**k):return _lazy("webapp.services.crypto_history_service","get_crypto_history_payload",*a,**k)
+def get_crypto_history_cache_path(*a,**k):return _lazy("webapp.services.crypto_history_web_cache_service","get_crypto_history_cache_path",*a,**k)
+def normalize_history_range(*a,**k):return _lazy("webapp.services.crypto_history_web_cache_service","normalize_history_range",*a,**k)
+def get_market_summary(*a,**k):return _lazy("webapp.services.market_service","get_market_summary",*a,**k)
+def get_recent_prices(*a,**k):return _lazy("webapp.services.market_service","get_recent_prices",*a,**k)
+def get_recent_prices_local(*a,**k):return _lazy("webapp.services.fast_market_history_service","get_recent_prices_local",*a,**k)
+def get_bulk_local_history(*a,**k):return _lazy("webapp.services.bulk_local_history_service","get_bulk_local_history",*a,**k)
+def get_symbol_24h_intraday(*a,**k):return _lazy("webapp.services.today_intraday_service","get_symbol_24h_intraday",*a,**k)
+def get_today_top10_intraday(*a,**k):return _lazy("webapp.services.today_intraday_service","get_today_top10_intraday",*a,**k)
+def get_latest_prediction(*a,**k):return _lazy("webapp.services.prediction_service","get_latest_prediction",*a,**k)
+def get_v8_rankings(*a,**k):return _lazy("webapp.services.prediction_service","get_v8_rankings",*a,**k)
+def get_pnl_attribution(*a,**k):return _lazy("webapp.services.paper_trading_service","get_pnl_attribution",*a,**k)
+def get_portfolio_summary(*a,**k):return _lazy("webapp.services.paper_trading_service","get_portfolio_summary",*a,**k)
+def summarize_journal(*a,**k):return _lazy("webapp.services.paper_journal_reader","summarize_journal",*a,**k)
+def get_v5_shadow_comparison(*a,**k):return _lazy("webapp.services.v5_shadow_portfolio_service","get_v5_shadow_comparison",*a,**k)
+def get_v5_shadow_history(*a,**k):return _lazy("webapp.services.v5_shadow_history_service","get_v5_shadow_history",*a,**k)
+def get_v4_realtime_equity_history(*a,**k):return _lazy("webapp.services.v4_realtime_equity_journal_service","get_v4_realtime_equity_history",*a,**k)
+def get_v4_reconstructed_history(*a,**k):return _lazy("webapp.services.v4_reconstructed_history_service","get_v4_reconstructed_history",*a,**k)
 app=Flask(__name__); app.secret_key=os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key: raise RuntimeError("FLASK_SECRET_KEY is not configured")
 app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12)); initialize_account_store()
 IDLE_TIMEOUT_SECONDS=300
+_REQUEST_TIMINGS=defaultdict(lambda:deque(maxlen=200))
 @app.before_request
 def begin_request_timing():
     g.request_started_monotonic=time.perf_counter()
@@ -62,6 +77,8 @@ def inject_dashboard_modules(response):
     started=getattr(g,"request_started_monotonic",None)
     if started is not None:
         elapsed_ms=(time.perf_counter()-started)*1000.0
+        endpoint=request.url_rule.endpoint if request.url_rule else request.path
+        _REQUEST_TIMINGS[endpoint].append(elapsed_ms)
         response.headers["Server-Timing"]=f"app;dur={elapsed_ms:.2f}"
         response.headers["X-Response-Time-Ms"]=f"{elapsed_ms:.2f}"
     return response
@@ -286,6 +303,18 @@ def api_crypto_history_file():
     return send_file(path,mimetype="application/json",conditional=True,max_age=30)
 @app.route("/health")
 def health():return jsonify({"status":"ok","service":"data-shepherd-web","timestamp_utc":datetime.now(timezone.utc).isoformat()})
+
+@app.get("/api/operations/performance")
+def api_operations_performance():
+    endpoints={}
+    for name,samples in sorted(_REQUEST_TIMINGS.items()):
+        values=sorted(samples);count=len(values)
+        if not count:continue
+        endpoints[name]={"count":count,"latest_ms":round(samples[-1],2),"p50_ms":round(values[(count-1)//2],2),"p95_ms":round(values[max(0,int(count*.95)-1)],2),"max_ms":round(values[-1],2)}
+    return jsonify({"status":"ok","sample_limit_per_endpoint":200,"endpoints":endpoints,
+                    "heavy_modules_loaded":{"pandas":"pandas" in sys.modules,"pyarrow":"pyarrow" in sys.modules},
+                    "startup_policy":"research services are lazy-loaded; lightweight health/holdout paths do not require Pandas or PyArrow",
+                    "brokerage_orders":False})
 @app.get("/api/v8/holdout")
 def api_v8_holdout():
     response=jsonify(get_v8_holdout_dashboard())
