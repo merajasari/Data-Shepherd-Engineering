@@ -9,14 +9,14 @@ from __future__ import annotations
 import json
 import math
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import statistics
 import time
 
-import pandas as pd
 
 EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
-HOLDOUT_START = pd.Timestamp("2026-09-01T00:00:00Z")
+HOLDOUT_START = datetime(2026, 9, 1, tzinfo=timezone.utc)
 ROOT = Path("data/model/v8/holdout")
 JOURNAL_PATH = ROOT / "journal.jsonl"
 STATUS_PATH = ROOT / "status.json"
@@ -224,10 +224,10 @@ def _launch_operations(status, readiness, events, now):
     monitor_fresh = False
     if checked_raw:
         try:
-            checked = pd.Timestamp(checked_raw)
+            checked = datetime.fromisoformat(str(checked_raw).replace("Z", "+00:00"))
             if checked.tzinfo is None:
-                checked = checked.tz_localize("UTC")
-            monitor_fresh = (now - checked).total_seconds() <= 15 * 60
+                checked = checked.replace(tzinfo=timezone.utc)
+            monitor_fresh = (now - checked.astimezone(timezone.utc)).total_seconds() <= 15 * 60
         except Exception:
             monitor_fresh = False
 
@@ -281,7 +281,7 @@ def get_v8_holdout_dashboard():
     ):
         return _dashboard_cache["payload"]
 
-    now = pd.Timestamp.now(tz="UTC")
+    now = datetime.now(timezone.utc)
     status = _read_json(STATUS_PATH)
     readiness = _read_json(READINESS_PATH)
     events = _events()
