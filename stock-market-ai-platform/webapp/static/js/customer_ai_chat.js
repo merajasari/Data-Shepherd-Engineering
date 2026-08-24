@@ -4,12 +4,12 @@
   const style = document.createElement('style');
   style.id = 'ds-ai-chat-style';
   style.textContent = `
-    #ds-ai-chat-launcher{position:fixed;right:22px;bottom:22px;z-index:90000;display:grid;place-items:center;width:54px;height:54px;padding:0;border:1px solid rgba(54,216,255,.7);border-radius:20px;background:linear-gradient(145deg,#36d8ff 0%,#28c9d8 45%,#39e3a1 100%);color:#06151d;cursor:pointer;box-shadow:0 18px 44px rgba(0,0,0,.46),0 0 0 5px rgba(54,216,255,.09);transition:transform .18s ease,box-shadow .18s ease}
-    #ds-ai-chat-launcher:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 22px 50px rgba(0,0,0,.5),0 0 0 7px rgba(54,216,255,.12)}
-    #ds-ai-chat-launcher:focus-visible{outline:3px solid #f2f6ff;outline-offset:4px}
-    #ds-ai-chat-launcher svg{width:29px;height:29px;display:block;transform:translate(2px,2px)}
-    #ds-ai-chat-launcher::before{content:"AI";position:absolute;left:7px;top:5px;color:#06151d;font-size:.52rem;font-weight:1000;line-height:1;letter-spacing:-.03em}
-    #ds-ai-chat-launcher::after{content:"Ask Data Shepherd";position:absolute;right:64px;top:50%;transform:translateY(-50%) translateX(7px);width:max-content;padding:8px 11px;border:1px solid #244261;border-radius:10px;background:#10223b;color:#f2f6ff;font-size:.76rem;font-weight:850;letter-spacing:.02em;box-shadow:0 10px 28px rgba(0,0,0,.35);opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility .16s ease;pointer-events:none}
+    #ds-ai-chat-launcher{position:fixed;right:22px;bottom:22px;z-index:90000;display:grid;place-items:center;width:46px;height:46px;padding:0;border:1px solid rgba(54,216,255,.7);border-radius:15px;background:linear-gradient(145deg,#36d8ff 0%,#28c9d8 45%,#39e3a1 100%);color:#06151d;cursor:pointer;box-shadow:0 18px 44px rgba(0,0,0,.46),0 0 0 3px rgba(54,216,255,.08);transition:transform .18s ease,box-shadow .18s ease}
+    #ds-ai-chat-launcher:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 22px 50px rgba(0,0,0,.5),0 0 0 4px rgba(54,216,255,.1)}
+    #ds-ai-chat-launcher:focus-visible{outline:2px solid #f2f6ff;outline-offset:2px}
+    #ds-ai-chat-launcher svg{width:24px;height:24px;display:block;transform:translate(2px,3px)}
+    #ds-ai-chat-launcher::before{content:"AI";position:absolute;left:5px;top:4px;color:#06151d;font-size:.7rem;font-weight:1000;line-height:1;letter-spacing:-.03em}
+    #ds-ai-chat-launcher::after{content:"Ask Data Shepherd";position:absolute;right:56px;top:50%;transform:translateY(-50%) translateX(7px);width:max-content;padding:8px 11px;border:1px solid #244261;border-radius:10px;background:#10223b;color:#f2f6ff;font-size:.76rem;font-weight:850;letter-spacing:.02em;box-shadow:0 10px 28px rgba(0,0,0,.35);opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility .16s ease;pointer-events:none}
     #ds-ai-chat-launcher:hover::after,#ds-ai-chat-launcher:focus-visible::after{opacity:1;visibility:visible;transform:translateY(-50%) translateX(0)}
     #ds-ai-chat-panel{position:fixed;right:22px;bottom:92px;z-index:90000;display:none;flex-direction:column;width:min(390px,calc(100vw - 28px));height:min(560px,calc(100vh - 125px));border:1px solid #244261;border-radius:20px;background:#091628;color:#f2f6ff;box-shadow:0 28px 80px rgba(0,0,0,.58);overflow:hidden}
     #ds-ai-chat-panel.open{display:flex}
@@ -23,7 +23,7 @@
     #ds-chat-input{min-width:0;resize:none;padding:11px 12px;border:1px solid #244261;border-radius:12px;background:#0d1c31;color:#f2f6ff;font:inherit}
     #ds-chat-send{padding:10px 14px;border:0;border-radius:12px;background:linear-gradient(90deg,#36d8ff,#39e3a1);color:#06151d;font-weight:950;cursor:pointer}
     #ds-chat-send:disabled{opacity:.55;cursor:wait}
-    @media(max-width:520px){#ds-ai-chat-launcher{right:14px;bottom:14px;width:52px;height:52px;border-radius:17px}#ds-ai-chat-launcher::after{display:none}#ds-ai-chat-panel{right:14px;bottom:82px}}
+    @media(max-width:520px){#ds-ai-chat-launcher{right:14px;bottom:14px;width:44px;height:44px;border-radius:14px}#ds-ai-chat-launcher::after{display:none}#ds-ai-chat-panel{right:14px;bottom:82px}}
   `;
   document.head.appendChild(style);
 
