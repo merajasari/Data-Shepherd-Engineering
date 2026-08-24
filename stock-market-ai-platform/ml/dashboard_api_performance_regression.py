@@ -27,7 +27,7 @@ def main():
     require('response.headers["Server-Timing"]' in source,"Every Flask response receives Server-Timing")
     require('response.headers["X-Response-Time-Ms"]' in source,"Every Flask response receives X-Response-Time-Ms")
     require('/api/operations/performance' in source,"Read-only performance telemetry endpoint exists")
-    require("brokerage_orders":False" in source,"Performance endpoint declares brokerage orders off")
+    require('"brokerage_orders":False' in source,"Performance endpoint declares brokerage orders off")
 
     os.environ.setdefault("FLASK_SECRET_KEY","performance-regression-secret")
     from webapp.app import app
