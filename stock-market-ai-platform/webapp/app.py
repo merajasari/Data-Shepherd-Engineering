@@ -1,12 +1,12 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
 from webapp.services.v10_cycle3_holdout_service import get_v10_cycle3_holdout_dashboard
 """Data Shepherd Engineering presentation layer."""
-import os, sys
+import os, sys, time
 import requests
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
 load_dotenv(); sys.path.append("data-ingestion")
 from v5_symbols import get_v5_company_name, get_v5_sector, get_v5_symbol_options, get_v5_symbols  # noqa: E402
@@ -32,6 +32,10 @@ app=Flask(__name__); app.secret_key=os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key: raise RuntimeError("FLASK_SECRET_KEY is not configured")
 app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12)); initialize_account_store()
 IDLE_TIMEOUT_SECONDS=300
+@app.before_request
+def begin_request_timing():
+    g.request_started_monotonic=time.perf_counter()
+
 @app.after_request
 def inject_dashboard_modules(response):
     if response.mimetype=="text/html" and response.status_code==200:
@@ -55,6 +59,11 @@ def inject_dashboard_modules(response):
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
             response.set_data(html)
+    started=getattr(g,"request_started_monotonic",None)
+    if started is not None:
+        elapsed_ms=(time.perf_counter()-started)*1000.0
+        response.headers["Server-Timing"]=f"app;dur={elapsed_ms:.2f}"
+        response.headers["X-Response-Time-Ms"]=f"{elapsed_ms:.2f}"
     return response
 V5_SYMBOLS=get_v5_symbols(); V5_SYMBOL_OPTIONS=get_v5_symbol_options(); DEFAULT_SYMBOL="AAPL"
 def _session_idle_expired():
@@ -263,7 +272,15 @@ def api_crypto_history_file():
 @app.route("/health")
 def health():return jsonify({"status":"ok","service":"data-shepherd-web","timestamp_utc":datetime.now(timezone.utc).isoformat()})
 @app.get("/api/v8/holdout")
-def api_v8_holdout():return get_v8_holdout_dashboard()
+def api_v8_holdout():
+    response=jsonify(get_v8_holdout_dashboard())
+    response.headers["Cache-Control"]="private, max-age=5"
+    response.headers["X-Data-Serving-Path"]="lightweight-files; no-historical-parquet"
+    return response
 @app.get("/api/v10/cycle3/holdout")
-def api_v10_cycle3_holdout():return get_v10_cycle3_holdout_dashboard()
+def api_v10_cycle3_holdout():
+    response=jsonify(get_v10_cycle3_holdout_dashboard())
+    response.headers["Cache-Control"]="private, max-age=5"
+    response.headers["X-Data-Serving-Path"]="lightweight-files"
+    return response
 if __name__=="__main__":app.run(host="0.0.0.0",port=5000,debug=False)
