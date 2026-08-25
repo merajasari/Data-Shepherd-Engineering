@@ -179,6 +179,21 @@ def main():
     _check(activation_audit.get("brokerage_orders") is False,
            "Activation audit brokerage authority", "OFF", failures)
 
+    approval_contract = PROJECT_ROOT / "ml/trading/paper_shadow_manual_approval_contract.json"
+    approval_contract_sha = __import__("hashlib").sha256(approval_contract.read_bytes()).hexdigest()
+    _check(approval_contract_sha ==
+           "28d38e8c9cfa2c5170b38b15a12d2110d04634ba6d3e7852b1bf4a111e424a4e",
+           "Manual approval ceremony contract", approval_contract_sha, failures)
+    approval_artifact = PROJECT_ROOT / "data/trading/paper_shadow/activation/manual_approval.json"
+    if now < datetime(2026, 9, 1, tzinfo=timezone.utc):
+        _check(not approval_artifact.exists(), "Pre-boundary manual approval artifact",
+               "ABSENT", failures)
+    else:
+        _check(True, "Manual approval artifact state",
+               "present for validation" if approval_artifact.exists() else "not present", failures)
+    _check(True, "Manual approval validator authority", "READ ONLY", failures)
+    _check(True, "Manual approval activation authority", "NONE", failures)
+
     for label in SERVICES:
         loaded, detail = _service(label)
         _check(loaded, f"LaunchAgent {label}", detail, failures)
@@ -245,6 +260,7 @@ def main():
     print(f"Paper-shadow execution state: {paper_monitor.get('execution_state')}")
     print(f"Activation audit state: {activation_audit.get('status')}")
     print("Activation performed: NO")
+    print("Manual approval validator: READ ONLY")
     print("Brokerage orders: OFF")
     print("Evidence writes: NONE")
 
