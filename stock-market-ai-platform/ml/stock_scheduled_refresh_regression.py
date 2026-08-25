@@ -22,8 +22,8 @@ EXPECTED_BACKEND = "spark"
 EXPECTED_VERIFICATION = "END_TO_END_READY_VERIFIED"
 
 _SECRET_QUERY_PATTERN = re.compile(
-    r"(?i)(?:[?&]|\\b)(?:token|api[_-]?key|apikey|access[_-]?token)="
-    r"[^\\s&\"'<>]+"
+    r"(?i)(?:[?&]|\b)(?:token|api[_-]?key|apikey|access[_-]?token)="
+    r"[^\s&\"'<>]+"
 )
 
 
