@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from webapp.services.paper_shadow_service import get_paper_shadow_status
 
 CONTRACT_PATH=Path("ml/trading/live_trading_contract.json")
 PAPER_CHECKPOINT_PATH=Path("data/trading/readiness/paper_engineering_status.json")
@@ -74,4 +75,5 @@ def get_trading_readiness():
         "prohibited":[name.replace("_"," ").upper() for name,value in (contract.get("prohibited") or {}).items() if value],
         "limits":[{"label":name.replace("_"," ").upper(),"configured":value is not None} for name,value in limits.items()],
         "paper_engineering":_paper_engineering_status(),
+        "paper_shadow":get_paper_shadow_status(),
     }
