@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from webapp.services.paper_shadow_service import get_paper_shadow_status
+from webapp.services.paper_shadow_bridge_service import get_paper_shadow_bridge_status
 
 CONTRACT_PATH=Path("ml/trading/live_trading_contract.json")
 PAPER_CHECKPOINT_PATH=Path("data/trading/readiness/paper_engineering_status.json")
@@ -25,6 +26,8 @@ def _paper_engineering_status():
         "sandbox_orchestration":False,
         "persistent_paper_shadow":False,
         "atomic_shadow_state":False,
+        "controlled_signal_bridge":False,
+        "bridge_activation_disabled":False,
         "live_credentials":False,
         "brokerage_orders":False,
         "production_evidence_modified":False,
@@ -78,4 +81,5 @@ def get_trading_readiness():
         "limits":[{"label":name.replace("_"," ").upper(),"configured":value is not None} for name,value in limits.items()],
         "paper_engineering":_paper_engineering_status(),
         "paper_shadow":get_paper_shadow_status(),
+        "paper_shadow_bridge":get_paper_shadow_bridge_status(),
     }
