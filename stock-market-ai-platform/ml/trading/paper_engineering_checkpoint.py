@@ -25,6 +25,7 @@ MODULES = (
     ("paper_shadow_scheduler", "ml.trading.paper_shadow_scheduler_regression"),
     ("operational_change_control", "ml.trading.paper_shadow_operational_change_control"),
     ("day_zero_activation_audit", "ml.trading.paper_shadow_activation_audit_regression"),
+    ("manual_approval_ceremony", "ml.trading.paper_shadow_manual_approval_regression"),
 )
 
 
@@ -71,7 +72,7 @@ def main() -> None:
     results = [run_module(name, module) for name, module in MODULES]
     passed = all(item["passed"] for item in results)
     payload = {
-        "schema_version": 7,
+        "schema_version": 8,
         "status": "PASSED" if passed else "FAILED",
         "validated_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": "PAPER_ONLY",
@@ -98,6 +99,8 @@ def main() -> None:
         "day_zero_activation_audit": results[7]["passed"],
         "activation_requires_manual_approval": results[7]["passed"],
         "activation_self_authority": False,
+        "manual_approval_ceremony": results[8]["passed"],
+        "manual_approval_validator_read_only": results[8]["passed"],
         "live_credentials": False,
         "brokerage_orders": False,
         "production_evidence_modified": False,
@@ -114,6 +117,7 @@ def main() -> None:
     print("Paper-shadow scheduler: VERIFIED MONITOR-ONLY" if payload["paper_shadow_scheduler"] else "Paper-shadow scheduler: FAILED")
     print("Operational change control: LOCKED_AND_VERIFIED" if payload["operational_change_control"] else "Operational change control: FAILED")
     print("Day-zero activation audit: PREREGISTERED MANUAL-APPROVAL ONLY" if payload["day_zero_activation_audit"] else "Day-zero activation audit: FAILED")
+    print("Manual approval ceremony: VERIFIED READ-ONLY" if payload["manual_approval_ceremony"] else "Manual approval ceremony: FAILED")
     print("Mode: PAPER ONLY")
     print("Live credentials: ABSENT")
     print("Brokerage orders: OFF")
