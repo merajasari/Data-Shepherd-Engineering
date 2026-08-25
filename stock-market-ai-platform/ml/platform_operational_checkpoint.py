@@ -24,6 +24,7 @@ SERVICES = (
     "com.datashepherd.cloudflared",
     "com.datashepherd.v8paper",
     "com.datashepherd.v10cycle3",
+    "com.datashepherd.papershadow",
 )
 ENDPOINTS = {
     "web_health": "http://127.0.0.1:5001/health",
@@ -117,6 +118,43 @@ def main():
     else:
         _check(True, "V10 journal integrity", f"events={len(v10_events)}; duplicate-safe", failures)
 
+    from ml.trading.paper_shadow_operational_change_control import verify as verify_paper_shadow_lock
+    _, protected_files, lock_failures = verify_paper_shadow_lock()
+    _check(not lock_failures, "Paper-shadow operational change control",
+           f"protected={len(protected_files)}; LOCKED_AND_VERIFIED" if not lock_failures else "; ".join(lock_failures),
+           failures)
+
+    monitor_path = PROJECT_ROOT / "data/trading/paper_shadow/monitor/status.json"
+    try:
+        paper_monitor = _json(monitor_path)
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+        paper_monitor = {}
+        _check(False, "Paper-shadow monitor status",
+               f"{type(exc).__name__}: {monitor_path}", failures)
+    expected_execution = (
+        "WAITING_FOR_BOUNDARY"
+        if now < datetime(2026, 9, 1, tzinfo=timezone.utc)
+        else "WAITING_FOR_MANUAL_ACTIVATION"
+    )
+    _check(paper_monitor.get("status") == "HEALTHY",
+           "Paper-shadow monitor health", str(paper_monitor.get("status")), failures)
+    _check(paper_monitor.get("execution_state") == expected_execution,
+           "Paper-shadow execution state", str(paper_monitor.get("execution_state")), failures)
+    _check(paper_monitor.get("bridge_status") == "PREREGISTERED_DISABLED",
+           "Paper-shadow bridge state", str(paper_monitor.get("bridge_status")), failures)
+    _check(paper_monitor.get("paper_account_status") in {"EMPTY_READY", "HEALTHY"},
+           "Paper-shadow account state", str(paper_monitor.get("paper_account_status")), failures)
+    _check(paper_monitor.get("signal_exports") == 0,
+           "Paper-shadow signal exports", "0", failures)
+    _check(paper_monitor.get("holdout_outcomes_read") is False,
+           "Paper-shadow holdout outcome access", "NO", failures)
+    _check(paper_monitor.get("production_holdout_evidence_modified") is False,
+           "Paper-shadow production evidence writes", "NONE", failures)
+    _check(paper_monitor.get("live_credentials") is False,
+           "Paper-shadow live credentials", "ABSENT", failures)
+    _check(paper_monitor.get("brokerage_orders") is False,
+           "Paper-shadow brokerage authority", "OFF", failures)
+
     for label in SERVICES:
         loaded, detail = _service(label)
         _check(loaded, f"LaunchAgent {label}", detail, failures)
@@ -179,6 +217,8 @@ def main():
     print(f"Services registered: {len(SERVICES)}/{len(SERVICES)}")
     print(f"Local APIs healthy: {len(ENDPOINTS)}/{len(ENDPOINTS)}")
     print("Frozen identities: VERIFIED")
+    print(f"Paper-shadow protected files: {len(protected_files)}")
+    print(f"Paper-shadow execution state: {paper_monitor.get('execution_state')}")
     print("Brokerage orders: OFF")
     print("Evidence writes: NONE")
 
