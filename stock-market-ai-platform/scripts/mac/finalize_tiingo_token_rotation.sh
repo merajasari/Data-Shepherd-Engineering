@@ -27,7 +27,7 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 text = path.read_text()
-match = re.search(r"(?m)^\\s*TIINGO_API_KEY\\s*=\\s*(?:['\"])?([^'\"#\\s]+)", text)
+match = re.search(r"(?m)^\s*TIINGO_API_KEY\s*=\s*(?:['\"])?([^'\"#\s]+)", text)
 if not match or len(match.group(1).strip()) < 12:
     raise SystemExit("[FAIL] .env does not contain a usable TIINGO_API_KEY.")
 print("[PASS] A Tiingo token is configured in .env (value not displayed).")
