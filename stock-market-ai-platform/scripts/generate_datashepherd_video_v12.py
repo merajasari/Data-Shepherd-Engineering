@@ -273,14 +273,8 @@ def clean_site(path, t, title, subtitle):
             )
         im.paste(rendered, (70, 200))
 
-    # One browser frame around the main image only—never extra inset boxes.
-    bx0, by0, bx1 = 120, 205, 1800
-    d.rounded_rectangle((bx0, by0, bx1, by0 + 48), 14, fill=(7, 18, 31), outline=v6.BORDER, width=2)
-    for n, colour in enumerate(((255, 95, 86), (255, 189, 46), (39, 201, 63))):
-        cx = bx0 + 25 + n * 28
-        d.ellipse((cx - 7, by0 + 17, cx + 7, by0 + 31), fill=colour)
-    d.rounded_rectangle((bx0 + 130, by0 + 10, bx1 - 25, by0 + 38), 10, fill=(11, 30, 49))
-    d.text((bx0 + 155, by0 + 13), "datashepherdengineering.com", font=v6.font(15, True), fill=v6.MUTED)
+    # Clean image framing only. Browser dots and URL/address chrome are omitted
+    # throughout the video so the platform artwork remains the focus.
     d.rounded_rectangle(area, 26, outline=v6.CYAN, width=3)
     d.rounded_rectangle((1435, 145, 1815, 190), 12, fill=(4, 18, 31), outline=v6.BORDER, width=2)
     d.text((1460, 157), "ACTUAL DATA SHEPHERD PLATFORM", font=v6.font(15, True), fill=v6.GREEN)

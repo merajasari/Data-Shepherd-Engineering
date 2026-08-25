@@ -47,35 +47,15 @@ def prepare_overview_artwork(source, t):
         fill=(165, 185, 207),
     )
 
-    # Remove the complete phone, bezel and Android mascot region first. The
-    # replacement chart is authored into the source artwork itself.
-    x0, y0 = int(sw * .205), int(sh * .555)
-    x1, y1 = int(sw * .372), int(sh * .955)
-    d.rounded_rectangle((x0, y0, x1, y1), max(12, sw // 110), fill=(4, 17, 30), outline=(22, 88, 110), width=max(2, sw // 650))
-    d.text((x0 + int(sw * .012), y0 + int(sh * .022)), "FORWARD MARKET SIGNAL", font=v6.font(max(12, int(sw * .0115)), True), fill=v6.CYAN)
-    d.text((x0 + int(sw * .012), y0 + int(sh * .060)), "MODEL + MARKET CONTEXT", font=v6.font(max(9, int(sw * .0085)), True), fill=v6.MUTED)
-    gx0, gy0 = x0 + int(sw * .014), y0 + int(sh * .115)
-    gx1, gy1 = x1 - int(sw * .014), y1 - int(sh * .085)
-    for j in range(5):
-        yy = gy0 + int((gy1 - gy0) * j / 4)
-        d.line((gx0, yy, gx1, yy), fill=(13, 43, 62), width=max(1, sw // 1500))
-    for j in range(7):
-        xx = gx0 + int((gx1 - gx0) * j / 6)
-        d.line((xx, gy0, xx, gy1), fill=(10, 33, 50), width=max(1, sw // 1700))
-    values = [.72, .66, .69, .57, .61, .46, .51, .39, .43, .28, .32, .18]
-    points = []
-    for i, value in enumerate(values):
-        px = gx0 + int((gx1 - gx0) * i / (len(values) - 1))
-        py = gy0 + int((gy1 - gy0) * value)
-        points.append((px, py))
-    area = points + [(points[-1][0], gy1), (points[0][0], gy1)]
-    d.polygon(area, fill=(5, 49, 61))
-    d.line(points, fill=(18, 105, 126), width=max(5, sw // 300))
-    d.line(points, fill=v6.GREEN, width=max(2, sw // 650))
-    pulse = points[min(len(points) - 1, int(t * len(points)))]
-    radius = max(4, sw // 380)
-    d.ellipse((pulse[0] - radius, pulse[1] - radius, pulse[0] + radius, pulse[1] + radius), fill=v6.CYAN)
-    d.text((gx0, y1 - int(sh * .052)), "LIVE SIGNAL VIEW", font=v6.font(max(9, int(sw * .0085)), True), fill=v6.GREEN)
+    # Remove the complete phone, bezel, Android mascot and replacement chart.
+    # Rebuild the pixels as a quiet continuation of the platform background.
+    x0, y0 = int(sw * .195), int(sh * .535)
+    x1, y1 = int(sw * .382), int(sh * .970)
+    d.rectangle((x0, y0, x1, y1), fill=(4, 17, 30))
+    for gx in range(x0 + max(18, sw // 65), x1, max(26, sw // 38)):
+        d.line((gx, y0, gx, y1), fill=(6, 27, 42), width=1)
+    for gy in range(y0 + max(18, sh // 45), y1, max(24, sh // 24)):
+        d.line((x0, gy, x1, gy), fill=(6, 27, 42), width=1)
 
     # Replace the original phone-build metric in the top ribbon as well.
     hx0, hy0 = int(sw * .355), int(sh * .016)
@@ -111,12 +91,6 @@ def cinematic_open(t):
     panel = v6.cover(panel_canvas, (1780, 785), 1.0 + .018 * v6.ease(t), .5, .5)
     d.rounded_rectangle((55, 235, 1865, 1050), 30, fill=(5, 18, 31), outline=v6.CYAN, width=4)
     im.paste(panel, (70, 255))
-    d.rounded_rectangle((70, 255, 1850, 303), 15, fill=(7, 20, 34))
-    for n, colour in enumerate(((255, 95, 86), (255, 189, 46), (39, 201, 63))):
-        cx = 100 + n * 28
-        d.ellipse((cx - 7, 272, cx + 7, 286), fill=colour)
-    d.rounded_rectangle((205, 266, 1810, 294), 9, fill=(11, 31, 49))
-    d.text((232, 267), "datashepherdengineering.com", font=v6.font(14, True), fill=v6.MUTED)
 
     portrait_path = v6.fp()
     if portrait_path:
@@ -278,10 +252,7 @@ def monitoring13(t):
     im = v6.bg(); v6.head(im, "READ-ONLY OPERATIONS", "A production-style monitor for evidence, health and forward comparison")
     d = v6.ImageDraw.Draw(im)
     d.rounded_rectangle((90, 245, 1830, 925), 30, fill=(5, 18, 32), outline=v6.CYAN, width=3)
-    d.rounded_rectangle((90, 245, 1830, 305), 18, fill=(8, 28, 47))
-    for n, col in enumerate(((255,95,86),(255,189,46),(39,201,63))):
-        x=128+n*30; d.ellipse((x-7,268,x+7,282),fill=col)
-    d.text((230, 262), "V10 CYCLE 3  /  FORWARD EVIDENCE MONITOR", font=v6.font(18, True), fill=v6.TEXT)
+    d.text((135, 270), "V10 CYCLE 3  /  FORWARD EVIDENCE MONITOR", font=v6.font(18, True), fill=v6.TEXT)
     d.rounded_rectangle((1450, 257, 1785, 293), 10, fill=(5, 35, 34), outline=v6.GREEN, width=2)
     center_text(d, (1618, 265), "SYSTEM READY", v6.font(14, True), v6.GREEN)
 
