@@ -129,6 +129,10 @@ class PaperSignalOrchestrator:
             event_key=f"{intent.intent_id}-proposed",
         )
         account_snapshot = self.adapter.account_snapshot()
+        positions_before = {
+            item["symbol"]: Decimal(item["quantity"])
+            for item in self.adapter.positions()
+        }
         risk_account = {
             "reconciled": True,
             "buying_power_usd": account_snapshot["cash"],
@@ -185,10 +189,12 @@ class PaperSignalOrchestrator:
                    {"filled_quantity": filled["filled_quantity"], "price": str(signal.reference_price)},
                    event_key=f"{intent.intent_id}-filled")
 
-        expected_cash = self.limits.starting_cash_usd - intent.quantity * signal.reference_price
-        reconciliation = self.adapter.reconcile(
-            expected_cash, {intent.symbol: intent.quantity}
+        expected_cash = Decimal(account_snapshot["cash"]) - intent.quantity * signal.reference_price
+        expected_positions = dict(positions_before)
+        expected_positions[intent.symbol] = (
+            expected_positions.get(intent.symbol, Decimal("0")) + intent.quantity
         )
+        reconciliation = self.adapter.reconcile(expected_cash, expected_positions)
         if not reconciliation["reconciled"]:
             raise SandboxBoundaryViolation("paper reconciliation failed after fill")
         return {
