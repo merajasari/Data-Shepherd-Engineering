@@ -5,6 +5,37 @@ import json
 from pathlib import Path
 
 CONTRACT_PATH=Path("ml/trading/live_trading_contract.json")
+PAPER_CHECKPOINT_PATH=Path("data/trading/readiness/paper_engineering_status.json")
+
+
+def _paper_engineering_status():
+    default={
+        "status":"NOT_VALIDATED",
+        "validated_at_utc":None,
+        "mode":"PAPER_ONLY",
+        "modules":[],
+        "lifecycle":[],
+        "restart_recovery":False,
+        "idempotency":False,
+        "concurrency_safety":False,
+        "reconciliation":False,
+        "failure_injection":False,
+        "live_credentials":False,
+        "brokerage_orders":False,
+        "production_evidence_modified":False,
+    }
+    try:
+        payload=json.loads(PAPER_CHECKPOINT_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError,json.JSONDecodeError,OSError):
+        return default
+    if not isinstance(payload,dict):
+        return default
+    safe={**default,**payload}
+    # Presentation fails closed even if the generated file is malformed.
+    safe["brokerage_orders"]=False
+    safe["live_credentials"]=False
+    return safe
+
 
 def get_trading_readiness():
     raw=CONTRACT_PATH.read_bytes()
@@ -40,4 +71,5 @@ def get_trading_readiness():
         "required_runtime_gates":contract.get("required_runtime_gates") or [],
         "prohibited":[name.replace("_"," ").upper() for name,value in (contract.get("prohibited") or {}).items() if value],
         "limits":[{"label":name.replace("_"," ").upper(),"configured":value is not None} for name,value in limits.items()],
+        "paper_engineering":_paper_engineering_status(),
     }
