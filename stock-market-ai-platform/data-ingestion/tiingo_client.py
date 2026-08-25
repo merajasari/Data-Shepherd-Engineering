@@ -68,15 +68,23 @@ class TiingoClient:
             "token": self.api_key,
         }
 
-        response = requests.get(
-            url,
-            params=params,
-            timeout=30,
-        )
-
-        response.raise_for_status()
-
-        payload = response.json()
+        try:
+            response = requests.get(
+                url,
+                params=params,
+                timeout=30,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.RequestException as exc:
+            # Requests includes the fully prepared URL in its exception text.
+            # Tiingo authenticates with a query parameter, so propagating that
+            # exception would write the API token into scheduler logs.
+            raise RuntimeError(
+                f"Tiingo request failed for {symbol} "
+                f"({start_date} through {end_date}): "
+                f"{type(exc).__name__}; endpoint credentials redacted"
+            ) from None
 
         rows = []
 
