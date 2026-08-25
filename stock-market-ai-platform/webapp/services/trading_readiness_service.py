@@ -23,6 +23,8 @@ def _paper_engineering_status():
         "failure_injection":False,
         "signal_provenance":False,
         "sandbox_orchestration":False,
+        "persistent_paper_shadow":False,
+        "atomic_shadow_state":False,
         "live_credentials":False,
         "brokerage_orders":False,
         "production_evidence_modified":False,
