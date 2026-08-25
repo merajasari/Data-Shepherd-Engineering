@@ -46,7 +46,8 @@ def main():
         journal = OrderJournal(root / "orders.jsonl")
         orchestrator = PaperSignalOrchestrator(journal)
 
-        frozen_signal = signal()\n        result = orchestrator.run(frozen_signal)
+        frozen_signal = signal()
+        result = orchestrator.run(frozen_signal)
         require(result["status"] == "FILLED", "Frozen signal reaches paper fill")
         require(result["quantity"] == "2", "Integer share sizing honors paper limits")
         require(result["reconciled"] is True, "Post-fill cash and position reconcile")
