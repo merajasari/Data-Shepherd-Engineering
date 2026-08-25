@@ -1,0 +1,99 @@
+"""Generate an atomic paper-execution engineering checkpoint.
+
+This command exercises only deterministic temporary paper infrastructure. It never
+loads credentials, connects to a broker, submits a live order, or touches V8/V10
+production evidence.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+OUTPUT = ROOT / "data/trading/readiness/paper_engineering_status.json"
+MODULES = (
+    ("core_lifecycle", "ml.trading.paper_execution_regression"),
+    ("failure_injection", "ml.trading.failure_injection_regression"),
+)
+
+
+def run_module(name: str, module: str) -> dict:
+    result = subprocess.run(
+        [sys.executable, "-m", module],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=120,
+        check=False,
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+    )
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip(), file=sys.stderr)
+    return {
+        "name": name,
+        "module": module,
+        "passed": result.returncode == 0,
+        "exit_code": result.returncode,
+    }
+
+
+def atomic_write(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def main() -> None:
+    print("DATA SHEPHERD PAPER-EXECUTION ENGINEERING CHECKPOINT")
+    print("=" * 80)
+    results = [run_module(name, module) for name, module in MODULES]
+    passed = all(item["passed"] for item in results)
+    payload = {
+        "schema_version": 1,
+        "status": "PASSED" if passed else "FAILED",
+        "validated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "mode": "PAPER_ONLY",
+        "modules": results,
+        "lifecycle": [
+            "PROPOSED", "RISK_APPROVED", "SUBMITTED", "ACKNOWLEDGED",
+            "PARTIALLY_FILLED", "FILLED",
+        ],
+        "restart_recovery": passed,
+        "idempotency": passed,
+        "concurrency_safety": passed,
+        "reconciliation": passed,
+        "failure_injection": results[1]["passed"],
+        "live_credentials": False,
+        "brokerage_orders": False,
+        "production_evidence_modified": False,
+    }
+    atomic_write(OUTPUT, payload)
+    print("\n" + "=" * 80)
+    print(f"Status: {payload['status']}")
+    print(f"Checkpoint: {OUTPUT.relative_to(ROOT)}")
+    print("Mode: PAPER ONLY")
+    print("Live credentials: ABSENT")
+    print("Brokerage orders: OFF")
+    print("V8/V10 production evidence modified: NO")
+    if not passed:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
