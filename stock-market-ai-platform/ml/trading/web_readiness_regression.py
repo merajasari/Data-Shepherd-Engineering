@@ -29,6 +29,7 @@ def main():
     require(payload["paper_engineering"]["protected_runtime_locked"] is True,"Paper runtime files are locked")
     require(payload["paper_engineering"]["day_zero_activation_audit"] is True,"Day-zero activation audit checkpoint verified")
     require(payload["paper_engineering"]["manual_approval_ceremony"] is True,"Manual approval ceremony checkpoint verified")
+    require(payload["paper_engineering"]["activation_transition_plan"] is True,"Activation transition plan checkpoint verified")
     audit=payload["paper_shadow_activation_audit"]
     require(audit["status"] in {"WAITING_FOR_BOUNDARY","READY_FOR_MANUAL_APPROVAL"},"Activation audit state is eligible")
     require(audit["manual_approval_required"] is True,"Separate manual approval is mandatory")
@@ -40,6 +41,11 @@ def main():
     require(approval["activation_performed"] is False,"Approval validator cannot activate")
     require(approval["paper_signal_export"] is False,"Approval validator cannot export signals")
     require(approval["brokerage_orders"] is False,"Approval validator has no brokerage authority")
+    transition=payload["paper_shadow_transition"]
+    require(transition["application_implementation_present"] is False,"Transition apply implementation is absent")
+    require(transition["transition_applied"] is False,"Transition remains unapplied")
+    require(transition["bridge_contract_modified"] is False,"Transition leaves bridge unchanged")
+    require(transition["brokerage_orders"] is False,"Transition planner has no brokerage authority")
     require(payload["paper_shadow_bridge"]["status"]=="PREREGISTERED_DISABLED","Controlled signal bridge remains disabled")
     require(payload["paper_shadow_bridge"]["activation_mode"]=="MANUAL_SEPARATE_APPROVAL","Bridge requires manual approval")
     require(payload["paper_shadow_bridge"]["brokerage_orders"] is False,"Bridge has no brokerage authority")
@@ -82,6 +88,8 @@ def main():
     require(b"Monitor-only safety" in response.data,"Monitor-only boundary rendered")
     require(b"DAY-ZERO ACTIVATION AUDIT" in response.data,"Day-zero audit panel rendered")
     require(b"MANUAL APPROVAL CEREMONY" in response.data,"Manual approval ceremony panel rendered")
+    require(b"ACTIVATION TRANSITION PLAN" in response.data,"Activation transition plan panel rendered")
+    require(b"Final Gate Map" in response.data and b"No Apply Capability" in response.data,"Non-applying plan boundary rendered")
     require(b"Human-Reviewed Paper-Only Authorization" in response.data,"Paper-only approval boundary rendered")
     require(b"September 1 Eligibility" in response.data,"Activation boundary rendered")
     require(b"ACTIVATION PERFORMED" in response.data and b"MANUAL APPROVAL" in response.data,"Manual-only activation boundary rendered")
