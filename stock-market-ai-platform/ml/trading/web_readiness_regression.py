@@ -31,7 +31,7 @@ def main():
     require(b"Real Trading Readiness" in response.data,"Readiness content rendered")
     require(b"TRADING READINESS" in response.data,"Dedicated navigation tab rendered")
     require(b"type=\"password\"" not in response.data and b"API_KEY" not in response.data,"No credential controls or secrets rendered")
-    source=(Path(__file__).resolve().parents[1]/"webapp/templates/trading_readiness.html").read_text()
+    source=(Path(__file__).resolve().parents[2]/"webapp/templates/trading_readiness.html").read_text()
     require("<form" not in source,"Page has no activation or order forms")
     print("\nStatus: PASSED")
     print("Page authority: READ ONLY")
