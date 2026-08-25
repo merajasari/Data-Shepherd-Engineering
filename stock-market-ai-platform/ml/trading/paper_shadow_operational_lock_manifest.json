@@ -1,0 +1,33 @@
+{
+  "contract": "DATA_SHEPHERD_PAPER_SHADOW_OPERATIONAL_CHANGE_CONTROL",
+  "locked_at_utc": "2026-08-25T00:00:00+00:00",
+  "activation_not_before_utc": "2026-09-01T00:00:00+00:00",
+  "frozen_candidate_sha256": "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41",
+  "strategy_id": "V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
+  "bridge_contract_sha256": "e2bf696e11341b6517afa1e9363516879d59de2efa8d5da83975520b94a69b80",
+  "rules": {
+    "mode": "PAPER_ONLY",
+    "bridge_status": "PREREGISTERED_DISABLED",
+    "manual_activation_required": true,
+    "scheduler_mode": "MONITOR_ONLY",
+    "signal_exports_before_activation": 0,
+    "holdout_outcomes_read": false,
+    "production_holdout_journal_write": false,
+    "live_credentials": false,
+    "brokerage_orders": false
+  },
+  "protected_files": [
+    {"path": "ml/trading/paper_shadow_bridge_contract.json", "sha256": "e2bf696e11341b6517afa1e9363516879d59de2efa8d5da83975520b94a69b80"},
+    {"path": "ml/trading/signal_provenance.py", "sha256": "7594040b0e877b3f4b2a3b5a950894ca32e5bd3c21938a086582d02673cd3c1e"},
+    {"path": "ml/trading/paper_shadow_signal_bridge.py", "sha256": "eee6b4e031595f16ab35b1eaebe2e5ee0b32b6a82c4a9e7e14a360aa9839723d"},
+    {"path": "ml/trading/journal.py", "sha256": "36a105282139074f4291bcfb9e45054e0f64f2c29ac8d479d2c5862669a2ab77"},
+    {"path": "ml/trading/paper_adapter.py", "sha256": "7415ad4e26545f97e94b96fa8fe47bedda39b1a244dd19b046af6a49aac6020a"},
+    {"path": "ml/trading/sandbox_orchestrator.py", "sha256": "7e55510d439046fef077a14036263ebc5377c13f867544b23e29d127cab9e01a"},
+    {"path": "ml/trading/paper_shadow_state.py", "sha256": "c3d221c8289c936ebc03d469a904331973bbaf1dee2c584ce6c61f298867cce2"},
+    {"path": "ml/trading/paper_shadow_runner.py", "sha256": "4e30089a8a52c537af80ae1f4ed50caee6341baeb70f39954330ae4305d24094"},
+    {"path": "ml/trading/paper_shadow_operational_monitor.py", "sha256": "564213593fce2a1f00d0496db66010540c317f285416bf298e89c7cc8b83e468"},
+    {"path": "ml/trading/paper_shadow_scheduled_entrypoint.py", "sha256": "8f42260c41869cbdf71b8851a8416eabe5a3158e4a720e2cd49a89f4a5f24a2f"},
+    {"path": "scripts/mac/install_paper_shadow_scheduler.sh", "sha256": "be0581f5013311b9db926d1f182e07e02b3ad0d96109a5180bc5ed0a5908d51b"}
+  ],
+  "change_policy": "Any hash mismatch blocks paper-shadow validation. Changes require explicit review, the complete paper engineering suite, and deliberate manifest re-locking. Holdout outcomes must never justify a change."
+}
