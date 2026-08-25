@@ -194,6 +194,21 @@ def main():
     _check(True, "Manual approval validator authority", "READ ONLY", failures)
     _check(True, "Manual approval activation authority", "NONE", failures)
 
+    transition_contract = PROJECT_ROOT / "ml/trading/paper_shadow_activation_transition_contract.json"
+    transition_sha = __import__("hashlib").sha256(transition_contract.read_bytes()).hexdigest()
+    _check(transition_sha ==
+           "16c626c9d0abba309a167d7d0b24714da4fb76ab724826c7e6cc308ab6de707f",
+           "Activation transition plan contract", transition_sha, failures)
+    transition_spec = _json(transition_contract)
+    _check(transition_spec.get("application_implementation_present") is False,
+           "Activation transition apply capability", "ABSENT", failures)
+    _check(transition_spec.get("bridge_contract_write") is False,
+           "Transition bridge mutation", "DISABLED", failures)
+    _check(transition_spec.get("activation_lease_write") is False,
+           "Transition lease writes", "DISABLED", failures)
+    _check(transition_spec.get("brokerage_orders") is False,
+           "Transition plan brokerage authority", "OFF", failures)
+
     for label in SERVICES:
         loaded, detail = _service(label)
         _check(loaded, f"LaunchAgent {label}", detail, failures)
@@ -261,6 +276,7 @@ def main():
     print(f"Activation audit state: {activation_audit.get('status')}")
     print("Activation performed: NO")
     print("Manual approval validator: READ ONLY")
+    print("Activation transition plan: NON-APPLYING")
     print("Brokerage orders: OFF")
     print("Evidence writes: NONE")
 
