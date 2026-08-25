@@ -46,7 +46,7 @@ def main():
         journal = OrderJournal(root / "orders.jsonl")
         orchestrator = PaperSignalOrchestrator(journal)
 
-        result = orchestrator.run(signal())
+        frozen_signal = signal()\n        result = orchestrator.run(frozen_signal)
         require(result["status"] == "FILLED", "Frozen signal reaches paper fill")
         require(result["quantity"] == "2", "Integer share sizing honors paper limits")
         require(result["reconciled"] is True, "Post-fill cash and position reconcile")
@@ -59,7 +59,7 @@ def main():
             == ["PROPOSED", "RISK_APPROVED", "SUBMITTED", "ACKNOWLEDGED", "FILLED"],
             "Append-only lifecycle is complete",
         )
-        duplicate = orchestrator.run(signal())
+        duplicate = orchestrator.run(frozen_signal)
         require(
             duplicate["duplicate_safe"] is True and len(journal.events_for(result["intent_id"])) == 5,
             "Repeated frozen signal is idempotent",
