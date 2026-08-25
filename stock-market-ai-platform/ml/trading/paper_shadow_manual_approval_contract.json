@@ -1,0 +1,21 @@
+{
+  "contract": "DATA_SHEPHERD_PAPER_SHADOW_MANUAL_APPROVAL_CEREMONY",
+  "version": 1,
+  "status": "PREREGISTERED_VALIDATION_ONLY",
+  "activation_not_before_utc": "2026-09-01T00:00:00+00:00",
+  "approval_validity_hours": 24,
+  "required_activation_audit_status": "READY_FOR_MANUAL_APPROVAL",
+  "required_activation_audit_sha256": true,
+  "required_frozen_v8_sha256": "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41",
+  "required_bridge_contract_sha256": "e2bf696e11341b6517afa1e9363516879d59de2efa8d5da83975520b94a69b80",
+  "required_acknowledgement": "I APPROVE PAPER SHADOW ONLY; NO LIVE BROKERAGE AUTHORITY",
+  "approval_artifact": "data/trading/paper_shadow/activation/manual_approval.json",
+  "validator_authority": "READ_ONLY",
+  "bridge_activation": false,
+  "paper_signal_export": false,
+  "holdout_outcomes_read": false,
+  "production_holdout_evidence_modified": false,
+  "live_credentials": false,
+  "brokerage_orders": false,
+  "notes": "This contract validates a future human approval artifact. Validation never edits the bridge contract or activates execution."
+}
