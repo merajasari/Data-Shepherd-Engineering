@@ -20,6 +20,8 @@ def _paper_engineering_status():
         "concurrency_safety":False,
         "reconciliation":False,
         "failure_injection":False,
+        "signal_provenance":False,
+        "sandbox_orchestration":False,
         "live_credentials":False,
         "brokerage_orders":False,
         "production_evidence_modified":False,
