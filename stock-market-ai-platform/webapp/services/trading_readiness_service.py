@@ -7,6 +7,7 @@ from webapp.services.paper_shadow_service import get_paper_shadow_status
 from webapp.services.paper_shadow_bridge_service import get_paper_shadow_bridge_status
 from webapp.services.paper_shadow_scheduler_service import get_paper_shadow_scheduler_status
 from webapp.services.paper_shadow_activation_service import get_paper_shadow_activation_status
+from webapp.services.paper_shadow_manual_approval_service import get_manual_approval_status
 
 CONTRACT_PATH=Path("ml/trading/live_trading_contract.json")
 PAPER_CHECKPOINT_PATH=Path("data/trading/readiness/paper_engineering_status.json")
@@ -90,4 +91,5 @@ def get_trading_readiness():
         "paper_shadow_bridge":get_paper_shadow_bridge_status(),
         "paper_shadow_scheduler":get_paper_shadow_scheduler_status(),
         "paper_shadow_activation_audit":get_paper_shadow_activation_status(),
+        "paper_shadow_manual_approval":get_manual_approval_status(),
     }
