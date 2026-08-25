@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
+BRAND_BANNER = HERE / "intro_video_13_brand_banner.jpg"
 SPEC = importlib.util.spec_from_file_location(
     "ds_intro_video_12", HERE / "generate_datashepherd_video_v12.py"
 )
@@ -28,7 +29,7 @@ def center_text(d, xy, text, font, fill):
 
 
 def prepare_overview_artwork(source, t):
-    """Remove phone-build copy and turn the existing phone screen into a chart."""
+    """Replace the source phone/Android composition with a native chart."""
     source = source.copy().convert("RGB")
     d = v6.ImageDraw.Draw(source)
     sw, sh = source.size
@@ -46,85 +47,87 @@ def prepare_overview_artwork(source, t):
         fill=(165, 185, 207),
     )
 
-    # The phone and bezel remain part of the original artwork. Only the inner
-    # screen pixels are repainted, following its existing perspective.
-    quad = [
-        (int(sw * .258), int(sh * .593)),
-        (int(sw * .313), int(sh * .602)),
-        (int(sw * .297), int(sh * .791)),
-        (int(sw * .244), int(sh * .784)),
-    ]
-    d.polygon(quad, fill=(3, 13, 23))
-
-    def qpoint(u, v):
-        tx = quad[0][0] + (quad[1][0] - quad[0][0]) * u
-        ty = quad[0][1] + (quad[1][1] - quad[0][1]) * u
-        bx = quad[3][0] + (quad[2][0] - quad[3][0]) * u
-        by = quad[3][1] + (quad[2][1] - quad[3][1]) * u
-        return int(tx + (bx - tx) * v), int(ty + (by - ty) * v)
-
-    for v in (.24, .43, .62, .81):
-        d.line((qpoint(.08, v), qpoint(.92, v)), fill=(18, 45, 62), width=max(1, sw // 1200))
-    for u in (.18, .38, .58, .78):
-        d.line((qpoint(u, .16), qpoint(u, .90)), fill=(12, 34, 50), width=max(1, sw // 1400))
-    values = [.76, .69, .72, .58, .62, .47, .52, .36, .40, .25, .30, .16]
-    points = [qpoint(.09 + i * .075, value) for i, value in enumerate(values)]
-    d.line(points, fill=(20, 92, 111), width=max(4, sw // 310))
-    d.line(points, fill=v6.GREEN, width=max(2, sw // 600))
+    # Remove the complete phone, bezel and Android mascot region first. The
+    # replacement chart is authored into the source artwork itself.
+    x0, y0 = int(sw * .205), int(sh * .555)
+    x1, y1 = int(sw * .372), int(sh * .955)
+    d.rounded_rectangle((x0, y0, x1, y1), max(12, sw // 110), fill=(4, 17, 30), outline=(22, 88, 110), width=max(2, sw // 650))
+    d.text((x0 + int(sw * .012), y0 + int(sh * .022)), "FORWARD MARKET SIGNAL", font=v6.font(max(12, int(sw * .0115)), True), fill=v6.CYAN)
+    d.text((x0 + int(sw * .012), y0 + int(sh * .060)), "MODEL + MARKET CONTEXT", font=v6.font(max(9, int(sw * .0085)), True), fill=v6.MUTED)
+    gx0, gy0 = x0 + int(sw * .014), y0 + int(sh * .115)
+    gx1, gy1 = x1 - int(sw * .014), y1 - int(sh * .085)
+    for j in range(5):
+        yy = gy0 + int((gy1 - gy0) * j / 4)
+        d.line((gx0, yy, gx1, yy), fill=(13, 43, 62), width=max(1, sw // 1500))
+    for j in range(7):
+        xx = gx0 + int((gx1 - gx0) * j / 6)
+        d.line((xx, gy0, xx, gy1), fill=(10, 33, 50), width=max(1, sw // 1700))
+    values = [.72, .66, .69, .57, .61, .46, .51, .39, .43, .28, .32, .18]
+    points = []
+    for i, value in enumerate(values):
+        px = gx0 + int((gx1 - gx0) * i / (len(values) - 1))
+        py = gy0 + int((gy1 - gy0) * value)
+        points.append((px, py))
+    area = points + [(points[-1][0], gy1), (points[0][0], gy1)]
+    d.polygon(area, fill=(5, 49, 61))
+    d.line(points, fill=(18, 105, 126), width=max(5, sw // 300))
+    d.line(points, fill=v6.GREEN, width=max(2, sw // 650))
     pulse = points[min(len(points) - 1, int(t * len(points)))]
-    radius = max(3, sw // 420)
+    radius = max(4, sw // 380)
     d.ellipse((pulse[0] - radius, pulse[1] - radius, pulse[0] + radius, pulse[1] + radius), fill=v6.CYAN)
-    for i, height in enumerate((.08, .13, .10, .18, .15, .22, .17, .27)):
-        u0 = .10 + i * .105
-        d.polygon(
-            [qpoint(u0, .93 - height), qpoint(u0 + .05, .93 - height), qpoint(u0 + .05, .93), qpoint(u0, .93)],
-            fill=(31, 119, 139),
-        )
+    d.text((gx0, y1 - int(sh * .052)), "LIVE SIGNAL VIEW", font=v6.font(max(9, int(sw * .0085)), True), fill=v6.GREEN)
+
+    # Replace the original phone-build metric in the top ribbon as well.
+    hx0, hy0 = int(sw * .355), int(sh * .016)
+    hx1, hy1 = int(sw * .455), int(sh * .105)
+    d.rectangle((hx0, hy0, hx1, hy1), fill=(4, 17, 30))
+    d.text((hx0 + int(sw * .010), hy0 + int(sh * .018)), "LIVE SIGNALS", font=v6.font(max(10, int(sw * .009)), True), fill=v6.GREEN)
+    d.text((hx0 + int(sw * .010), hy0 + int(sh * .052)), "MARKET CHART", font=v6.font(max(8, int(sw * .0075)), True), fill=v6.TEXT)
     return source
 
 
 def cinematic_open(t):
-    """Clean platform-first opening; copy never floats over the hero artwork."""
+    """Full-width platform opening with the supplied brand banner."""
     im = v6.bg()
     d = v6.ImageDraw.Draw(im)
-    # Quiet branded field on the left, real platform in its own browser surface.
     for x in range(0, v6.W, 96):
         d.line((x, 0, x, v6.H), fill=(5, 24, 39), width=1)
     for y in range(0, v6.H, 96):
         d.line((0, y, v6.W, y), fill=(5, 24, 39), width=1)
-    v6.logo(im, 70, 44, 390, 148)
-    d.text((92, 270), "DATA SHEPHERD", font=v6.font(60, True), fill=v6.TEXT)
-    d.text((94, 344), "ENGINEERING", font=v6.font(60, True), fill=v6.GREEN)
-    d.text((96, 450), "GOVERNED DATA", font=v6.font(22, True), fill=v6.CYAN)
-    d.text((96, 494), "TESTABLE MACHINE LEARNING", font=v6.font(22, True), fill=(190, 116, 255))
-    d.text((96, 538), "VISIBLE EVIDENCE", font=v6.font(22, True), fill=v6.GREEN)
-    d.line((96, 600, 485, 600), fill=v6.CYAN, width=3)
-    d.multiline_text(
-        (96, 640),
-        "Stocks, crypto, model governance\nand forward monitoring in one\nobservable engineering platform.",
-        font=v6.font(25), fill=v6.MUTED, spacing=14,
-    )
+    if BRAND_BANNER.exists():
+        banner = v6.load(BRAND_BANNER)
+        banner.thumbnail((1320, 188), v6.Image.Resampling.LANCZOS)
+        im.paste(banner, (58, 28))
+    else:
+        v6.logo(im, 70, 36, 340, 130)
+        d.text((430, 64), "DATA SHEPHERD ENGINEERING", font=v6.font(46, True), fill=v6.TEXT)
+        d.text((435, 128), "Intelligent Data. Smarter Markets.", font=v6.font(20, True), fill=v6.MUTED)
 
     source = prepare_overview_artwork(v6.load(v6.ASSETS["overview"]), t)
-    panel = v6.cover(source, (1260, 715), 1.0 + .025 * v6.ease(t), .51, .47)
-    d.rounded_rectangle((575, 245, 1860, 995), 30, fill=(5, 18, 31), outline=v6.CYAN, width=4)
-    im.paste(panel, (588, 267))
-    d.rounded_rectangle((588, 267, 1848, 315), 15, fill=(7, 20, 34))
+    panel_canvas = v6.Image.new("RGB", (1780, 785), (3, 13, 23))
+    scale = min(1780 / source.width, 785 / source.height)
+    fitted = source.resize((int(source.width * scale), int(source.height * scale)), v6.Image.Resampling.LANCZOS)
+    panel_canvas.paste(fitted, ((1780 - fitted.width) // 2, (785 - fitted.height) // 2))
+    panel = v6.cover(panel_canvas, (1780, 785), 1.0 + .018 * v6.ease(t), .5, .5)
+    d.rounded_rectangle((55, 235, 1865, 1050), 30, fill=(5, 18, 31), outline=v6.CYAN, width=4)
+    im.paste(panel, (70, 255))
+    d.rounded_rectangle((70, 255, 1850, 303), 15, fill=(7, 20, 34))
     for n, colour in enumerate(((255, 95, 86), (255, 189, 46), (39, 201, 63))):
-        cx = 618 + n * 28
-        d.ellipse((cx - 7, 284, cx + 7, 298), fill=colour)
-    d.rounded_rectangle((720, 278, 1810, 305), 9, fill=(11, 31, 49))
-    d.text((745, 279), "datashepherdengineering.com", font=v6.font(14, True), fill=v6.MUTED)
+        cx = 100 + n * 28
+        d.ellipse((cx - 7, 272, cx + 7, 286), fill=colour)
+    d.rounded_rectangle((205, 266, 1810, 294), 9, fill=(11, 31, 49))
+    d.text((232, 267), "datashepherdengineering.com", font=v6.font(14, True), fill=v6.MUTED)
 
     portrait_path = v6.fp()
     if portrait_path:
-        d.rounded_rectangle((1550, 45, 1845, 225), 22, fill=(6, 20, 35), outline=v6.CYAN, width=3)
-        portrait = v6.cover(v6.load(portrait_path), (142, 142), 1.04, .5, .22)
+        d.rounded_rectangle((1420, 25, 1870, 220), 22, fill=(6, 20, 35), outline=v6.CYAN, width=3)
+        portrait = v6.cover(v6.load(portrait_path), (150, 150), 1.04, .5, .22)
         mask = v6.Image.new("L", portrait.size, 0)
-        v6.ImageDraw.Draw(mask).rounded_rectangle((0, 0, 141, 141), 16, fill=255)
-        im.paste(portrait, (1570, 64), mask)
-        d.text((1730, 87), "MERAJ ASARI", font=v6.font(18, True), fill=v6.TEXT)
-        d.text((1730, 128), "FOUNDER · CEO", font=v6.font(16, True), fill=v6.CYAN)
+        v6.ImageDraw.Draw(mask).rounded_rectangle((0, 0, 149, 149), 16, fill=255)
+        im.paste(portrait, (1442, 47), mask)
+        d.text((1620, 72), "MERAJ ASARI", font=v6.font(17, True), fill=v6.TEXT)
+        d.text((1620, 116), "FOUNDER · CEO", font=v6.font(15, True), fill=v6.CYAN)
+        d.text((1620, 158), "DATA SHEPHERD", font=v6.font(13, True), fill=v6.MUTED)
     return im
 def track_card(im, d, box, title, status, colour, icon_kind, artwork=None):
     x0, y0, x1, y1 = box
