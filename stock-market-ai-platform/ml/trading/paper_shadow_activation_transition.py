@@ -34,10 +34,15 @@ def plan_transition(*, audit: dict, approval: dict, runtime_locked: bool,
         ("no_application_implementation", contract.get("application_implementation_present") is False),
     ]
     eligible = all(value for _, value in gates)
+    structural_names = {
+        "contract_locked", "runtime_locked", "bridge_disabled",
+        "paper_account_reconciled", "paper_mode_only",
+        "no_application_implementation",
+    }
+    structural_ready = all(value for name, value in gates if name in structural_names)
     return {
         "status": "ELIGIBLE_PLAN_ONLY" if eligible else (
-            "WAITING_FOR_BOUNDARY" if now < BOUNDARY and
-            all(value for name, value in gates if name != "boundary_reached")
+            "WAITING_FOR_BOUNDARY" if now < BOUNDARY and structural_ready
             else "BLOCKED"
         ),
         "eligible": eligible,
