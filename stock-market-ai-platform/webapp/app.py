@@ -60,10 +60,10 @@ def inject_dashboard_modules(response):
             prelayout='''<style id="ds-live-prelayout-style">html.ds-live-prelayout .card:has(#stock-select){display:none!important}html.ds-live-prelayout .card.ds-live-viewer-card:has(#stock-select){display:block!important}</style><script>document.documentElement.classList.add("ds-live-prelayout")</script>'''
             if head_marker in html and 'ds-live-prelayout-style' not in html:
                 html=html.replace(head_marker,prelayout+"\n"+head_marker,1)
-        if request.path in {"/","/dashboard","/crypto","/crypto-visual"}:
+        if request.path in {"/","/dashboard","/crypto","/crypto-visual","/trading-readiness"}:
             scripts.extend(['<script src="/static/js/signup_button.js" defer></script>','<script src="/static/js/customer_ai_chat.js" defer></script>'])
-        if request.path in {"/dashboard","/crypto","/crypto-visual"}:
-            scripts.append('<script src="/static/js/session_idle_timeout.js" defer></script>')
+        if request.path in {"/dashboard","/crypto","/crypto-visual","/trading-readiness"}:
+            scripts.extend(['<script src="/static/js/session_idle_timeout.js" defer></script>','<script src="/static/js/trading_readiness_nav.js" defer></script>'])
         if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
         if request.path=="/dashboard":
             shared=['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
@@ -226,6 +226,12 @@ def dashboard():
                 market=get_market_summary(row["symbol"]);live=get_live_quote(row["symbol"]);row=dict(row);row["display_price"]=live["reference_price"] if live["available"] else market["close"];row["eod_change_pct"]=market["price_change_pct"];row["rsi_14"]=market["rsi_14"];top10_rows.append(row)
             except Exception as exc:print(f"[V8 TOP10 ERROR] {row['symbol']}: {exc}")
     return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top10=top10,top10_rows=top10_rows,stock_symbols=V5_SYMBOL_OPTIONS,v8=rankings_payload,live_view=live_view)
+@app.route("/trading-readiness")
+@login_required
+def trading_readiness():
+    from webapp.services.trading_readiness_service import get_trading_readiness
+    return render_template("trading_readiness.html",readiness=get_trading_readiness())
+
 @app.route("/crypto")
 @login_required
 def crypto_dashboard():return render_template("crypto.html",crypto=get_crypto_dashboard_payload())
