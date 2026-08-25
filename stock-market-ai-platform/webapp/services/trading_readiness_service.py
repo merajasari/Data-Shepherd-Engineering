@@ -1,0 +1,43 @@
+"""Read-only presentation service for the live-trading preparation contract."""
+from __future__ import annotations
+import hashlib
+import json
+from pathlib import Path
+
+CONTRACT_PATH=Path("ml/trading/live_trading_contract.json")
+
+def get_trading_readiness():
+    raw=CONTRACT_PATH.read_bytes()
+    contract=json.loads(raw)
+    limits=contract.get("limits") or {}
+    blockers=[]
+    checks=[
+        ("Contract live-authorized",contract.get("status")=="LIVE_AUTHORIZED"),
+        ("Live trading enabled",contract.get("live_trading_enabled") is True),
+        ("Broker selected",bool(contract.get("broker"))),
+        ("Account selected",bool(contract.get("account_id"))),
+        ("Strategy identity authorized",bool(contract.get("strategy_id") and contract.get("frozen_strategy_sha256"))),
+        ("Risk limits configured",bool(limits) and all(value is not None for value in limits.values())),
+        ("Human activation required",contract.get("human_activation_required") is True),
+        ("Repository credentials prohibited",(contract.get("credentials") or {}).get("may_be_stored_in_repository") is False),
+        ("Brokerage orders off",contract.get("brokerage_orders") is False),
+    ]
+    for label,passed in checks:
+        if not passed and label not in {"Human activation required"}:blockers.append(label)
+    return {
+        "status":"NOT_AUTHORIZED" if blockers else "READY_FOR_SEPARATE_ACTIVATION_AUDIT",
+        "contract_status":contract.get("status"),
+        "contract_sha256":hashlib.sha256(raw).hexdigest(),
+        "broker":contract.get("broker") or "UNSELECTED",
+        "account":"NOT CONNECTED" if not contract.get("account_id") else "CONFIGURED (ID HIDDEN)",
+        "strategy":"NOT AUTHORIZED" if not contract.get("strategy_id") else str(contract.get("strategy_id")),
+        "live_trading_enabled":contract.get("live_trading_enabled") is True,
+        "human_activation_required":contract.get("human_activation_required") is True,
+        "brokerage_orders":contract.get("brokerage_orders") is True,
+        "credentials_in_repository":False,
+        "checks":[{"label":label,"passed":passed} for label,passed in checks],
+        "blockers":blockers,
+        "required_runtime_gates":contract.get("required_runtime_gates") or [],
+        "prohibited":[name.replace("_"," ").upper() for name,value in (contract.get("prohibited") or {}).items() if value],
+        "limits":[{"label":name.replace("_"," ").upper(),"configured":value is not None} for name,value in limits.items()],
+    }
