@@ -9,10 +9,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
+
+from ml.feature_source import (
+    feature_dataset_exists,
+    get_feature_backend,
+    get_feature_dataset_path,
+    get_feature_root,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = PROJECT_ROOT / "webapp/static/generated/stock_operations_health.json"
@@ -22,8 +30,10 @@ V10_MONITOR = PROJECT_ROOT / "data/model/v10/cycle3/monitor/alert_state.json"
 V10_SPEC = PROJECT_ROOT / "data/model/v10/cycle3/freeze/frozen_candidate_spec.json"
 V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
 CONVERGENCE_STATUS = PROJECT_ROOT / "webapp/static/generated/stock_data_convergence.json"
-ERR_LOG = PROJECT_ROOT / "logs/v5_refresh.err.log"
-FEATURE_ROOT = PROJECT_ROOT / "data/features/stocks"
+ERR_LOG_CANDIDATES = (
+    PROJECT_ROOT / "logs/v8_refresh.err.log",
+    PROJECT_ROOT / "logs/v5_refresh.err.log",
+)
 EXPECTED_SYMBOLS = 101
 HOURLY_LIMIT = 45
 
@@ -60,28 +70,39 @@ def _active_quota(now: datetime):
 
 
 def _feature_common_latest():
+    backend = get_feature_backend()
+    root = get_feature_root(project_root=PROJECT_ROOT, backend=backend)
     latest = []
     found = 0
-    if not FEATURE_ROOT.exists():
-        return None, found
-    for symbol_dir in FEATURE_ROOT.iterdir():
+    if not root.exists():
+        return None, found, backend
+    for symbol_dir in root.iterdir():
         if not symbol_dir.is_dir():
             continue
         symbol = symbol_dir.name
-        path = symbol_dir / f"{symbol}_features.parquet"
-        if not path.exists() or path.stat().st_size == 0:
+        path = get_feature_dataset_path(
+            symbol, project_root=PROJECT_ROOT, backend=backend
+        )
+        if not feature_dataset_exists(path):
             continue
         found += 1
         try:
             df = pd.read_parquet(path, columns=["timestamp_utc"])
-            values = pd.to_datetime(df["timestamp_utc"], utc=True, errors="coerce").dropna()
+            values = pd.to_datetime(
+                df["timestamp_utc"], utc=True, errors="coerce"
+            ).dropna()
             if not values.empty:
                 latest.append(values.max())
         except Exception:
             continue
     if not latest:
-        return None, found
-    return min(latest).isoformat(), found
+        return None, found, backend
+    return min(latest).isoformat(), found, backend
+
+
+def _active_error_log():
+    existing = [path for path in ERR_LOG_CANDIDATES if path.exists()]
+    return max(existing, key=lambda path: path.stat().st_mtime) if existing else ERR_LOG_CANDIDATES[0]
 
 
 def main():
@@ -96,8 +117,9 @@ def main():
     v10_spec = _json(V10_SPEC)
     v10_identity_ok = v10_spec.get("spec_sha256") == V10_EXPECTED_SHA
     convergence = _json(CONVERGENCE_STATUS)
-    common_latest, feature_files = _feature_common_latest()
-    err_size = ERR_LOG.stat().st_size if ERR_LOG.exists() else 0
+    common_latest, feature_files, feature_backend = _feature_common_latest()
+    err_log = _active_error_log()
+    err_size = err_log.stat().st_size if err_log.exists() else 0
 
     if args.pipeline_exit_code is None:
         scheduler_status = "UNKNOWN"
@@ -124,6 +146,7 @@ def main():
             "files_found": feature_files,
             "expected_files": EXPECTED_SYMBOLS,
             "common_latest_utc": common_latest,
+            "backend": feature_backend,
         },
         "convergence": {
             "status": convergence.get("status", "UNKNOWN"),
@@ -149,9 +172,9 @@ def main():
             "v8_modified": False,
         },
         "error_log": {
-            "path": "logs/v5_refresh.err.log",
+            "path": str(err_log.relative_to(PROJECT_ROOT)),
             "bytes": err_size,
-            "modified_at_utc": _iso_mtime(ERR_LOG),
+            "modified_at_utc": _iso_mtime(err_log),
         },
         "safety": {
             "brokerage_orders": False,
@@ -167,7 +190,7 @@ def main():
     print("=" * 80)
     print(f"Scheduler: {scheduler_status} | exit={args.pipeline_exit_code}")
     print(f"Tiingo: {used}/{HOURLY_LIMIT} rolling requests")
-    print(f"Features: {feature_files}/{EXPECTED_SYMBOLS} | common latest={common_latest}")
+    print(f"Features ({feature_backend}): {feature_files}/{EXPECTED_SYMBOLS} | common latest={common_latest}")
     print(f"Convergence: {payload['convergence']['status']} | verification={payload['convergence']['verification']}")
     print(f"V8 guard: {payload['v8']['guard_status']} | gate={payload['v8']['decision_gate_open']}")
     print(f"V10 Cycle 3: {payload['v10']['status']} | decision={payload['v10']['decision']}")
