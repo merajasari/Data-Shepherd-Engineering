@@ -155,6 +155,30 @@ def main():
     _check(paper_monitor.get("brokerage_orders") is False,
            "Paper-shadow brokerage authority", "OFF", failures)
 
+    activation_path = PROJECT_ROOT / "data/trading/readiness/paper_shadow_activation_audit.json"
+    try:
+        activation_audit = _json(activation_path)
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+        activation_audit = {}
+        _check(False, "Paper-shadow activation audit",
+               f"{type(exc).__name__}: {activation_path}", failures)
+    expected_audit_states = {"WAITING_FOR_BOUNDARY", "READY_FOR_MANUAL_APPROVAL"}
+    _check(activation_audit.get("status") in expected_audit_states,
+           "Paper-shadow activation audit state", str(activation_audit.get("status")), failures)
+    _check(activation_audit.get("contract_sha256") ==
+           "81e211909d3bb2dd6964fae959c1e81677a7861fb3402a00f813abcf16739e94",
+           "Activation audit contract identity", str(activation_audit.get("contract_sha256")), failures)
+    _check(activation_audit.get("manual_approval_required") is True,
+           "Activation manual approval boundary", "REQUIRED", failures)
+    _check(activation_audit.get("activation_performed") is False,
+           "Paper-shadow activation authority", "NONE", failures)
+    _check(activation_audit.get("paper_signal_export") is False,
+           "Activation audit signal exports", "NONE", failures)
+    _check(activation_audit.get("holdout_outcomes_read") is False,
+           "Activation audit holdout outcome access", "NO", failures)
+    _check(activation_audit.get("brokerage_orders") is False,
+           "Activation audit brokerage authority", "OFF", failures)
+
     for label in SERVICES:
         loaded, detail = _service(label)
         _check(loaded, f"LaunchAgent {label}", detail, failures)
@@ -219,6 +243,8 @@ def main():
     print("Frozen identities: VERIFIED")
     print(f"Paper-shadow protected files: {len(protected_files)}")
     print(f"Paper-shadow execution state: {paper_monitor.get('execution_state')}")
+    print(f"Activation audit state: {activation_audit.get('status')}")
+    print("Activation performed: NO")
     print("Brokerage orders: OFF")
     print("Evidence writes: NONE")
 
