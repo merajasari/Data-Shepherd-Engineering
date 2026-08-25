@@ -124,7 +124,8 @@ class PaperSignalOrchestrator:
             self.journal,
             intent.intent_id,
             "PROPOSED",
-            {"symbol": intent.symbol, "rank": signal.rank, "quantity": str(intent.quantity),\n             "provenance_sha256": provenance["provenance_sha256"]},
+            {"symbol": intent.symbol, "rank": signal.rank, "quantity": str(intent.quantity),
+             "provenance_sha256": provenance["provenance_sha256"]},
             event_key=f"{intent.intent_id}-proposed",
         )
         account_snapshot = self.adapter.account_snapshot()
