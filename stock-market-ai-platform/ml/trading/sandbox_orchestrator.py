@@ -16,22 +16,11 @@ from ml.trading.journal import OrderJournal
 from ml.trading.lifecycle import current_state, transition
 from ml.trading.paper_adapter import PaperBrokerAdapter
 from ml.trading.risk import evaluate_pretrade
+from ml.trading.signal_provenance import FrozenSignalSnapshot, FrozenSignalVerifier
 
 
 class SandboxBoundaryViolation(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class FrozenSignalSnapshot:
-    strategy_id: str
-    frozen_strategy_sha256: str
-    decision_timestamp_utc: datetime
-    symbol: str
-    reference_price: Decimal
-    spread_bps: Decimal
-    rank: int
-    target_weight: Decimal
 
 
 @dataclass(frozen=True)
@@ -79,10 +68,12 @@ class PaperSignalOrchestrator:
         *,
         adapter: PaperBrokerAdapter | None = None,
         limits: SandboxLimits | None = None,
+        approved_model_identities: dict[str, str] | None = None,
     ):
         self.journal = journal
         self.limits = limits or SandboxLimits()
         self.adapter = adapter or PaperBrokerAdapter(self.limits.starting_cash_usd)
+        self.verifier = FrozenSignalVerifier(approved_model_identities or {})
         if type(self.adapter) is not PaperBrokerAdapter:
             raise SandboxBoundaryViolation("sandbox accepts only the deterministic PaperBrokerAdapter")
 
@@ -112,6 +103,7 @@ class PaperSignalOrchestrator:
         )
 
     def run(self, signal: FrozenSignalSnapshot) -> dict[str, Any]:
+        provenance = self.verifier.verify(signal)
         if signal.reference_price <= 0 or signal.target_weight <= 0:
             raise SandboxBoundaryViolation("signal price and target weight must be positive")
         if signal.rank < 1:
@@ -132,7 +124,7 @@ class PaperSignalOrchestrator:
             self.journal,
             intent.intent_id,
             "PROPOSED",
-            {"symbol": intent.symbol, "rank": signal.rank, "quantity": str(intent.quantity)},
+            {"symbol": intent.symbol, "rank": signal.rank, "quantity": str(intent.quantity),\n             "provenance_sha256": provenance["provenance_sha256"]},
             event_key=f"{intent.intent_id}-proposed",
         )
         account_snapshot = self.adapter.account_snapshot()
