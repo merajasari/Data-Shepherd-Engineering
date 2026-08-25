@@ -150,7 +150,7 @@ def main():
                 "No production journal or credential artifact created")
 
     print("\nStatus: PASSED")
-    print("Failure scenarios: 14/14")
+    print("Failure-injection suite: ALL SCENARIOS PASSED")
     print("Process interruption and recovery: VERIFIED")
     print("Live credentials: ABSENT")
     print("Brokerage orders: OFF")
