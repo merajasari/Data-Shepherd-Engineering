@@ -21,6 +21,7 @@ MODULES = (
     ("failure_injection", "ml.trading.failure_injection_regression"),
     ("provenance_orchestration", "ml.trading.sandbox_orchestrator_regression"),
     ("persistent_paper_shadow", "ml.trading.paper_shadow_regression"),
+    ("controlled_signal_bridge", "ml.trading.paper_shadow_bridge_regression"),
 )
 
 
@@ -67,7 +68,7 @@ def main() -> None:
     results = [run_module(name, module) for name, module in MODULES]
     passed = all(item["passed"] for item in results)
     payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "status": "PASSED" if passed else "FAILED",
         "validated_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": "PAPER_ONLY",
@@ -85,6 +86,8 @@ def main() -> None:
         "sandbox_orchestration": results[2]["passed"],
         "persistent_paper_shadow": results[3]["passed"],
         "atomic_shadow_state": results[3]["passed"],
+        "controlled_signal_bridge": results[4]["passed"],
+        "bridge_activation_disabled": results[4]["passed"],
         "live_credentials": False,
         "brokerage_orders": False,
         "production_evidence_modified": False,
@@ -97,6 +100,7 @@ def main() -> None:
     print("Signal provenance: VERIFIED" if payload["signal_provenance"] else "Signal provenance: FAILED")
     print("Sandbox orchestration: VERIFIED" if payload["sandbox_orchestration"] else "Sandbox orchestration: FAILED")
     print("Persistent paper shadow: VERIFIED" if payload["persistent_paper_shadow"] else "Persistent paper shadow: FAILED")
+    print("Controlled signal bridge: VERIFIED DISABLED" if payload["controlled_signal_bridge"] else "Controlled signal bridge: FAILED")
     print("Mode: PAPER ONLY")
     print("Live credentials: ABSENT")
     print("Brokerage orders: OFF")
