@@ -1,0 +1,52 @@
+{
+  "contract": "DATA_SHEPHERD_LIVE_TRADING_SAFETY_CONTRACT",
+  "version": 1,
+  "status": "PREPARATION_ONLY",
+  "live_trading_enabled": false,
+  "human_activation_required": true,
+  "broker": null,
+  "account_id": null,
+  "strategy_id": null,
+  "frozen_strategy_sha256": null,
+  "allowed_asset_classes": ["US_EQUITY"],
+  "allowed_order_sides": ["BUY", "SELL"],
+  "allowed_order_types": ["MARKET", "LIMIT"],
+  "prohibited": {
+    "margin": true,
+    "short_selling": true,
+    "options": true,
+    "leverage": true,
+    "cryptocurrency": true,
+    "fractional_orders": true,
+    "extended_hours": true
+  },
+  "limits": {
+    "maximum_deployed_capital_usd": null,
+    "maximum_order_notional_usd": null,
+    "maximum_position_notional_usd": null,
+    "maximum_daily_loss_usd": null,
+    "maximum_open_positions": null,
+    "maximum_orders_per_session": null,
+    "maximum_signal_age_seconds": null,
+    "maximum_quote_age_seconds": null,
+    "maximum_spread_bps": null
+  },
+  "required_runtime_gates": [
+    "HUMAN_ACTIVATION",
+    "KILL_SWITCH_CLEAR",
+    "FROZEN_MODEL_VERIFIED",
+    "MARKET_SESSION_OPEN",
+    "MARKET_DATA_CURRENT",
+    "ACCOUNT_RECONCILED",
+    "BUYING_POWER_SUFFICIENT",
+    "IDEMPOTENCY_KEY_NEW",
+    "DAILY_LOSS_WITHIN_LIMIT",
+    "POSITION_LIMITS_CLEAR"
+  ],
+  "credentials": {
+    "may_be_stored_in_repository": false,
+    "required_now": false
+  },
+  "brokerage_orders": false,
+  "notes": "All monetary and operational limits require explicit future approval. Null limits fail closed. This contract grants no brokerage authority."
+}
