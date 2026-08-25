@@ -31,6 +31,8 @@ def _paper_engineering_status():
         "bridge_activation_disabled":False,
         "paper_shadow_scheduler":False,
         "scheduler_monitor_only":False,
+        "operational_change_control":False,
+        "protected_runtime_locked":False,
         "live_credentials":False,
         "brokerage_orders":False,
         "production_evidence_modified":False,
