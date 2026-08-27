@@ -7,6 +7,7 @@ OHLCV data. Partial downloads never become an eligible research dataset.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import math
@@ -138,6 +139,31 @@ class TiingoHistoricalIntradayClient:
         return normalize_historical_rows(symbol, payload)
 
 
+def _load_reusable_staging(
+    path: Path,
+    *,
+    symbol: str,
+    start_date: date,
+    end_date: date,
+) -> list[dict[str, object]] | None:
+    if not path.exists():
+        return None
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(rows, list) or not rows:
+            return None
+        for row in rows:
+            if row.get("symbol") != symbol:
+                return None
+            stamp = datetime.fromisoformat(str(row["timestamp_utc"]))
+            local_date = stamp.astimezone(NEW_YORK).date()
+            if local_date < start_date or local_date > end_date:
+                return None
+        return rows
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return None
+
+
 def run_backfill(
     *,
     start_date: date,
@@ -145,7 +171,9 @@ def run_backfill(
     client: object,
     output_root: Path = BASE_ROOT,
     symbols: Sequence[str] | None = None,
-    chunk_days: int = 30,
+    chunk_days: int = 120,
+    workers: int = 8,
+    progress: bool = False,
 ) -> dict[str, object]:
     universe = tuple(symbols or get_v5_data_symbols())
     if len(universe) != 101 or len(set(universe)) != 101 or "SPY" not in universe:
@@ -155,37 +183,71 @@ def run_backfill(
     staging_root = output_root / f".{run_id}.staging"
     staging_root.mkdir(parents=True, exist_ok=True)
 
+    if workers < 1 or workers > 16:
+        raise ValueError("workers must be between 1 and 16")
+
+    def fetch_symbol(symbol: str) -> tuple[str, list[dict[str, object]], bool]:
+        path = staging_root / f"{symbol}.json"
+        reusable = _load_reusable_staging(
+            path,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if reusable is not None:
+            return symbol, reusable, True
+        merged: dict[str, dict[str, object]] = {}
+        for chunk_start, chunk_end in _chunks(start_date, end_date, chunk_days):
+            for row in client.fetch(symbol, chunk_start, chunk_end):
+                merged[str(row["timestamp_utc"])] = row
+        rows = [merged[key] for key in sorted(merged)]
+        if rows:
+            _atomic_json_write(path, rows)
+        return symbol, rows, False
+
     symbol_metadata: dict[str, dict[str, object]] = {}
     failures: list[str] = []
-    for symbol in universe:
-        merged: dict[str, dict[str, object]] = {}
-        try:
-            for chunk_start, chunk_end in _chunks(start_date, end_date, chunk_days):
-                for row in client.fetch(symbol, chunk_start, chunk_end):
-                    merged[str(row["timestamp_utc"])] = row
-        except Exception:
-            failures.append(f"FETCH_FAILED:{symbol}")
-            continue
-        rows = [merged[key] for key in sorted(merged)]
-        if not rows:
-            failures.append(f"NO_VALID_ROWS:{symbol}")
-            continue
-        path = staging_root / f"{symbol}.json"
-        _atomic_json_write(path, rows)
-        sessions = sorted(
-            {
-                datetime.fromisoformat(str(row["timestamp_utc"])).astimezone(NEW_YORK).date().isoformat()
-                for row in rows
+    completed = 0
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(fetch_symbol, symbol): symbol for symbol in universe}
+        for future in as_completed(futures):
+            expected_symbol = futures[future]
+            try:
+                symbol, rows, reused = future.result()
+            except Exception:
+                failures.append(f"FETCH_FAILED:{expected_symbol}")
+                completed += 1
+                if progress:
+                    print(f"[{completed:3d}/101] {expected_symbol}: FETCH FAILED", flush=True)
+                continue
+            completed += 1
+            if not rows:
+                failures.append(f"NO_VALID_ROWS:{symbol}")
+                if progress:
+                    print(f"[{completed:3d}/101] {symbol}: NO VALID ROWS", flush=True)
+                continue
+            path = staging_root / f"{symbol}.json"
+            sessions = sorted(
+                {
+                    datetime.fromisoformat(str(row["timestamp_utc"])).astimezone(NEW_YORK).date().isoformat()
+                    for row in rows
+                }
+            )
+            symbol_metadata[symbol] = {
+                "rows": len(rows),
+                "sessions": len(sessions),
+                "first_timestamp_utc": rows[0]["timestamp_utc"],
+                "last_timestamp_utc": rows[-1]["timestamp_utc"],
+                "sha256": _canonical_sha(rows),
+                "file": path.name,
             }
-        )
-        symbol_metadata[symbol] = {
-            "rows": len(rows),
-            "sessions": len(sessions),
-            "first_timestamp_utc": rows[0]["timestamp_utc"],
-            "last_timestamp_utc": rows[-1]["timestamp_utc"],
-            "sha256": _canonical_sha(rows),
-            "file": path.name,
-        }
+            if progress:
+                mode = "REUSED" if reused else "FETCHED"
+                print(
+                    f"[{completed:3d}/101] {symbol}: {mode} "
+                    f"{len(rows):,} rows / {len(sessions)} sessions",
+                    flush=True,
+                )
 
     if failures or len(symbol_metadata) != 101:
         return {
@@ -256,7 +318,8 @@ def main() -> None:
     parser.add_argument("--start-date")
     parser.add_argument("--end-date")
     parser.add_argument("--lookback-days", type=int, default=120)
-    parser.add_argument("--chunk-days", type=int, default=30)
+    parser.add_argument("--chunk-days", type=int, default=120)
+    parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
     end = date.fromisoformat(args.end_date) if args.end_date else datetime.now(NEW_YORK).date()
     if args.lookback_days < 1:
@@ -273,6 +336,8 @@ def main() -> None:
         end_date=end,
         client=TiingoHistoricalIntradayClient(),
         chunk_days=args.chunk_days,
+        workers=args.workers,
+        progress=True,
     )
     print(f"Status: {result['status']}")
     print(f"Published: {result['published']}")
