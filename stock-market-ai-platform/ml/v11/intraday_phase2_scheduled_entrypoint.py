@@ -22,8 +22,16 @@ NEW_YORK = ZoneInfo("America/New_York")
 STATUS_PATH = (
     ROOT / "data/research/v11/intraday/phase2/operational_status.json"
 )
-WINDOW_START = time(9, 58)
-WINDOW_END = time(10, 40)
+COLLECTION_WINDOWS = (
+    (time(9, 58), time(10, 3), "DECISION_CHECKPOINT"),
+    (time(10, 3), time(10, 8), "ENTRY_CHECKPOINT"),
+    (time(10, 28), time(10, 33), "EXIT_CHECKPOINT"),
+)
+MAX_REQUESTS_PER_COLLECTION = 101
+MAX_COLLECTIONS_PER_SESSION = 3
+MAX_REQUESTS_PER_SESSION = (
+    MAX_REQUESTS_PER_COLLECTION * MAX_COLLECTIONS_PER_SESSION
+)
 
 
 def _atomic_write(path: Path, payload: dict[str, object]) -> None:
@@ -50,9 +58,10 @@ def schedule_state(now_utc: datetime) -> str:
     local = now_utc.astimezone(NEW_YORK)
     if local.weekday() >= 5:
         return "MARKET_CLOSED"
-    if WINDOW_START <= local.time().replace(tzinfo=None) <= WINDOW_END:
+    local_time = local.time().replace(tzinfo=None)
+    if any(start <= local_time < end for start, end, _ in COLLECTION_WINDOWS):
         return "OBSERVATION_WINDOW"
-    return "OUTSIDE_OBSERVATION_WINDOW"
+    return "BETWEEN_OBSERVATION_CHECKPOINTS"
 
 
 def run_scheduled(
@@ -126,6 +135,8 @@ def run_scheduled(
         "checked_at_utc": now.isoformat(),
         "status": status,
         "schedule_state": window,
+        "maximum_collections_per_session": MAX_COLLECTIONS_PER_SESSION,
+        "maximum_tiingo_requests_per_session": MAX_REQUESTS_PER_SESSION,
         "activation": activation,
         "contract_sha256": observed_sha,
         "runner_invoked": runner_invoked,
