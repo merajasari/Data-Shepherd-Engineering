@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ml.v11.intraday_phase2_journal import Phase2EvidenceJournal
 from ml.v11.intraday_phase2_observation import run_observation
-from ml.v11.intraday_ranking import _canonical_sha
+from ml.v11.intraday_ranking import _canonical_sha, get_v5_data_symbols
 
 
 def require(condition: bool, label: str) -> None:
@@ -18,7 +18,7 @@ def require(condition: bool, label: str) -> None:
 
 
 def synthetic_fixture() -> tuple[dict[str, object], dict[str, float]]:
-    symbols = ["SPY"] + [f"S{index:03d}" for index in range(100)]
+    symbols = list(get_v5_data_symbols())
     start = datetime(2026, 9, 1, 13, 30, tzinfo=timezone.utc)
     series: dict[str, list[dict[str, object]]] = {}
     closes: dict[str, float] = {}
@@ -107,7 +107,7 @@ def main() -> None:
         require(restart.total_session_events == 4, "Restart creates no duplicates")
 
         tampered = copy.deepcopy(snapshot)
-        tampered["series"]["S001"][0]["close"] *= 2
+        tampered["series"][next(symbol for symbol in tampered["series"] if symbol != "SPY")][0]["close"] *= 2
         sha_failed = False
         try:
             run_observation(
