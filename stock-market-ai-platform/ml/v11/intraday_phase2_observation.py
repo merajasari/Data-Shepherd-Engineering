@@ -200,6 +200,8 @@ def run_observation(
                 ranking_sha=ranking_sha,
                 selected=selected,
                 rehearsal=rehearsal,
+                catch_up=catch_up,
+                collected_at_utc=collection_time,
                 extra={
                     "entry_rule": contract["entry"],
                     "entry_prices": entry_prices,
@@ -243,6 +245,8 @@ def run_observation(
                 ranking_sha=ranking_sha,
                 selected=selected,
                 rehearsal=rehearsal,
+                catch_up=catch_up,
+                collected_at_utc=collection_time,
                 extra={
                     "holding_bars": holding_bars,
                     "exit_prices": exit_prices,
@@ -259,6 +263,8 @@ def run_observation(
                 ranking_sha=ranking_sha,
                 selected=selected,
                 rehearsal=rehearsal,
+                catch_up=catch_up,
+                collected_at_utc=collection_time,
                 extra={
                     "strategy_gross_return": strategy_gross_return,
                     "modeled_total_cost_bps_round_trip": contract[
