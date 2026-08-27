@@ -85,8 +85,8 @@ def validate_contract(contract: Mapping[str, object]) -> tuple[str, ...]:
         reasons.append("COST_ASSUMPTION_CHANGED")
     if contract.get("required_universe_symbols") != 101:
         reasons.append("UNIVERSE_CHANGED")
-    if contract.get("activation_status") != "DISABLED_PENDING_OPERATIONAL_PREFLIGHT":
-        reasons.append("ACTIVATION_MUST_REMAIN_DISABLED")
+    if contract.get("activation_status") != "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY":
+        reasons.append("ACTIVATION_MUST_BE_PAPER_CONFIRMATION_ONLY")
 
     policy = contract.get("evidence_policy", {})
     if not isinstance(policy, Mapping):
@@ -141,7 +141,7 @@ def main() -> None:
     print(f"Fresh evidence boundary: {contract['fresh_confirmation_start_utc']}")
     print(f"Contract SHA-256: {contract_sha256(contract)}")
     print("Development observations reused: 0")
-    print("Activation: DISABLED PENDING OPERATIONAL PREFLIGHT")
+    print("Activation: ENABLED FRESH CONFIRMATION PAPER ONLY")
     print("Paper trading only: YES")
     print("Brokerage orders: OFF")
     print("V8/V10 production modified: NO")
