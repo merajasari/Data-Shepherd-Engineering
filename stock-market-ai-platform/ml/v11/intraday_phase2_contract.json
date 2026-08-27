@@ -9,7 +9,7 @@
   },
   "fresh_confirmation_start_utc": "2026-09-01T14:00:00+00:00",
   "fresh_confirmation_start_eastern": "2026-09-01T10:00:00-04:00",
-  "activation_status": "DISABLED_PENDING_OPERATIONAL_PREFLIGHT",
+  "activation_status": "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY",
   "bar_interval_minutes": 5,
   "regular_session_only": true,
   "completed_bars_only": true,
@@ -21,12 +21,12 @@
     "config_id": "MOMENTUM_BALANCED_6",
     "holding_bars": 6,
     "weights": {
-      "return_5m": 1.0,
-      "return_15m": 1.0,
-      "vwap_distance": 1.0,
-      "volume_acceleration": 1.0,
+      "return_5m": 1,
+      "return_15m": 1,
+      "vwap_distance": 1,
+      "volume_acceleration": 1,
       "realized_volatility_30m": -0.25,
-      "opening_gap": 1.0
+      "opening_gap": 1
     }
   },
   "top_n": 10,
@@ -42,8 +42,8 @@
     "minimum_accumulating_sessions": 60,
     "primary_metric": "NET_RELATIVE_TOTAL_RETURN",
     "preliminary_gates": {
-      "net_total_return_greater_than": 0.0,
-      "net_relative_total_return_greater_than": 0.0,
+      "net_total_return_greater_than": 0,
+      "net_relative_total_return_greater_than": 0,
       "net_excess_hit_rate_at_least": 0.5
     },
     "insufficient_evidence_before_minimum": true,
