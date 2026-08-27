@@ -17,7 +17,7 @@ from ml.v11.intraday_phase2_journal import (
 )
 
 EXPECTED_CONTRACT_SHA256 = (
-    "2bb7a0c14c658cc1009207ce9108494b2efdb9f89e7f12d936ebc592d90c6452"
+    "f539fabe9532752adb2a3b6b98aa244671b5ec8d8ae86b5eaacf8076f812a6c8"
 )
 
 
@@ -42,9 +42,9 @@ def run_preflight(
         observed_sha,
     )
     check(
-        "activation_disabled",
+        "paper_confirmation_activation",
         contract["activation_status"]
-        == "DISABLED_PENDING_OPERATIONAL_PREFLIGHT",
+        == "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY",
         str(contract["activation_status"]),
     )
     check(
@@ -145,13 +145,13 @@ def run_preflight(
 
     passed = all(bool(row["passed"]) for row in checks)
     return {
-        "status": "READY_DISABLED" if passed else "FAILED",
+        "status": "READY_PAPER_CONFIRMATION" if passed else "FAILED",
         "checks": checks,
         "contract_sha256": observed_sha,
         "fresh_confirmation_start_utc": contract[
             "fresh_confirmation_start_utc"
         ],
-        "activation": "DISABLED",
+        "activation": "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY",
         "production_journal_events": (
             len(Phase2EvidenceJournal(production_journal_path).read())
             if production_valid
@@ -184,11 +184,11 @@ def main() -> None:
         "Production evidence modified: "
         f"{'YES' if result['production_evidence_modified'] else 'NO'}"
     )
-    print("Activation: DISABLED")
+    print("Activation: ENABLED FRESH CONFIRMATION PAPER ONLY")
     print("Paper trading only: YES")
     print("Brokerage orders: OFF")
     print("V8/V10 production modified: NO")
-    if result["status"] != "READY_DISABLED":
+    if result["status"] != "READY_PAPER_CONFIRMATION":
         raise SystemExit(1)
 
 
