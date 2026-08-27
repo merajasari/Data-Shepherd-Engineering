@@ -31,8 +31,20 @@ def main() -> None:
     require(costs["modeled_fees_bps_round_trip"] == 2, "Two-bps fee assumption is reported")
     require(costs["modeled_slippage_bps_round_trip"] == 8, "Eight-bps slippage assumption is reported")
     require(sum(row["observations"] for row in payload["market_regimes"].values()) == result["test_observations"], "Every test session receives one market regime")
-    require(len(payload["worst_contributors"]) == 15, "Worst contributors are reported")
-    require(len(payload["best_contributors"]) == 15, "Best contributors are reported")
+    unique_selected = {
+        symbol
+        for row in result["test_results"]
+        for symbol in row["selected"]
+    }
+    expected_contributors = min(15, len(unique_selected))
+    require(
+        len(payload["worst_contributors"]) == expected_contributors,
+        "Worst available contributors are reported",
+    )
+    require(
+        len(payload["best_contributors"]) == expected_contributors,
+        "Best available contributors are reported",
+    )
     require(len(payload["diagnostic_sha256"]) == 64, "Diagnostics have a SHA-256 identity")
     require(payload["paper_trading_only"] is True, "Diagnostics remain paper only")
     require(payload["brokerage_orders"] is False, "Diagnostics have no brokerage authority")
