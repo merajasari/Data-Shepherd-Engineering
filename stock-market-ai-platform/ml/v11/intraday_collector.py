@@ -10,10 +10,10 @@ import hashlib
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Mapping, Sequence
+from typing import Mapping, Sequence
 
 import requests
 from dotenv import load_dotenv
@@ -133,13 +133,17 @@ def collect_complete_snapshot(
         reasons.append("NOW_MUST_BE_TIMEZONE_AWARE")
 
     staged: dict[str, list[dict[str, object]]] = {}
-    validations: dict[str, IntradayValidation] = {}
+    fetched_latest_timestamps: set[str] = set()
+    fetched_bar_counts: set[int] = set()
     for symbol in universe:
         try:
             rows = client.get_five_minute_bars(symbol, session_date)
         except Exception:
             reasons.append(f"FETCH_FAILED:{symbol}")
             continue
+        if rows:
+            fetched_latest_timestamps.add(str(rows[-1]["timestamp_utc"]))
+            fetched_bar_counts.add(len(rows))
         validation = validate_completed_bars(
             rows,
             now_utc=now_utc,
@@ -147,7 +151,6 @@ def collect_complete_snapshot(
             minimum_bars=minimum_bars,
             maximum_age_seconds=maximum_age_seconds,
         )
-        validations[symbol] = validation
         if validation.accepted:
             staged[symbol] = rows
         else:
@@ -161,9 +164,9 @@ def collect_complete_snapshot(
     bar_counts = {len(rows) for rows in staged.values()}
     if len(staged) != 101:
         reasons.append("COMPLETE_UNIVERSE_NOT_AVAILABLE")
-    if len(latest_timestamps) != 1:
+    if len(fetched_latest_timestamps) != 1:
         reasons.append("LATEST_BAR_NOT_ALIGNED")
-    if len(bar_counts) != 1:
+    if len(fetched_bar_counts) != 1:
         reasons.append("BAR_COUNTS_NOT_ALIGNED")
 
     unique_reasons = tuple(dict.fromkeys(reasons))
