@@ -1,4 +1,4 @@
-"""Launch-control regression for disabled V11 Phase 2 scheduling."""
+"""Launch-control regression for activated V11 Phase 2 paper confirmation."""
 from __future__ import annotations
 
 import tempfile
@@ -26,7 +26,12 @@ def main() -> None:
     contract = load_contract()
     require(
         contract_sha256(contract) == EXPECTED_CONTRACT_SHA256,
-        "Frozen Phase 2 contract identity matches",
+        "Activated Phase 2 contract identity matches",
+    )
+    require(
+        contract["activation_status"]
+        == "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY",
+        "Authority is limited to fresh paper confirmation",
     )
     require(
         schedule_state(
@@ -59,38 +64,95 @@ def main() -> None:
         journal_path = root / "production_evidence.jsonl"
         runner_calls = 0
 
-        def forbidden_runner():
+        def paper_runner():
             nonlocal runner_calls
             runner_calls += 1
-            raise AssertionError("disabled scheduler invoked runner")
+            return "SYNTHETIC_PAPER_RUNNER_COMPLETE"
 
-        result = run_scheduled(
+        early = run_scheduled(
+            now_utc=datetime(
+                2026, 8, 31, 14, 5, tzinfo=timezone.utc
+            ),
+            status_path=status_path,
+            production_journal_path=journal_path,
+            active_runner=paper_runner,
+        )
+        require(
+            early["status"] == "WAITING_FOR_BOUNDARY",
+            "Activated entrypoint remains dormant before boundary",
+        )
+        require(
+            early["runner_invoked"] is False and runner_calls == 0,
+            "Pre-boundary entrypoint makes no market request",
+        )
+        require(
+            not journal_path.exists(),
+            "Pre-boundary entrypoint writes no evidence",
+        )
+
+        active = run_scheduled(
             now_utc=datetime(
                 2026, 9, 1, 14, 5, tzinfo=timezone.utc
             ),
             status_path=status_path,
             production_journal_path=journal_path,
-            active_runner=forbidden_runner,
+            active_runner=paper_runner,
         )
-        require(result["status"] == "READY_DISABLED", "Disabled entrypoint remains ready")
-        require(result["runner_invoked"] is False, "Disabled entrypoint makes no market request")
-        require(runner_calls == 0, "Disabled entrypoint cannot invoke observation runner")
-        require(not journal_path.exists(), "Disabled entrypoint writes no evidence")
-        require(status_path.exists(), "Operational status publishes atomically")
-        require(result["brokerage_orders"] is False, "Scheduled entrypoint has no brokerage authority")
+        require(
+            active["runner_invoked"] is True and runner_calls == 1,
+            "Observation-window entrypoint invokes paper runner once",
+        )
+        require(
+            active["runner_status"]
+            == "SYNTHETIC_PAPER_RUNNER_COMPLETE",
+            "Paper runner result is published",
+        )
+        require(
+            not journal_path.exists(),
+            "Injected launch rehearsal writes no production evidence",
+        )
+        require(
+            status_path.exists(),
+            "Operational status publishes atomically",
+        )
+        require(
+            active["brokerage_orders"] is False,
+            "Scheduled entrypoint has no brokerage authority",
+        )
 
         preflight = run_preflight(
             production_journal_path=journal_path
         )
-        require(preflight["status"] == "READY_DISABLED", "Operational preflight remains ready")
-        require(not journal_path.exists(), "Launch rehearsal leaves production journal absent")
+        require(
+            preflight["status"] == "READY_PAPER_CONFIRMATION",
+            "Activated operational preflight passes",
+        )
+        require(
+            not journal_path.exists(),
+            "Launch rehearsal leaves production journal absent",
+        )
 
-    require(contract["v8_production_writes"] is False, "V8 production remains isolated")
-    require(contract["v10_production_writes"] is False, "V10 production remains isolated")
+    require(
+        contract["live_trading_enabled"] is False,
+        "Live trading remains disabled",
+    )
+    require(
+        contract["brokerage_orders"] is False,
+        "Brokerage orders remain off",
+    )
+    require(
+        contract["v8_production_writes"] is False,
+        "V8 production remains isolated",
+    )
+    require(
+        contract["v10_production_writes"] is False,
+        "V10 production remains isolated",
+    )
     print("Status: PASSED")
-    print("Five-minute launch control: VERIFIED DISABLED")
+    print("Five-minute launch control: VERIFIED PAPER CONFIRMATION")
     print("Market-window and boundary guards: VERIFIED")
     print("Production evidence modified: NO")
+    print("Live trading: DISABLED")
     print("Brokerage orders: OFF")
     print("V8/V10 production evidence modified: NO")
 
