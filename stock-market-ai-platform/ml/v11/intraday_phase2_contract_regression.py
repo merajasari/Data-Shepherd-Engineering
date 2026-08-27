@@ -26,7 +26,7 @@ def main() -> None:
     require(contract["hypothesis_origin"]["post_hoc_origin_disclosed"] is True, "Post-hoc hypothesis origin is disclosed")
     require(contract["hypothesis_origin"]["development_observations_reused"] == 0, "Development observations are excluded")
     require(contract["fresh_confirmation_start_utc"] == "2026-09-01T14:00:00+00:00", "Fresh evidence boundary is locked")
-    require(contract["activation_status"] == "DISABLED_PENDING_OPERATIONAL_PREFLIGHT", "Activation remains disabled")
+    require(contract["activation_status"] == "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY", "Fresh paper confirmation is activated")
     require(contract["evidence_policy"]["minimum_preliminary_sessions"] == 20, "Preliminary evidence requires 20 fresh sessions")
     require(contract["evidence_policy"]["minimum_accumulating_sessions"] == 60, "Accumulating evidence requires 60 fresh sessions")
     require(contract["modeled_total_cost_bps_round_trip"] == 10, "Ten-bps round-trip cost is locked")
@@ -43,12 +43,12 @@ def main() -> None:
     reused["hypothesis_origin"]["development_observations_reused"] = 40
     require("DEVELOPMENT_EVIDENCE_REUSE_PROHIBITED" in validate_contract(reused), "Development-evidence reuse fails closed")
     activated = copy.deepcopy(contract)
-    activated["activation_status"] = "ENABLED"
-    require("ACTIVATION_MUST_REMAIN_DISABLED" in validate_contract(activated), "Unauthorized activation fails closed")
+    activated["activation_status"] = "LIVE_TRADING_ENABLED"
+    require("ACTIVATION_MUST_BE_PAPER_CONFIRMATION_ONLY" in validate_contract(activated), "Non-paper activation fails closed")
 
     print("Status: PASSED")
     print("Phase 2 research specification: PREREGISTERED")
-    print("Fresh confirmation activation: DISABLED")
+    print("Fresh confirmation activation: ENABLED PAPER ONLY")
     print("Model selection authority: NONE")
     print("Brokerage orders: OFF")
     print("V8/V10 production evidence modified: NO")
