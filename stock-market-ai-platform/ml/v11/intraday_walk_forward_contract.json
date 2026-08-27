@@ -1,0 +1,78 @@
+{
+  "contract_id": "V11_INTRADAY_WALK_FORWARD_DEVELOPMENT_V1",
+  "status": "PREREGISTERED_DEVELOPMENT_EVALUATION",
+  "source_contract_id": "V11_INTRADAY_HISTORICAL_RESEARCH_V1",
+  "decision_bar_index": 5,
+  "decision_time_eastern": "10:00",
+  "entry": "NEXT_5MIN_BAR_OPEN",
+  "top_n": 10,
+  "weighting": "EQUAL_WEIGHT",
+  "benchmark": "SPY_SAME_WINDOW",
+  "minimum_train_sessions": 40,
+  "test_sessions_per_fold": 10,
+  "minimum_final_test_sessions": 5,
+  "modeled_fees_bps_round_trip": 2,
+  "modeled_slippage_bps_round_trip": 8,
+  "modeled_total_cost_bps_round_trip": 10,
+  "candidate_configurations": [
+    {
+      "config_id": "MOMENTUM_FAST_3",
+      "holding_bars": 3,
+      "weights": {
+        "return_5m": 1.5,
+        "return_15m": 0.5,
+        "vwap_distance": 1.0,
+        "volume_acceleration": 0.5,
+        "realized_volatility_30m": -0.25,
+        "opening_gap": 0.25
+      }
+    },
+    {
+      "config_id": "MOMENTUM_BALANCED_6",
+      "holding_bars": 6,
+      "weights": {
+        "return_5m": 1.0,
+        "return_15m": 1.0,
+        "vwap_distance": 1.0,
+        "volume_acceleration": 1.0,
+        "realized_volatility_30m": -0.25,
+        "opening_gap": 1.0
+      }
+    },
+    {
+      "config_id": "MOMENTUM_SLOW_12",
+      "holding_bars": 12,
+      "weights": {
+        "return_5m": 0.25,
+        "return_15m": 1.5,
+        "vwap_distance": 0.75,
+        "volume_acceleration": 0.5,
+        "realized_volatility_30m": -0.5,
+        "opening_gap": 0.5
+      }
+    },
+    {
+      "config_id": "REVERSION_FAST_3",
+      "holding_bars": 3,
+      "weights": {
+        "return_5m": -1.5,
+        "return_15m": -0.5,
+        "vwap_distance": -1.0,
+        "volume_acceleration": 0.25,
+        "realized_volatility_30m": -0.25,
+        "opening_gap": -0.25
+      }
+    }
+  ],
+  "selection_metric": "MEAN_TRAIN_NET_EXCESS_RETURN",
+  "selection_on_test_data": false,
+  "future_data_in_training": false,
+  "model_frozen": false,
+  "paper_trading_only": true,
+  "live_trading_enabled": false,
+  "brokerage_orders": false,
+  "v8_production_reads": false,
+  "v8_production_writes": false,
+  "v10_production_reads": false,
+  "v10_production_writes": false
+}
