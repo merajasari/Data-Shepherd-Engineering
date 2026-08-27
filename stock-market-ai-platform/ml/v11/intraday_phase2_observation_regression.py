@@ -160,6 +160,36 @@ def main() -> None:
             "Activated paper confirmation retains zero brokerage authority",
         )
 
+        catch_up_path = Path(directory) / "catch_up.jsonl"
+        catch_up = run_observation(
+            snapshot=snapshot,
+            previous_closes=closes,
+            journal_path=catch_up_path,
+            rehearsal=False,
+            catch_up=True,
+            collected_at_utc="2026-09-01T18:00:00+00:00",
+        )
+        catch_up_rows = Phase2EvidenceJournal(catch_up_path).read()
+        require(
+            catch_up.status == "SESSION_OBSERVATION_COMPLETE",
+            "Wake-up catch-up reconstructs the complete session",
+        )
+        require(
+            all(
+                row["catch_up_reconstruction"] is True
+                for row in catch_up_rows
+            ),
+            "Every reconstructed event is labeled catch-up",
+        )
+        require(
+            all(
+                row["collected_at_utc"]
+                == "2026-09-01T18:00:00+00:00"
+                for row in catch_up_rows
+            ),
+            "Catch-up preserves a separate collection timestamp",
+        )
+
     print("Status: PASSED")
     print("Decision -> paper entry -> paper exit -> observation: VERIFIED")
     print("Restart/idempotency/provenance/boundary safety: VERIFIED")
