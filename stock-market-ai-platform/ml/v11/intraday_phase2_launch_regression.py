@@ -11,6 +11,8 @@ from ml.v11.intraday_phase2_preflight import (
     run_preflight,
 )
 from ml.v11.intraday_phase2_scheduled_entrypoint import (
+    MAX_COLLECTIONS_PER_SESSION,
+    MAX_REQUESTS_PER_SESSION,
     run_scheduled,
     schedule_state,
 )
@@ -47,9 +49,35 @@ def main() -> None:
     )
     require(
         schedule_state(
+            datetime(2026, 9, 1, 14, 0, tzinfo=timezone.utc)
+        ) == "OBSERVATION_WINDOW",
+        "Decision checkpoint is active",
+    )
+    require(
+        schedule_state(
+            datetime(2026, 9, 1, 14, 30, tzinfo=timezone.utc)
+        ) == "OBSERVATION_WINDOW",
+        "Exit checkpoint is active",
+    )
+    require(
+        schedule_state(
+            datetime(2026, 9, 1, 14, 15, tzinfo=timezone.utc)
+        ) == "BETWEEN_OBSERVATION_CHECKPOINTS",
+        "Between-checkpoint invocation performs no collection",
+    )
+    require(
+        schedule_state(
             datetime(2026, 9, 1, 16, 0, tzinfo=timezone.utc)
-        ) == "OUTSIDE_OBSERVATION_WINDOW",
+        ) == "BETWEEN_OBSERVATION_CHECKPOINTS",
         "Midday invocation performs no collection",
+    )
+    require(
+        MAX_COLLECTIONS_PER_SESSION == 3,
+        "Exactly three collection checkpoints are allowed",
+    )
+    require(
+        MAX_REQUESTS_PER_SESSION == 303,
+        "Maximum session requests remain below the 500 hourly budget",
     )
     require(
         schedule_state(
