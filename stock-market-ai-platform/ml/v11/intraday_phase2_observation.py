@@ -92,6 +92,8 @@ def _event(
     ranking_sha: str,
     selected: list[str],
     rehearsal: bool,
+    catch_up: bool,
+    collected_at_utc: str,
     extra: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
@@ -102,6 +104,8 @@ def _event(
         "ranking_sha256": ranking_sha,
         "selected_symbols": selected,
         "rehearsal": rehearsal,
+        "catch_up_reconstruction": catch_up,
+        "collected_at_utc": collected_at_utc,
         "paper_trading_only": True,
         "brokerage_orders": False,
         "v8_modified": False,
@@ -118,8 +122,12 @@ def run_observation(
     previous_closes: Mapping[str, float],
     journal_path: Path = DEFAULT_JOURNAL_PATH,
     rehearsal: bool = False,
+    catch_up: bool = False,
+    collected_at_utc: str | None = None,
 ) -> ObservationRun:
     contract = load_contract()
+    collection_time = collected_at_utc or datetime.now(timezone.utc).isoformat()
+    _utc(collection_time)
     if not rehearsal:
         if (
             contract["activation_status"]
@@ -164,6 +172,8 @@ def run_observation(
             ranking_sha=ranking_sha,
             selected=selected,
             rehearsal=rehearsal,
+            catch_up=catch_up,
+            collected_at_utc=collection_time,
             extra={
                 "source_snapshot_sha256": snapshot["series_sha256"],
                 "configuration_id": contract["configuration"]["config_id"],
@@ -293,6 +303,7 @@ def run_from_files(
     snapshot_path: Path = SNAPSHOT_PATH,
     journal_path: Path = DEFAULT_JOURNAL_PATH,
     rehearsal: bool = False,
+    catch_up: bool = False,
 ) -> ObservationRun:
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
     closes = load_previous_closes_from_bronze(
@@ -303,6 +314,7 @@ def run_from_files(
         previous_closes=closes,
         journal_path=journal_path,
         rehearsal=rehearsal,
+        catch_up=catch_up,
     )
 
 
