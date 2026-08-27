@@ -4,11 +4,19 @@
   "source": "tiingo_iex_historical_5min",
   "bar_interval_minutes": 5,
   "default_lookback_calendar_days": 120,
-  "request_chunk_calendar_days": 30,
+  "request_chunk_calendar_days": 120,
   "required_symbols": 101,
   "candidate_symbols": 100,
   "benchmark": "SPY",
-  "required_fields": ["symbol", "timestamp_utc", "open", "high", "low", "close", "volume"],
+  "required_fields": [
+    "symbol",
+    "timestamp_utc",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume"
+  ],
   "regular_session_only": true,
   "partial_manifest_publication": false,
   "walk_forward_only": true,
@@ -21,5 +29,7 @@
   "v8_production_reads": false,
   "v8_production_writes": false,
   "v10_production_reads": false,
-  "v10_production_writes": false
+  "v10_production_writes": false,
+  "maximum_concurrent_requests": 8,
+  "resume_completed_staging_symbols": true
 }
