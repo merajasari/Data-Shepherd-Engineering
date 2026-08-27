@@ -259,7 +259,13 @@ def main() -> None:
     parser.add_argument("--chunk-days", type=int, default=30)
     args = parser.parse_args()
     end = date.fromisoformat(args.end_date) if args.end_date else datetime.now(NEW_YORK).date()
-    start = date.fromisoformat(args.start_date) if args.start_date else end - timedelta(days=args.lookback_days)
+    if args.lookback_days < 1:
+        raise SystemExit("--lookback-days must be at least 1")
+    start = (
+        date.fromisoformat(args.start_date)
+        if args.start_date
+        else end - timedelta(days=args.lookback_days - 1)
+    )
     print("V11 HISTORICAL FIVE-MINUTE RESEARCH BACKFILL")
     print("=" * 80)
     result = run_backfill(
