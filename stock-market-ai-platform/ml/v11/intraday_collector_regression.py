@@ -37,6 +37,11 @@ def bars(symbol: str, *, count: int = 6, shift_last: bool = False) -> list[dict[
     return rows
 
 
+class FinalSessionClient:
+    def get_five_minute_bars(self, symbol: str, session_date: str) -> list[dict[str, object]]:
+        return bars(symbol, count=78)
+
+
 class FakeClient:
     def __init__(self, *, missing: str | None = None, misaligned: str | None = None):
         self.missing = missing
@@ -94,6 +99,37 @@ def main() -> None:
         require(not misaligned.published, "Misaligned completed bar prevents publication")
         require("LATEST_BAR_NOT_ALIGNED" in misaligned.reasons, "Cross-sectional timestamp mismatch is explicit")
         require(output.read_bytes() == before, "Misalignment cannot mutate complete snapshot")
+
+        after_close = collect_complete_snapshot(
+            now_utc=datetime(2026, 8, 27, 21, 0, tzinfo=timezone.utc),
+            session_date="2026-08-27",
+            client=FinalSessionClient(),
+            output_path=output,
+            symbols=universe(),
+        )
+        require(after_close.published, "Same-day final session snapshot publishes after close")
+        after_close_payload = json.loads(output.read_text())
+        require(
+            after_close_payload["freshness_mode"] == "FINAL_SESSION_SNAPSHOT",
+            "After-close publication is labeled final session",
+        )
+        require(
+            after_close.completed_bar_utc.endswith("19:55:00+00:00"),
+            "After-close publication requires the 15:55 Eastern bar",
+        )
+
+        incomplete_close = collect_complete_snapshot(
+            now_utc=datetime(2026, 8, 27, 21, 0, tzinfo=timezone.utc),
+            session_date="2026-08-27",
+            client=FakeClient(),
+            output_path=output,
+            symbols=universe(),
+        )
+        require(not incomplete_close.published, "Opening-only data cannot publish after close")
+        require(
+            "FINAL_SESSION_BAR_MISSING" in incomplete_close.reasons,
+            "Missing 15:55 final bar is explicit",
+        )
 
         partial_universe = collect_complete_snapshot(
             now_utc=now,
