@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import statistics
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Mapping
 
@@ -153,9 +153,7 @@ def run_observation(
     decision_time = (
         _utc(decision_bar["timestamp_utc"])
         .replace(second=0, microsecond=0)
-    )
-    decision_time = decision_time.replace(
-        minute=decision_time.minute + 5
+        + timedelta(minutes=5)
     )
     events.append(
         _event(
@@ -201,8 +199,10 @@ def run_observation(
 
     if minimum_count > exit_index:
         exit_bar = series["SPY"][exit_index]
-        exit_time = _utc(exit_bar["timestamp_utc"])
-        exit_time = exit_time.replace(minute=exit_time.minute + 5)
+        exit_time = (
+            _utc(exit_bar["timestamp_utc"])
+            + timedelta(minutes=5)
+        )
         entry_prices = {
             symbol: float(series[symbol][entry_index]["open"])
             for symbol in selected
