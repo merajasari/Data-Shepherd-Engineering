@@ -14,7 +14,10 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 from ml.v11.intraday_phase2_contract import contract_sha256, load_contract
-from ml.v11.intraday_phase2_journal import (\n    DEFAULT_JOURNAL_PATH,\n    Phase2EvidenceJournal,\n)
+from ml.v11.intraday_phase2_journal import (
+    DEFAULT_JOURNAL_PATH,
+    Phase2EvidenceJournal,
+)
 from ml.v11.intraday_phase2_preflight import EXPECTED_CONTRACT_SHA256
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,7 +31,10 @@ COLLECTION_WINDOWS = (
     (time(10, 28), time(10, 33), "EXIT_CHECKPOINT"),
 )
 MAX_REQUESTS_PER_COLLECTION = 101
-MAX_COLLECTIONS_PER_SESSION = 4  # three checkpoints plus one catch-up\nMAX_REQUESTS_PER_SESSION = (\n    MAX_REQUESTS_PER_COLLECTION * MAX_COLLECTIONS_PER_SESSION\n)
+MAX_COLLECTIONS_PER_SESSION = 4  # three checkpoints plus one catch-up
+MAX_REQUESTS_PER_SESSION = (
+    MAX_REQUESTS_PER_COLLECTION * MAX_COLLECTIONS_PER_SESSION
+)
 
 
 def _atomic_write(path: Path, payload: dict[str, object]) -> None:
@@ -36,7 +42,7 @@ def _atomic_write(path: Path, payload: dict[str, object]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
-        handle.write("\n")
+        handle.write("\\n")
         handle.flush()
         os.fsync(handle.fileno())
     temporary.replace(path)
@@ -56,7 +62,11 @@ def schedule_state(now_utc: datetime) -> str:
     if local.weekday() >= 5:
         return "MARKET_CLOSED"
     local_time = local.time().replace(tzinfo=None)
-    if any(start <= local_time < end for start, end, _ in COLLECTION_WINDOWS):\n        return "OBSERVATION_WINDOW"\n    if local_time >= time(10, 33):\n        return "CATCH_UP_WINDOW"\n    return "BETWEEN_OBSERVATION_CHECKPOINTS"
+    if any(start <= local_time < end for start, end, _ in COLLECTION_WINDOWS):
+        return "OBSERVATION_WINDOW"
+    if local_time >= time(10, 33):
+        return "CATCH_UP_WINDOW"
+    return "BETWEEN_OBSERVATION_CHECKPOINTS"
 
 
 def run_scheduled(
@@ -79,12 +89,37 @@ def run_scheduled(
     )
     window = schedule_state(now)
     activation = str(contract["activation_status"])
-    runner_invoked = False\n    runner_status = None\n    local_date = now.astimezone(NEW_YORK).date().isoformat()\n    journal_rows = Phase2EvidenceJournal(production_journal_path).read()\n    session_complete = any(\n        row["session_date"] == local_date\n        and row["event_type"] == "SESSION_OBSERVATION"\n        for row in journal_rows\n    )\n    previous_status = None\n    if status_path.exists():\n        try:\n            previous_status = json.loads(status_path.read_text(encoding="utf-8"))\n        except (json.JSONDecodeError, OSError):\n            previous_status = None\n    catch_up_already_attempted = (\n        isinstance(previous_status, dict)\n        and previous_status.get("catch_up_attempted_session") == local_date\n    )\n    catch_up_attempted_session = (\n        local_date if catch_up_already_attempted else None\n    )
+    runner_invoked = False
+    runner_status = None
+    local_date = now.astimezone(NEW_YORK).date().isoformat()
+    journal_rows = Phase2EvidenceJournal(production_journal_path).read()
+    session_complete = any(
+        row["session_date"] == local_date
+        and row["event_type"] == "SESSION_OBSERVATION"
+        for row in journal_rows
+    )
+    previous_status = None
+    if status_path.exists():
+        try:
+            previous_status = json.loads(status_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            previous_status = None
+    catch_up_already_attempted = (
+        isinstance(previous_status, dict)
+        and previous_status.get("catch_up_attempted_session") == local_date
+    )
+    catch_up_attempted_session = (
+        local_date if catch_up_already_attempted else None
+    )
 
     if activation == "DISABLED_PENDING_OPERATIONAL_PREFLIGHT":
         status = "READY_DISABLED"
     elif activation == "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY":
-        if session_complete:\n            status = "SESSION_ALREADY_COMPLETE"\n        elif window == "CATCH_UP_WINDOW" and catch_up_already_attempted:\n            status = "CATCH_UP_ALREADY_ATTEMPTED"\n        elif window in {"OBSERVATION_WINDOW", "CATCH_UP_WINDOW"}:
+        if session_complete:
+            status = "SESSION_ALREADY_COMPLETE"
+        elif window == "CATCH_UP_WINDOW" and catch_up_already_attempted:
+            status = "CATCH_UP_ALREADY_ATTEMPTED"
+        elif window in {"OBSERVATION_WINDOW", "CATCH_UP_WINDOW"}:
             if active_runner is None:
                 from ml.v11.intraday_collector import (
                     TiingoIntradayClient,
@@ -99,7 +134,10 @@ def run_scheduled(
                 )
                 runner_invoked = True
                 if collection.published:
-                    observation = run_from_files(\n                        catch_up=(window == "CATCH_UP_WINDOW")\n                    )\n                    runner_status = observation.status
+                    observation = run_from_files(
+                        catch_up=(window == "CATCH_UP_WINDOW")
+                    )
+                    runner_status = observation.status
                 else:
                     runner_status = collection.status
             else:
@@ -108,7 +146,9 @@ def run_scheduled(
                 runner_status = str(
                     getattr(outcome, "status", outcome)
                 )
-            if window == "CATCH_UP_WINDOW":\n                catch_up_attempted_session = local_date\n            status = runner_status or "RUNNER_COMPLETED"
+            if window == "CATCH_UP_WINDOW":
+                catch_up_attempted_session = local_date
+            status = runner_status or "RUNNER_COMPLETED"
         else:
             status = window
     else:
@@ -132,7 +172,9 @@ def run_scheduled(
         "activation": activation,
         "contract_sha256": observed_sha,
         "runner_invoked": runner_invoked,
-        "runner_status": runner_status,\n        "session_complete": session_complete,\n        "catch_up_attempted_session": catch_up_attempted_session,
+        "runner_status": runner_status,
+        "session_complete": session_complete,
+        "catch_up_attempted_session": catch_up_attempted_session,
         "production_evidence_modified": evidence_modified,
         "paper_trading_only": True,
         "brokerage_orders": False,
