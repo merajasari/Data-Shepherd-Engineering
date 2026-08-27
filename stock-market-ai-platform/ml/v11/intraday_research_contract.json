@@ -1,0 +1,39 @@
+{
+  "contract_id": "V11_INTRADAY_5MIN_RESEARCH_V1",
+  "status": "RESEARCH_ONLY",
+  "bar_interval_minutes": 5,
+  "session_timezone": "America/New_York",
+  "regular_session_open": "09:30",
+  "regular_session_close": "16:00",
+  "decision_delay_minutes": 1,
+  "maximum_bar_age_seconds": 420,
+  "minimum_session_bars": 6,
+  "required_symbols": 101,
+  "required_fields": [
+    "symbol",
+    "timestamp_utc",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume"
+  ],
+  "features": [
+    "return_5m",
+    "return_15m",
+    "vwap_distance",
+    "volume_acceleration",
+    "realized_volatility_30m",
+    "opening_gap"
+  ],
+  "research_outputs_only": true,
+  "paper_trading_only": true,
+  "live_trading_enabled": false,
+  "brokerage_orders": false,
+  "brokerage_sdk_allowed": false,
+  "holdout_outcomes_allowed": false,
+  "v8_production_reads": false,
+  "v8_production_writes": false,
+  "v10_production_reads": false,
+  "v10_production_writes": false
+}
