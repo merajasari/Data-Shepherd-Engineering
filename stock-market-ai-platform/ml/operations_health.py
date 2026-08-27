@@ -35,11 +35,28 @@ ERR_LOG_CANDIDATES = (
     PROJECT_ROOT / "logs/v5_refresh.err.log",
 )
 EXPECTED_SYMBOLS = 101
-HOURLY_LIMIT = 45
+DEFAULT_HOURLY_LIMIT = 45
+MAX_SUPPORTED_HOURLY_LIMIT = 10_000
 
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _configured_hourly_limit():
+    raw = os.environ.get("TIINGO_HOURLY_REQUEST_LIMIT")
+    if raw is None or not raw.strip():
+        return DEFAULT_HOURLY_LIMIT
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_HOURLY_LIMIT
+    return value if 1 <= value <= MAX_SUPPORTED_HOURLY_LIMIT else DEFAULT_HOURLY_LIMIT
+
+
+def _configured_tiingo_plan():
+    value = os.environ.get("TIINGO_PLAN", "starter").strip().lower()
+    return value if value in {"starter", "power"} else "unknown"
 
 
 def _json(path: Path):
@@ -112,6 +129,8 @@ def main():
 
     now = _now()
     used = _active_quota(now)
+    hourly_limit = _configured_hourly_limit()
+    tiingo_plan = _configured_tiingo_plan()
     v8 = _json(V8_GUARD)
     v10_monitor = _json(V10_MONITOR)
     v10_spec = _json(V10_SPEC)
@@ -138,9 +157,10 @@ def main():
         },
         "tiingo": {
             "rolling_requests_used": used,
-            "rolling_request_limit": HOURLY_LIMIT,
-            "rolling_requests_available": max(0, HOURLY_LIMIT - used),
-            "quota_saturated": used >= HOURLY_LIMIT,
+            "plan": tiingo_plan,
+            "rolling_request_limit": hourly_limit,
+            "rolling_requests_available": max(0, hourly_limit - used),
+            "quota_saturated": used >= hourly_limit,
         },
         "features": {
             "files_found": feature_files,
@@ -189,7 +209,7 @@ def main():
     print("STOCK OPERATIONS HEALTH")
     print("=" * 80)
     print(f"Scheduler: {scheduler_status} | exit={args.pipeline_exit_code}")
-    print(f"Tiingo: {used}/{HOURLY_LIMIT} rolling requests")
+    print(f"Tiingo ({tiingo_plan}): {used}/{hourly_limit} rolling requests")
     print(f"Features ({feature_backend}): {feature_files}/{EXPECTED_SYMBOLS} | common latest={common_latest}")
     print(f"Convergence: {payload['convergence']['status']} | verification={payload['convergence']['verification']}")
     print(f"V8 guard: {payload['v8']['guard_status']} | gate={payload['v8']['decision_gate_open']}")
