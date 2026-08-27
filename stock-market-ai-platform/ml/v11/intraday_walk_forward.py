@@ -142,10 +142,13 @@ def _session_observation(
     for symbol in symbols:
         current = grouped[symbol][session]
         previous = grouped[symbol][previous_session]
-        values = derive_features(
-            current[: decision_bar_index + 1],
-            previous_close=float(previous[-1]["close"]),
-        )
+        try:
+            values = derive_features(
+                current[: decision_bar_index + 1],
+                previous_close=float(previous[-1]["close"]),
+            )
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            return None
         raw_features[symbol] = {
             name: float(getattr(values, name)) for name in FEATURE_NAMES
         }
@@ -317,7 +320,9 @@ def evaluate_walk_forward(
         "status": "WALK_FORWARD_DEVELOPMENT_EVIDENCE",
         "model_frozen": False,
         "selection_on_test_data": False,
+        "common_sessions": len(common) - 1,
         "eligible_sessions": len(eligible_sessions),
+        "skipped_incomplete_sessions": (len(common) - 1) - len(eligible_sessions),
         "fold_count": len(folds),
         "test_observations": len(test_observations),
         "folds": folds,
@@ -359,9 +364,18 @@ def main() -> None:
     parser.parse_args()
     print("V11 INTRADAY WALK-FORWARD DEVELOPMENT EVALUATION")
     print("=" * 80)
-    result = run()
+    try:
+        result = run()
+    except Exception as exc:
+        print("Status: REJECTED_FAIL_CLOSED")
+        print(f"Reason: {type(exc).__name__}: {exc}")
+        print("Results published: NO")
+        print("Brokerage orders: OFF")
+        raise SystemExit(1)
     print(f"Status: {result['status']}")
+    print(f"Common candidate sessions: {result['common_sessions']}")
     print(f"Eligible sessions: {result['eligible_sessions']}")
+    print(f"Skipped incomplete sessions: {result['skipped_incomplete_sessions']}")
     print(f"Walk-forward folds: {result['fold_count']}")
     print(f"Out-of-sample observations: {result['test_observations']}")
     print(f"V11 net return: {result['strategy_net_total_return']:+.2%}")
