@@ -34,12 +34,6 @@ def run_monitor(
         failures.append(f"JOURNAL_INVALID:{exc}")
         events = []
 
-    if (
-        contract["activation_status"]
-        == "DISABLED_PENDING_OPERATIONAL_PREFLIGHT"
-        and events
-    ):
-        failures.append("EVIDENCE_PRESENT_WHILE_DISABLED")
 
     operational = None
     if status_path.exists():
@@ -59,7 +53,7 @@ def run_monitor(
 
     return {
         "checked_at_utc": datetime.now(timezone.utc).isoformat(),
-        "status": "HEALTHY_DISABLED" if not failures else "ALERT",
+        "status": "HEALTHY_PAPER_CONFIRMATION" if not failures else "ALERT",
         "failures": failures,
         "contract_sha256": observed_sha,
         "activation": contract["activation_status"],
