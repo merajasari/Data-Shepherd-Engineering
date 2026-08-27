@@ -94,17 +94,17 @@ def main() -> None:
 
         production = root / "production.jsonl"
         preflight = run_preflight(production_journal_path=production)
-        require(preflight["status"] == "READY_DISABLED", "Operational preflight passes")
+        require(preflight["status"] == "READY_PAPER_CONFIRMATION", "Operational preflight passes")
         require(not production.exists(), "Preflight creates no production evidence")
         require(preflight["production_evidence_modified"] is False, "Production evidence remains unchanged")
-        require(preflight["activation"] == "DISABLED", "Activation remains disabled")
+        require(preflight["activation"] == "ENABLED_FRESH_CONFIRMATION_PAPER_ONLY", "Paper confirmation is activated")
 
     require(contract["v8_production_writes"] is False, "V8 production remains isolated")
     require(contract["v10_production_writes"] is False, "V10 production remains isolated")
     print("Status: PASSED")
     print("Append-only evidence journal: VERIFIED")
     print("Duplicate/restart/tamper/boundary safety: VERIFIED")
-    print("Activation: DISABLED")
+    print("Activation: ENABLED PAPER CONFIRMATION")
     print("Brokerage orders: OFF")
     print("V8/V10 production evidence modified: NO")
 
