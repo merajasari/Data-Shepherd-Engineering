@@ -87,6 +87,22 @@ def main() -> None:
         "Every test cohort contains 10 stocks and excludes SPY",
     )
     require(first["modeled_total_cost_bps_round_trip"] == 10, "Ten-bps round-trip cost is applied")
+    require(first["skipped_incomplete_sessions"] == 0, "Complete synthetic sessions are retained")
+
+    incomplete_volume = copy.deepcopy(dataset)
+    target_date = str(incomplete_volume["AAPL"][18]["timestamp_utc"])[:10]
+    for row in incomplete_volume["AAPL"]:
+        if str(row["timestamp_utc"])[:10] == target_date:
+            row["volume"] = 0
+    incomplete_result = evaluate_walk_forward(incomplete_volume, contract)
+    require(
+        incomplete_result["skipped_incomplete_sessions"] == 1,
+        "Undefined historical volume skips exactly one session",
+    )
+    require(
+        incomplete_result["eligible_sessions"] == first["eligible_sessions"] - 1,
+        "Incomplete feature session cannot enter evaluation",
+    )
 
     short = synthetic_dataset(session_count=20)
     try:
