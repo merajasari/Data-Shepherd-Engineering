@@ -202,6 +202,19 @@ def collect_complete_snapshot(
         reasons.append("LATEST_BAR_NOT_ALIGNED")
     if len(fetched_bar_counts) != 1:
         reasons.append("BAR_COUNTS_NOT_ALIGNED")
+    final_session_mode = effective_maximum_age_seconds > maximum_age_seconds
+    if final_session_mode and len(fetched_latest_timestamps) == 1:
+        try:
+            final_timestamp = datetime.fromisoformat(
+                next(iter(fetched_latest_timestamps)).replace("Z", "+00:00")
+            ).astimezone(NEW_YORK)
+            if (
+                final_timestamp.date().isoformat() != session_date
+                or final_timestamp.time().replace(tzinfo=None) != time(15, 55)
+            ):
+                reasons.append("FINAL_SESSION_BAR_MISSING")
+        except ValueError:
+            reasons.append("FINAL_SESSION_BAR_MISSING")
 
     unique_reasons = tuple(dict.fromkeys(reasons))
     if unique_reasons:
@@ -225,7 +238,7 @@ def collect_complete_snapshot(
         "bar_interval_minutes": 5,
         "freshness_mode": (
             "FINAL_SESSION_SNAPSHOT"
-            if effective_maximum_age_seconds > maximum_age_seconds
+            if final_session_mode
             else "LIVE_SESSION"
         ),
         "symbol_count": len(staged),
