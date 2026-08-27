@@ -135,24 +135,35 @@ def main() -> None:
             boundary_failed = True
         require(boundary_failed, "Pre-boundary session fails closed")
 
-        production_failed = False
         production_path = Path(directory) / "production.jsonl"
-        try:
-            run_observation(
-                snapshot=snapshot,
-                previous_closes=closes,
-                journal_path=production_path,
-                rehearsal=False,
-            )
-        except RuntimeError:
-            production_failed = True
-        require(production_failed, "Disabled production runner fails closed")
-        require(not production_path.exists(), "Disabled runner writes no evidence")
+        production = run_observation(
+            snapshot=snapshot,
+            previous_closes=closes,
+            journal_path=production_path,
+            rehearsal=False,
+        )
+        require(
+            production.status == "SESSION_OBSERVATION_COMPLETE",
+            "Activated paper-confirmation runner completes",
+        )
+        production_rows = Phase2EvidenceJournal(production_path).read()
+        require(
+            len(production_rows) == 4,
+            "Activated runner writes exactly four temporary test events",
+        )
+        require(
+            all(row["rehearsal"] is False for row in production_rows),
+            "Activated observations are labeled genuine",
+        )
+        require(
+            all(row["brokerage_orders"] is False for row in production_rows),
+            "Activated paper confirmation retains zero brokerage authority",
+        )
 
     print("Status: PASSED")
     print("Decision -> paper entry -> paper exit -> observation: VERIFIED")
     print("Restart/idempotency/provenance/boundary safety: VERIFIED")
-    print("Production activation: DISABLED")
+    print("Production activation: ENABLED PAPER CONFIRMATION")
     print("Brokerage orders: OFF")
     print("V8/V10 production evidence modified: NO")
 
