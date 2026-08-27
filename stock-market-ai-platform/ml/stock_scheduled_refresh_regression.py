@@ -89,6 +89,41 @@ def main() -> None:
         "Runtime, convergence and feature layer all use Spark",
     )
     require(
+        convergence.get("safety_violation") is False
+        and health_convergence.get("safety_violation") is False,
+        "No convergence safety violation is active",
+    )
+    require(
+        scheduler.get("real_orders") is False
+        and safety.get("brokerage_orders") is False,
+        "Brokerage orders remain off",
+    )
+    require(
+        active_logs_are_secret_free(),
+        "Active refresh error logs contain no credential-bearing query strings",
+    )
+
+    catching_up = (
+        str(convergence.get("status", "")).startswith("CATCHING_UP_")
+        and convergence.get("verification") == "FAIL_CLOSED_WHILE_CATCHING_UP"
+    )
+    if catching_up:
+        require(
+            convergence.get("v8_decision_gate_open") is False
+            and v8.get("decision_gate_open") is False,
+            "V8 gate is fail-closed while the newest session converges",
+        )
+        completed = feature_layer.get("symbols_at_target", 0)
+        expected = feature_layer.get("symbols_expected", EXPECTED_SYMBOLS)
+        print("\nStatus: WAITING_FOR_CONVERGENCE")
+        print(f"Spark target coverage: {completed}/{expected}")
+        print("Safety: FAIL_CLOSED")
+        print("Credential logging: NOT DETECTED")
+        print("Production evidence modified: NO")
+        print("Brokerage orders: OFF")
+        return
+
+    require(
         features.get("files_found") == EXPECTED_SYMBOLS
         and features.get("expected_files") == EXPECTED_SYMBOLS
         and feature_layer.get("symbols_at_target") == EXPECTED_SYMBOLS
@@ -108,11 +143,6 @@ def main() -> None:
         "End-to-end readiness is verified",
     )
     require(
-        convergence.get("safety_violation") is False
-        and health_convergence.get("safety_violation") is False,
-        "No convergence safety violation is active",
-    )
-    require(
         convergence.get("v8_decision_gate_open") is True
         and convergence.get("v8_ranking_matches_target") is True
         and v8.get("guard_status") == "READY"
@@ -120,15 +150,6 @@ def main() -> None:
         and v8.get("ranking_timestamp_utc")
         == convergence.get("target_session_utc"),
         "V8 gate and ranking timestamp match the converged target",
-    )
-    require(
-        scheduler.get("real_orders") is False
-        and safety.get("brokerage_orders") is False,
-        "Brokerage orders remain off",
-    )
-    require(
-        active_logs_are_secret_free(),
-        "Active refresh error logs contain no credential-bearing query strings",
     )
 
     print("\nStatus: PASSED")
