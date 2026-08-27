@@ -22,11 +22,11 @@ if [[ "$TIINGO_PLAN_VALUE" != "power" ]]; then
   echo "Refusing Power scheduler installation: TIINGO_PLAN must be power." >&2
   exit 2
 fi
-if ! [[ "$HOURLY_REQUEST_LIMIT" =~ '^[0-9]+$' ]] || (( HOURLY_REQUEST_LIMIT < 101 || HOURLY_REQUEST_LIMIT > 10000 )); then
+if [[ "$HOURLY_REQUEST_LIMIT" != <-> ]] || (( HOURLY_REQUEST_LIMIT < 101 || HOURLY_REQUEST_LIMIT > 10000 )); then
   echo "TIINGO_HOURLY_REQUEST_LIMIT must be between 101 and 10000 for Power." >&2
   exit 2
 fi
-if ! [[ "$INTERVAL_SECONDS" =~ '^[0-9]+$' ]] || (( INTERVAL_SECONDS < 60 )); then
+if [[ "$INTERVAL_SECONDS" != <-> ]] || (( INTERVAL_SECONDS < 60 )); then
   echo "V8_REFRESH_INTERVAL_SECONDS must be at least 60." >&2
   exit 2
 fi
