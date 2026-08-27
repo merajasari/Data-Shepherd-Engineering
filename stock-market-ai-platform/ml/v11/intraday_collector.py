@@ -11,9 +11,10 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -32,6 +33,7 @@ load_dotenv(ROOT / ".env")
 DEFAULT_OUTPUT = ROOT / "data/research/v11/intraday/latest_complete_snapshot.json"
 SOURCE = "tiingo_iex_historical_5min"
 COLUMNS = "open,high,low,close,volume"
+NEW_YORK = ZoneInfo("America/New_York")
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,33 @@ def _digest(series: Mapping[str, Sequence[Mapping[str, object]]]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _effective_maximum_age_seconds(
+    now_utc: datetime,
+    session_date: str,
+    configured_seconds: int,
+) -> int:
+    """Allow the same session's final 15:55 bar after the regular close."""
+    if now_utc.tzinfo is None:
+        return configured_seconds
+    try:
+        requested_date = date.fromisoformat(session_date)
+    except ValueError:
+        return configured_seconds
+    local_now = now_utc.astimezone(NEW_YORK)
+    if local_now.date() != requested_date or local_now.time() < time(16, 0):
+        return configured_seconds
+    final_bar_end_local = datetime.combine(
+        requested_date,
+        time(16, 0),
+        tzinfo=NEW_YORK,
+    )
+    seconds_since_close = max(
+        0,
+        int((local_now - final_bar_end_local).total_seconds()),
+    )
+    return max(configured_seconds, seconds_since_close + 300)
+
+
 def collect_complete_snapshot(
     *,
     now_utc: datetime,
@@ -132,6 +161,11 @@ def collect_complete_snapshot(
     if now_utc.tzinfo is None:
         reasons.append("NOW_MUST_BE_TIMEZONE_AWARE")
 
+    effective_maximum_age_seconds = _effective_maximum_age_seconds(
+        now_utc,
+        session_date,
+        maximum_age_seconds,
+    )
     staged: dict[str, list[dict[str, object]]] = {}
     fetched_latest_timestamps: set[str] = set()
     fetched_bar_counts: set[int] = set()
@@ -149,7 +183,7 @@ def collect_complete_snapshot(
             now_utc=now_utc,
             expected_symbol=symbol,
             minimum_bars=minimum_bars,
-            maximum_age_seconds=maximum_age_seconds,
+            maximum_age_seconds=effective_maximum_age_seconds,
         )
         if validation.accepted:
             staged[symbol] = rows
@@ -189,6 +223,11 @@ def collect_complete_snapshot(
         "generated_at_utc": now_utc.astimezone(timezone.utc).isoformat(),
         "completed_bar_utc": completed_bar,
         "bar_interval_minutes": 5,
+        "freshness_mode": (
+            "FINAL_SESSION_SNAPSHOT"
+            if effective_maximum_age_seconds > maximum_age_seconds
+            else "LIVE_SESSION"
+        ),
         "symbol_count": len(staged),
         "symbols": list(universe),
         "series_sha256": _digest(staged),
@@ -211,7 +250,7 @@ def collect_complete_snapshot(
 
 def main() -> None:
     now = datetime.now(timezone.utc)
-    session_date = now.astimezone(__import__("zoneinfo").ZoneInfo("America/New_York")).date().isoformat()
+    session_date = now.astimezone(NEW_YORK).date().isoformat()
     result = collect_complete_snapshot(
         now_utc=now,
         session_date=session_date,
