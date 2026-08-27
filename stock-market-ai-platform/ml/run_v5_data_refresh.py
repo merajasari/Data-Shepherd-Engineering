@@ -54,6 +54,7 @@ from feature_pipeline import process_stock as process_feature_stock  # noqa: E40
 
 REQUEST_LEDGER_PATH = PROJECT_ROOT / "data/live/v5_tiingo_request_ledger.json"
 DEFAULT_HOURLY_REQUEST_LIMIT = 45
+MAX_SUPPORTED_HOURLY_REQUEST_LIMIT = 10_000
 REQUEST_WINDOW = timedelta(hours=1)
 COMPARISON_OUTPUT_PATH = PROJECT_ROOT / "webapp/static/generated/stock_model_comparison.json"
 COMPARISON_STATIC_INPUTS = (
@@ -68,6 +69,28 @@ COMPARISON_STATIC_INPUTS = (
 
 def _utc_now():
     return datetime.now(timezone.utc)
+
+
+def configured_hourly_request_limit():
+    """Return the locally approved Tiingo rolling-hour ceiling.
+
+    Starter remains the fail-closed default. Power capacity must be selected
+    explicitly through TIINGO_HOURLY_REQUEST_LIMIT; the runtime never infers or
+    upgrades account authority from a token.
+    """
+    raw = os.environ.get("TIINGO_HOURLY_REQUEST_LIMIT")
+    if raw is None or not raw.strip():
+        return DEFAULT_HOURLY_REQUEST_LIMIT
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError("TIINGO_HOURLY_REQUEST_LIMIT must be an integer") from exc
+    if not 1 <= value <= MAX_SUPPORTED_HOURLY_REQUEST_LIMIT:
+        raise ValueError(
+            "TIINGO_HOURLY_REQUEST_LIMIT must be between 1 and "
+            f"{MAX_SUPPORTED_HOURLY_REQUEST_LIMIT}"
+        )
+    return value
 
 
 def _parse_utc(value):
@@ -335,7 +358,7 @@ def parse_args():
     parser.add_argument(
         "--hourly-request-limit",
         type=int,
-        default=DEFAULT_HOURLY_REQUEST_LIMIT,
+        default=configured_hourly_request_limit(),
         help="Maximum Tiingo REST attempts allowed in any rolling 60-minute window.",
     )
     parser.add_argument(
