@@ -1,5 +1,6 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
 from webapp.services.v10_cycle3_holdout_service import get_v10_cycle3_holdout_dashboard
+from webapp.services.v11_phase2_service import get_v11_phase2_dashboard
 """Data Shepherd Engineering presentation layer."""
 import os, sys, time
 from collections import defaultdict, deque
@@ -69,7 +70,7 @@ def inject_dashboard_modules(response):
             shared=['<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
             scripts.extend(shared)
             if request.args.get("view")!="live":
-                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>'])
+                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v11_phase2_status.js" defer></script>'])
         if marker in html:
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
@@ -332,5 +333,11 @@ def api_v10_cycle3_holdout():
     response=jsonify(get_v10_cycle3_holdout_dashboard())
     response.headers["Cache-Control"]="private, max-age=5"
     response.headers["X-Data-Serving-Path"]="lightweight-files"
+    return response
+@app.get("/api/v11/phase2")
+def api_v11_phase2():
+    response=jsonify(get_v11_phase2_dashboard())
+    response.headers["Cache-Control"]="private, max-age=5"
+    response.headers["X-Data-Serving-Path"]="lightweight-files; no-historical-intraday-load"
     return response
 if __name__=="__main__":app.run(host="0.0.0.0",port=5000,debug=False)
