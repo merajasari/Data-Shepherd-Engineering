@@ -152,8 +152,8 @@ def reconstruct(
         "configuration": config.config_id,
         "contract_sha256": contract_sha256(contract),
         "source_manifest_sha256": manifest["manifest_sha256"],
-        "source_window_start": manifest.get("common_session_start"),
-        "source_window_end": manifest.get("common_session_end"),
+        "source_window_start": manifest.get("first_common_session"),
+        "source_window_end": manifest.get("last_common_session"),
         "fresh_confirmation_start_utc": contract[
             "fresh_confirmation_start_utc"
         ],
