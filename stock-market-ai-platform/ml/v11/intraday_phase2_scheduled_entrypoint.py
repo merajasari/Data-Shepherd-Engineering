@@ -42,7 +42,7 @@ def _atomic_write(path: Path, payload: dict[str, object]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
-        handle.write("\\n")
+        handle.write("\n")
         handle.flush()
         os.fsync(handle.fileno())
     temporary.replace(path)
