@@ -52,6 +52,11 @@ def main() -> None:
     )
 
     app.config.update(TESTING=True, SESSION_COOKIE_SECURE=False)
+    compiled_template = app.jinja_env.get_template("index.html")
+    require(
+        compiled_template is not None,
+        "Model Research template compiles under Jinja",
+    )
     response = app.test_client().get("/api/v11/phase2")
     require(response.status_code == 200, "V11 status API responds")
     api_payload = response.get_json()
@@ -78,6 +83,10 @@ def main() -> None:
     require(
         "{% if not live_view %}" in template,
         "V11 panel is limited to Model Research",
+    )
+    require(
+        "{#v11-phase2-status" not in template,
+        "Responsive V11 CSS cannot open a Jinja comment",
     )
     require(
         "FIVE-MINUTE FRESH CONFIRMATION" in template,
