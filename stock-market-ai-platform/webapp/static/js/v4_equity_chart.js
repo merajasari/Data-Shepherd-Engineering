@@ -44,11 +44,11 @@
   card.innerHTML = `
     <div class="smc-head"><div><div class="label">MODEL PERFORMANCE COMPARISON</div><div class="smc-title">V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 vs V11 Phase 2 development vs SPY</div><div class="smc-subtitle">Every strategy is shown on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded, so there is no artificial reset or vertical drop when reconstructed history reaches the present.</div></div><span id="smc-load-status" class="mode">LOADING MODELS</span></div>
     <div class="smc-metrics"><div class="metric"><span>VISIBLE RANGE</span><strong id="smc-visible-range">—</strong></div><div class="metric"><span>MODELS SHOWN</span><strong id="smc-model-count">—</strong></div><div class="metric"><span>START CAPITAL</span><strong>$100,000</strong></div><div class="metric"><span>LATEST DATA</span><strong id="smc-latest-date">—</strong></div></div>
-    <div class="smc-toolbar"><strong class="muted">RANGE</strong><button class="smc-btn" data-range="ALL">ALL</button><button class="smc-btn" data-range="5Y">5Y</button><button class="smc-btn active" data-range="3Y">3Y</button><button class="smc-btn" data-range="1Y">1Y</button><button class="smc-btn" data-range="90D">90D</button><button class="smc-btn" data-range="30D">30D</button><strong class="muted" style="margin-left:10px">VIEW</strong><button class="smc-btn active" data-mode="equity">EQUITY USD</button><button class="smc-btn" data-mode="normalized">NORMALIZED GROWTH</button></div>
+    <div class="smc-toolbar"><strong class="muted">RANGE</strong><button class="smc-btn" data-range="ALL">ALL</button><button class="smc-btn" data-range="5Y">5Y</button><button class="smc-btn active" data-range="3Y">3Y</button><button class="smc-btn" data-range="1Y">1Y</button><button class="smc-btn" data-range="90D">90D</button><button class="smc-btn" data-range="30D">30D</button><strong class="muted" style="margin-left:10px">VIEW</strong><button class="smc-btn" data-mode="equity">EQUITY USD</button><button class="smc-btn active" data-mode="normalized">NORMALIZED GROWTH</button></div>
     <div id="smc-range-message" class="smc-range-message"></div>
     <div id="smc-models" class="smc-models"></div>
     <div class="smc-ux"><div class="hint"><strong>Explore:</strong> move near a line to highlight that model · click to pin · click again to release · toggle models · choose range · zoom and pan.</div><button class="smc-nav" data-action="left">◀ EARLIER</button><button class="smc-nav" data-action="out">− ZOOM OUT</button><span id="smc-zoom-status" class="smc-zoom-status">FULL RANGE</span><button class="smc-nav" data-action="in">+ ZOOM IN</button><button class="smc-nav" data-action="right">LATER ▶</button><button class="smc-nav" data-action="reset">RESET VIEW</button></div>
-    <div class="smc-panel"><svg id="smc-chart" class="smc-svg" viewBox="0 0 1200 520" preserveAspectRatio="none"></svg><div id="smc-tooltip" class="smc-tooltip"></div><div id="smc-scale-note" class="smc-note">Each model begins at $100,000 on its own first scientifically eligible historical date.</div></div>
+    <div class="smc-panel"><svg id="smc-chart" class="smc-svg" viewBox="0 0 1200 520" preserveAspectRatio="none"></svg><div id="smc-tooltip" class="smc-tooltip"></div><div id="smc-scale-note" class="smc-note">Visible-range growth index: each line is rebased to 100 at its first displayed eligible observation. V11 begins in May 2026 because no earlier five-minute development history was backfilled.</div></div>
     <div id="smc-method-note" class="smc-warning">V6 and V7 are intentionally excluded. V8 is its frozen historical reconstruction and V10 is the frozen Cycle 3 development reconstruction. V11 is an explicitly post-hoc Phase 2 development reconstruction—not a frozen model—and excludes all fresh September confirmation evidence. Genuine V8, V10 and V11 forward evidence remains separate.</div>
     <details id="smc-lineage" class="smc-lineage"><summary>DATA INTEGRITY &amp; MODEL LINEAGE</summary><div class="smc-lineage-grid"><div class="smc-lineage-item"><span>V8 FROZEN SHA</span><strong id="smc-lineage-v8">—</strong></div><div class="smc-lineage-item"><span>V10 CYCLE 3 CANDIDATE</span><strong id="smc-lineage-v10-id">—</strong></div><div class="smc-lineage-item"><span>V10 FROZEN SHA</span><strong id="smc-lineage-v10-sha">—</strong></div><div class="smc-lineage-item"><span>V11 PHASE 2 CONTRACT</span><strong id="smc-lineage-v11-sha">—</strong></div><div class="smc-lineage-item"><span>V11 CLASSIFICATION</span><strong id="smc-lineage-v11-class">—</strong></div><div class="smc-lineage-item"><span>GENERATED</span><strong id="smc-lineage-generated">—</strong></div><div class="smc-lineage-item"><span>FORWARD EVIDENCE INCLUDED</span><strong id="smc-lineage-forward" class="smc-lineage-safe">—</strong></div><div class="smc-lineage-item"><span>BROKERAGE ORDERS</span><strong id="smc-lineage-orders" class="smc-lineage-safe">—</strong></div></div></details>
     <div class="smc-holdout" id="smc-v8-holdout-interaction">
@@ -88,7 +88,7 @@
   methodNote.insertAdjacentElement('beforebegin',workspace);
 
   const svg=card.querySelector('#smc-chart'), panel=svg.closest('.smc-panel'), tooltip=card.querySelector('#smc-tooltip'), ns='http://www.w3.org/2000/svg';
-  let payload=null, series={}, active=new Set(ORDER), range='3Y', mode='equity', zoomLevel=1, panOffset=1, pinned=false;
+  let payload=null, series={}, active=new Set(ORDER), range='3Y', mode='normalized', zoomLevel=1, panOffset=1, pinned=false, normalizedBases={};
   const money=v=>'$'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct=v=>(Number(v)>=0?'+':'')+Number(v||0).toFixed(2)+'%';
   const date=t=>new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
@@ -102,7 +102,7 @@
   function cutoff(end){const d=new Date(end);if(range==='ALL')return startTime();if(range==='30D')d.setUTCDate(d.getUTCDate()-30);else if(range==='90D')d.setUTCDate(d.getUTCDate()-90);else if(range==='1Y')d.setUTCFullYear(d.getUTCFullYear()-1);else if(range==='3Y')d.setUTCFullYear(d.getUTCFullYear()-3);else if(range==='5Y')d.setUTCFullYear(d.getUTCFullYear()-5);return d.getTime();}
   function visibleDomain(){const end=endTime(), start=cutoff(end);let a=start,b=end;if(zoomLevel>1&&Number.isFinite(start)){const full=b-a,span=full/zoomLevel,maxShift=full-span;a=start+(maxShift*Math.max(0,Math.min(1,panOffset)));b=a+span;}return[a,b];}
   function rowsInDomain(s,a,b){return s.rows.filter(r=>r.t>=a&&r.t<=b);}
-  function value(s,r){if(mode==='normalized'){const base=s.startingCapital||100000;return 100*r.equity/base;}return r.equity;}
+  function value(s,r){if(mode==='normalized'){const base=normalizedBases[s.model_id]||s.startingCapital||100000;return 100*r.equity/base;}return r.equity;}
   function nearest(rows,t){if(!rows.length)return null;let lo=0,hi=rows.length-1;while(lo<hi){const mid=Math.floor((lo+hi)/2);if(rows[mid].t<t)lo=mid+1;else hi=mid;}const a=rows[lo],b=lo>0?rows[lo-1]:null;return b&&Math.abs(b.t-t)<Math.abs(a.t-t)?b:a;}
 
   function buildModelToggles(){
@@ -119,7 +119,7 @@
     });
     const note=document.createElement('div');
     note.className='smc-eligibility-note';
-    note.innerHTML='<strong>Why different start dates?</strong> Each curve begins at its first scientifically eligible observation. V5 begins Jul 1, 2021; earlier performance is intentionally not backfilled. V11 begins only where the complete five-minute development dataset is eligible.';
+    const v11=series.V11,v11Start=v11?.rows?.[0],v11End=v11?.rows?.at(-1);const v11Detail=v11Start&&v11End?` V11 has ${v11.rows.length.toLocaleString()} eligible observations from ${date(v11Start.t)} through ${date(v11End.t)}; no earlier intraday history is manufactured.`:'';note.innerHTML='<strong>Why different start dates?</strong> Each curve begins at its first scientifically eligible observation. V5 begins Jul 1, 2021; earlier performance is intentionally not backfilled.'+v11Detail;
     const noteHost=card.querySelector('#smc-eligibility-footer')||host;
     noteHost.appendChild(note);
   }
@@ -140,12 +140,15 @@
     if(!payload)return; const [a,b]=visibleDomain(); svg.innerHTML='';
     card.querySelectorAll('[data-range]').forEach(x=>x.classList.toggle('active',x.dataset.range===range));card.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x.dataset.mode===mode));card.querySelectorAll('[data-model]').forEach(x=>{const shown=active.has(x.dataset.model);x.classList.toggle('off',!shown);x.setAttribute('aria-pressed',String(shown));const state=x.querySelector('.smc-model-state');if(state)state.textContent=shown?'SHOWN':'HIDDEN';});
     set('smc-visible-range',`${date(a)} → ${date(b)}`);set('smc-model-count',String(active.size));set('smc-latest-date',date(endTime()));set('smc-zoom-status',zoomLevel>1?`${zoomLevel.toFixed(1)}× ZOOM`:'FULL RANGE');set('smc-range-message',`${range} selected — ${active.size} comparison lines shown.`);
-    set('smc-scale-note',mode==='normalized'?'Normalized growth index: each model starts at 100 on its own first eligible date.':'Equity USD: every model starts with the same hypothetical $100,000 capital.');
+    set('smc-scale-note',mode==='normalized'?'Visible-range growth index: each line is rebased to 100 at its first displayed eligible observation. V11 begins in May 2026 because no earlier five-minute development history was backfilled.':'Equity USD preserves each model’s full eligible compounded history; late-starting V11 begins at $100,000 in May 2026.');
 
     const W=1200,H=520,p={l:92,r:128,t:30,b:62};const activeSeries=ORDER.filter(id=>active.has(id)&&series[id]);const vis={};let vals=[];
-    activeSeries.forEach(id=>{vis[id]=rowsInDomain(series[id],a,b);vals.push(...vis[id].map(r=>value(series[id],r)));});
+    normalizedBases={};
+    activeSeries.forEach(id=>{vis[id]=rowsInDomain(series[id],a,b);const first=vis[id][0];normalizedBases[id]=first?.equity||series[id].startingCapital||100000;});
+    activeSeries.forEach(id=>{vals.push(...vis[id].map(r=>value(series[id],r)));});
+    card.querySelectorAll('[data-model]').forEach(button=>{const id=button.dataset.model,s=series[id],rows=s?rowsInDomain(s,a,b):[],first=rows[0],last=rows.at(-1),out=button.querySelector('.smc-model-value');if(!out||!first||!last)return;const visibleReturn=(last.equity/first.equity-1)*100;out.textContent=mode==='normalized'?`${(100*last.equity/first.equity).toFixed(2)} index · ${pct(visibleReturn)}`:`${money(last.equity)} · ${pct(s.totalReturnPct)}`;});
     if(!vals.length){const n=el('text',{x:W/2,y:H/2,'text-anchor':'middle',fill:'#91a6c2'});n.textContent='No model observations in this range.';svg.appendChild(n);return;}
-    let minV=Math.min(...vals),maxV=Math.max(...vals),span=Math.max(maxV-minV,mode==='equity'?1000:1);minV-=span*.1;maxV+=span*.1;
+    let minV=Math.min(...vals),maxV=Math.max(...vals),span=Math.max(maxV-minV,mode==='equity'?1000:1);minV=mode==='equity'?Math.max(0,minV-span*.1):minV-span*.1;maxV+=span*.1;
     const x=t=>p.l+(W-p.l-p.r)*(t-a)/Math.max(1,b-a),y=v=>p.t+(H-p.t-p.b)*(1-(v-minV)/Math.max(.000001,maxV-minV));
     for(let i=0;i<5;i++){const v=minV+(maxV-minV)*i/4,yy=y(v);svg.appendChild(el('line',{x1:p.l,y1:yy,x2:W-p.r,y2:yy,stroke:'rgba(145,166,194,.13)'}));const n=el('text',{x:p.l-10,y:yy+4,'text-anchor':'end',fill:'#91a6c2','font-size':11});n.textContent=mode==='normalized'?v.toFixed(1):money(v);svg.appendChild(n);}
     for(let i=0;i<5;i++){const t=a+(b-a)*i/4,n=el('text',{x:x(t),y:H-24,'text-anchor':i===0?'start':i===4?'end':'middle',fill:'#91a6c2','font-size':11});n.textContent=date(t);svg.appendChild(n);}
@@ -194,9 +197,9 @@
       focusDot.setAttribute('cx',selectedX);focusDot.setAttribute('cy',best.yy);focusDot.setAttribute('fill',COLORS[best.id]);focusDot.setAttribute('visibility','visible');
       svg.querySelectorAll('[data-model]').forEach(line=>{const selected=line.dataset.model===best.id;line.setAttribute('opacity',selected?'1':'.16');line.setAttribute('stroke-width',selected?'5':line.dataset.width);});
 
-      const ranked=activeSeries.map(id=>({id,equity:nearest(vis[id],best.r.t)?.equity})).filter(item=>Number.isFinite(item.equity)).sort((u,v)=>v.equity-u.equity);
+      const ranked=activeSeries.map(id=>{const row=nearest(vis[id],best.r.t);return{id,score:row?value(series[id],row):NaN};}).filter(item=>Number.isFinite(item.score)).sort((u,v)=>v.score-u.score);
       const rank=ranked.findIndex(item=>item.id===best.id)+1;
-      tooltip.innerHTML=`<strong><span class="smc-dot" style="background:${COLORS[best.id]};margin-right:7px"></span>${series[best.id].label}</strong><div class="smc-tooltip-row"><span>Date</span><b>${dateTime(best.r.t)}</b></div><div class="smc-tooltip-row"><span>${mode==='normalized'?'Growth index':'Portfolio equity'}</span><b>${mode==='normalized'?selectedValue.toFixed(2):money(best.r.equity)}</b></div><div class="smc-tooltip-row"><span>Historical total return</span><b>${pct(series[best.id].totalReturnPct)}</b></div><div class="smc-tooltip-row"><span>Rank at this date</span><b>#${rank} of ${ranked.length}</b></div>`;
+      tooltip.innerHTML=`<strong><span class="smc-dot" style="background:${COLORS[best.id]};margin-right:7px"></span>${series[best.id].label}</strong><div class="smc-tooltip-row"><span>Date</span><b>${dateTime(best.r.t)}</b></div><div class="smc-tooltip-row"><span>${mode==='normalized'?'Growth index':'Portfolio equity'}</span><b>${mode==='normalized'?selectedValue.toFixed(2):money(best.r.equity)}</b></div><div class="smc-tooltip-row"><span>${mode==='normalized'?'Visible-range return':'Historical total return'}</span><b>${pct(mode==='normalized'?(best.r.equity/normalizedBases[best.id]-1)*100:series[best.id].totalReturnPct)}</b></div><div class="smc-tooltip-row"><span>Rank at this date</span><b>#${rank} of ${ranked.length}</b></div>`;
       tooltip.style.display='block';const pr=panel.getBoundingClientRect();tooltip.style.left=Math.min(e.clientX-pr.left+14,pr.width-300)+'px';tooltip.style.top=Math.max(8,e.clientY-pr.top-20)+'px';
       if(pin)pinned=!pinned;
     }
