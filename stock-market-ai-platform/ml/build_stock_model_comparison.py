@@ -272,7 +272,7 @@ def _load_v11():
         }
         for row in payload.get("history") or []
     ]
-    return _series_record(
+    series = _series_record(
         "V11",
         "V11 Phase 2 development",
         rows,
@@ -285,6 +285,15 @@ def _load_v11():
         ),
         "post-hoc development reconstruction; fresh September confirmation remains separate",
     )
+    series["research_lineage"] = {
+        "contract_sha256": payload["contract_sha256"],
+        "reconstruction_sha256": payload["reconstruction_sha256"],
+        "source_manifest_sha256": payload["source_manifest_sha256"],
+        "classification": payload["status"],
+        "model_frozen": False,
+        "fresh_evidence_included": False,
+    }
+    return series
 
 
 def _load_spy(start_ts):
@@ -336,7 +345,9 @@ def main():
             "v10_frozen_sha256": V10_EXPECTED_SHA,
             "v10_forward_holdout_start_utc": V10_HOLDOUT_START_UTC.isoformat(),
             "v10_classification": "FROZEN_CYCLE3_DEVELOPMENT_RECONSTRUCTION",
-            "v11_contract_sha256": v11["methodology"].split("contract SHA ", 1)[1].split(";", 1)[0],
+            "v11_contract_sha256": v11["research_lineage"]["contract_sha256"],
+            "v11_reconstruction_sha256": v11["research_lineage"]["reconstruction_sha256"],
+            "v11_source_manifest_sha256": v11["research_lineage"]["source_manifest_sha256"],
             "v11_classification": "POST_HOC_DEVELOPMENT_RECONSTRUCTION",
             "v11_model_frozen": False,
             "v11_fresh_confirmation_start_utc": "2026-09-01T14:00:00+00:00",
