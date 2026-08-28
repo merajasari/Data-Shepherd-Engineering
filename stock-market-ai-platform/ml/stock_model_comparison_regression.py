@@ -18,12 +18,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_PATH = PROJECT_ROOT / "webapp/static/generated/stock_model_comparison.json"
 DASHBOARD_JS = PROJECT_ROOT / "webapp/static/js/v4_equity_chart.js"
 
-EXPECTED_IDS = ["V4", "V5", "V8", "V10", "SPY"]
+EXPECTED_IDS = ["V4", "V5", "V8", "V10", "V11", "SPY"]
 EXPECTED_V8_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 EXPECTED_V10_ID = "c3_confirm2_blend50"
 EXPECTED_V10_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
 V8_BOUNDARY = pd.Timestamp("2026-09-01T00:00:00Z")
 V10_BOUNDARY = pd.Timestamp("2027-01-04T00:00:00Z")
+V11_BOUNDARY = pd.Timestamp("2026-09-01T14:00:00Z")
+EXPECTED_V11_SHA = "f539fabe9532752adb2a3b6b98aa244671b5ec8d8ae86b5eaacf8076f812a6c8"
 OLD_V10_EQUITY = 989_545.87
 EXPECTED_V10_EQUITY = 939_441.16
 
@@ -40,7 +42,7 @@ def load_json(path):
 def validate_artifact():
     require(ARTIFACT_PATH.exists(), f"missing {ARTIFACT_PATH}")
     payload = load_json(ARTIFACT_PATH)
-    require(payload.get("schema_version") == 2, "comparison schema must be version 2")
+    require(payload.get("schema_version") == 3, "comparison schema must be version 3")
     require(payload.get("excluded_models") == ["V6", "V7"], "V6/V7 exclusion changed")
 
     rows = payload.get("series") or []
@@ -64,8 +66,13 @@ def validate_artifact():
 
     v8 = by_id["V8"]
     v10 = by_id["V10"]
+    v11 = by_id["V11"]
     require(v8.get("label") == "V8 frozen", "V8 chart label changed")
     require(v10.get("label") == "V10 Cycle 3 frozen", "V10 chart label is not Cycle 3 frozen")
+    require(
+        v11.get("label") == "V11 Phase 2 development",
+        "V11 chart label does not disclose development status",
+    )
     require(
         max(pd.Timestamp(point["timestamp"]) for point in v8["history"]) < V8_BOUNDARY,
         "V8 chart includes forward-holdout evidence",
@@ -73,6 +80,19 @@ def validate_artifact():
     require(
         max(pd.Timestamp(point["timestamp"]) for point in v10["history"]) < V10_BOUNDARY,
         "V10 chart includes fresh forward-holdout evidence",
+    )
+    require(
+        max(pd.Timestamp(point["timestamp"]) for point in v11["history"])
+        < V11_BOUNDARY,
+        "V11 chart includes fresh Phase 2 evidence",
+    )
+    require(
+        "Post-hoc development reconstruction" in v11.get("methodology", ""),
+        "V11 methodology does not disclose its post-hoc origin",
+    )
+    require(
+        "not a frozen model" in v11.get("methodology", ""),
+        "V11 development curve could be mistaken for a frozen model",
     )
     require(EXPECTED_V10_ID in v10.get("methodology", ""), "V10 methodology lacks frozen candidate ID")
     require(EXPECTED_V10_SHA in v10.get("methodology", ""), "V10 methodology lacks frozen SHA")
@@ -90,6 +110,22 @@ def validate_artifact():
     require(lineage.get("v10_candidate_id") == EXPECTED_V10_ID, "V10 lineage candidate mismatch")
     require(lineage.get("v10_frozen_sha256") == EXPECTED_V10_SHA, "V10 lineage SHA mismatch")
     require(lineage.get("v10_forward_holdout_start_utc") == V10_BOUNDARY.isoformat(), "V10 boundary mismatch")
+    require(lineage.get("v11_contract_sha256") == EXPECTED_V11_SHA, "V11 contract SHA mismatch")
+    require(
+        lineage.get("v11_classification")
+        == "POST_HOC_DEVELOPMENT_RECONSTRUCTION",
+        "V11 classification changed",
+    )
+    require(lineage.get("v11_model_frozen") is False, "V11 is incorrectly labeled frozen")
+    require(
+        lineage.get("v11_fresh_confirmation_start_utc")
+        == V11_BOUNDARY.isoformat(),
+        "V11 fresh boundary mismatch",
+    )
+    require(
+        lineage.get("v11_fresh_evidence_included") is False,
+        "V11 fresh evidence entered comparison",
+    )
     require(lineage.get("forward_evidence_included") is False, "forward evidence entered comparison")
     require(lineage.get("live_paper_balances_included") is False, "paper balances entered comparison")
     require(lineage.get("brokerage_orders") is False, "comparison reports brokerage authority")
@@ -115,7 +151,9 @@ def validate_dashboard_source():
     source = DASHBOARD_JS.read_text(encoding="utf-8")
     required = [
         "pageHeader.insertAdjacentElement('afterend', card)",
-        "V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 reconstruction vs SPY",
+        "V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 vs V11 Phase 2 development vs SPY",
+        "V11 PHASE 2 CONTRACT",
+        "smc-lineage-v11-sha",
         "DATA INTEGRITY &amp; MODEL LINEAGE",
         "V10 CYCLE 3 CANDIDATE",
         "renderLineage()",
@@ -130,6 +168,7 @@ def validate_dashboard_source():
         require(marker in source, f"dashboard regression marker missing: {marker}")
     forbidden = [
         "V4 vs V5 vs frozen V8 vs reconstructed V10 vs SPY",
+        "V11 Phase 2 frozen",
         "$989,545.87",
     ]
     for marker in forbidden:
@@ -145,12 +184,15 @@ def main():
     validate_dashboard_source()
 
     v10 = next(row for row in payload["series"] if row["model_id"] == "V10")
+    v11 = next(row for row in payload["series"] if row["model_id"] == "V11")
     print(f"[PASS] Models/order: {', '.join(EXPECTED_IDS)}")
     print(f"[PASS] V8 frozen SHA: {EXPECTED_V8_SHA}")
     print(f"[PASS] V10 Cycle 3 candidate: {EXPECTED_V10_ID}")
     print(f"[PASS] V10 frozen SHA: {EXPECTED_V10_SHA}")
     print(f"[PASS] V10 development equity: ${float(v10['ending_equity']):,.2f}")
-    print("[PASS] V8/V10 forward evidence excluded")
+    print(f"[PASS] V11 Phase 2 development equity: ${float(v11['ending_equity']):,.2f}")
+    print(f"[PASS] V11 Phase 2 contract SHA: {EXPECTED_V11_SHA}")
+    print("[PASS] V8/V10 forward evidence and V11 fresh confirmation excluded")
     print("[PASS] Live paper balances excluded")
     print("[PASS] Brokerage orders: OFF")
     print("[PASS] Top placement, desktop/mobile layout, toggles, ranges, hover and pin markers present")
