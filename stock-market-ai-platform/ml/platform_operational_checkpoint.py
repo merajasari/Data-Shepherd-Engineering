@@ -24,12 +24,14 @@ SERVICES = (
     "com.datashepherd.cloudflared",
     "com.datashepherd.v8paper",
     "com.datashepherd.v10cycle3",
+    "com.datashepherd.v11phase2",
     "com.datashepherd.papershadow",
 )
 ENDPOINTS = {
     "web_health": "http://127.0.0.1:5001/health",
     "v8_holdout": "http://127.0.0.1:5001/api/v8/holdout",
     "v10_cycle3": "http://127.0.0.1:5001/api/v10/cycle3/holdout",
+    "v11_phase2": "http://127.0.0.1:5001/api/v11/phase2",
     "performance": "http://127.0.0.1:5001/api/operations/performance",
 }
 
@@ -117,6 +119,25 @@ def main():
         _check(len(v10_events) == 0, "V10 pre-boundary journal", f"events={len(v10_events)}", failures)
     else:
         _check(True, "V10 journal integrity", f"events={len(v10_events)}; duplicate-safe", failures)
+
+    from ml.v11.intraday_phase2_day_zero import run_checkpoint as run_v11_phase2_checkpoint
+    v11_phase2 = run_v11_phase2_checkpoint(now_utc=now)
+    _check(v11_phase2.get("status") == "READY_FOR_2026_09_01",
+           "V11 Phase 2 day-zero readiness", str(v11_phase2.get("status")), failures)
+    _check(v11_phase2.get("maximum_tiingo_requests_per_session") == 404,
+           "V11 Phase 2 Tiingo request ceiling", "404/500", failures)
+    _check(v11_phase2.get("production_evidence_modified") is False,
+           "V11 Phase 2 evidence writes", "NONE", failures)
+    _check(v11_phase2.get("operational_status_modified") is False,
+           "V11 Phase 2 status writes", "NONE", failures)
+    _check(v11_phase2.get("paper_trading_only") is True
+           and v11_phase2.get("live_trading_enabled") is False,
+           "V11 Phase 2 execution authority", "PAPER ONLY", failures)
+    _check(v11_phase2.get("brokerage_orders") is False,
+           "V11 Phase 2 brokerage authority", "OFF", failures)
+    _check(v11_phase2.get("v8_modified") is False
+           and v11_phase2.get("v10_modified") is False,
+           "V11 Phase 2 V8/V10 isolation", "UNCHANGED", failures)
 
     from ml.trading.paper_shadow_operational_change_control import verify as verify_paper_shadow_lock
     _, protected_files, lock_failures = verify_paper_shadow_lock()
@@ -248,6 +269,24 @@ def main():
     _check(v10_api.get("v8_modified") is False,
            "V10 API V8 isolation", "V8 modified: NO", failures)
 
+    v11_api = responses.get("v11_phase2", {})
+    _check(v11_api.get("status") == "READY",
+           "V11 Phase 2 API readiness", str(v11_api.get("status")), failures)
+    _check(v11_api.get("contract_sha_verified") is True,
+           "V11 Phase 2 API contract identity", "VERIFIED", failures)
+    _check(v11_api.get("maximum_tiingo_requests_per_session") == 404,
+           "V11 Phase 2 API request ceiling", "404/500", failures)
+    _check(v11_api.get("request_time_historical_data_load") is False,
+           "V11 Phase 2 historical request-time load", "DISABLED", failures)
+    _check(v11_api.get("paper_trading_only") is True
+           and v11_api.get("live_trading_enabled") is False,
+           "V11 Phase 2 API execution authority", "PAPER ONLY", failures)
+    _check(v11_api.get("brokerage_orders") is False,
+           "V11 Phase 2 API brokerage authority", "OFF", failures)
+    _check(v11_api.get("v8_modified") is False
+           and v11_api.get("v10_modified") is False,
+           "V11 Phase 2 API V8/V10 isolation", "UNCHANGED", failures)
+
     performance = responses.get("performance", {})
     _check(performance.get("status") == "ok",
            "Endpoint timing telemetry", str(performance.get("status")), failures)
@@ -268,6 +307,8 @@ def main():
     print("Status: HEALTHY")
     print(f"V8 journal events: {len(v8_events)}")
     print(f"V10 Cycle 3 journal events: {len(v10_events)}")
+    print(f"V11 Phase 2 journal events: {v11_phase2.get('journal_events')}")
+    print(f"V11 Phase 2 status: {v11_phase2.get('status')}")
     print(f"Services registered: {len(SERVICES)}/{len(SERVICES)}")
     print(f"Local APIs healthy: {len(ENDPOINTS)}/{len(ENDPOINTS)}")
     print("Frozen identities: VERIFIED")
