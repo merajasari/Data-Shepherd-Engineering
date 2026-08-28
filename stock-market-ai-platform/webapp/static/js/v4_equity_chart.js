@@ -21,8 +21,8 @@
   card.classList.add('smc-full-width-card', 'smc-top-card');
 
   const DATA_URL = '/static/generated/stock_model_comparison.json';
-  const COLORS = { V4:'#39e3a1', V5:'#36d8ff', V8:'#efc56b', V10:'#ff7ad9', SPY:'#a78bfa' };
-  const ORDER = ['V4','V5','V8','V10','SPY'];
+  const COLORS = { V4:'#39e3a1', V5:'#36d8ff', V8:'#efc56b', V10:'#ff7ad9', V11:'#f97316', SPY:'#a78bfa' };
+  const ORDER = ['V4','V5','V8','V10','V11','SPY'];
 
   const style = document.createElement('style');
   style.id = 'stock-model-comparison-style';
@@ -42,15 +42,15 @@
   document.getElementById(style.id)?.remove(); document.head.appendChild(style);
 
   card.innerHTML = `
-    <div class="smc-head"><div><div class="label">MODEL PERFORMANCE COMPARISON</div><div class="smc-title">V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 reconstruction vs SPY</div><div class="smc-subtitle">Every strategy is shown on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded, so there is no artificial reset or vertical drop when reconstructed history reaches the present.</div></div><span id="smc-load-status" class="mode">LOADING MODELS</span></div>
+    <div class="smc-head"><div><div class="label">MODEL PERFORMANCE COMPARISON</div><div class="smc-title">V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 vs V11 Phase 2 development vs SPY</div><div class="smc-subtitle">Every strategy is shown on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded, so there is no artificial reset or vertical drop when reconstructed history reaches the present.</div></div><span id="smc-load-status" class="mode">LOADING MODELS</span></div>
     <div class="smc-metrics"><div class="metric"><span>VISIBLE RANGE</span><strong id="smc-visible-range">—</strong></div><div class="metric"><span>MODELS SHOWN</span><strong id="smc-model-count">—</strong></div><div class="metric"><span>START CAPITAL</span><strong>$100,000</strong></div><div class="metric"><span>LATEST DATA</span><strong id="smc-latest-date">—</strong></div></div>
     <div class="smc-toolbar"><strong class="muted">RANGE</strong><button class="smc-btn" data-range="ALL">ALL</button><button class="smc-btn" data-range="5Y">5Y</button><button class="smc-btn active" data-range="3Y">3Y</button><button class="smc-btn" data-range="1Y">1Y</button><button class="smc-btn" data-range="90D">90D</button><button class="smc-btn" data-range="30D">30D</button><strong class="muted" style="margin-left:10px">VIEW</strong><button class="smc-btn active" data-mode="equity">EQUITY USD</button><button class="smc-btn" data-mode="normalized">NORMALIZED GROWTH</button></div>
     <div id="smc-range-message" class="smc-range-message"></div>
     <div id="smc-models" class="smc-models"></div>
     <div class="smc-ux"><div class="hint"><strong>Explore:</strong> move near a line to highlight that model · click to pin · click again to release · toggle models · choose range · zoom and pan.</div><button class="smc-nav" data-action="left">◀ EARLIER</button><button class="smc-nav" data-action="out">− ZOOM OUT</button><span id="smc-zoom-status" class="smc-zoom-status">FULL RANGE</span><button class="smc-nav" data-action="in">+ ZOOM IN</button><button class="smc-nav" data-action="right">LATER ▶</button><button class="smc-nav" data-action="reset">RESET VIEW</button></div>
     <div class="smc-panel"><svg id="smc-chart" class="smc-svg" viewBox="0 0 1200 520" preserveAspectRatio="none"></svg><div id="smc-tooltip" class="smc-tooltip"></div><div id="smc-scale-note" class="smc-note">Each model begins at $100,000 on its own first scientifically eligible historical date.</div></div>
-    <div id="smc-method-note" class="smc-warning">V6 and V7 are intentionally excluded. The V8 line is the frozen V8 historical reconstruction. The V10 line is the frozen Cycle 3 candidate’s development reconstruction. Genuine V8 and V10 Cycle 3 forward evidence remains separate; the Cycle 3 forward holdout begins January 4, 2027 and has no results yet.</div>
-    <details id="smc-lineage" class="smc-lineage"><summary>DATA INTEGRITY &amp; MODEL LINEAGE</summary><div class="smc-lineage-grid"><div class="smc-lineage-item"><span>V8 FROZEN SHA</span><strong id="smc-lineage-v8">—</strong></div><div class="smc-lineage-item"><span>V10 CYCLE 3 CANDIDATE</span><strong id="smc-lineage-v10-id">—</strong></div><div class="smc-lineage-item"><span>V10 FROZEN SHA</span><strong id="smc-lineage-v10-sha">—</strong></div><div class="smc-lineage-item"><span>GENERATED</span><strong id="smc-lineage-generated">—</strong></div><div class="smc-lineage-item"><span>FORWARD EVIDENCE INCLUDED</span><strong id="smc-lineage-forward" class="smc-lineage-safe">—</strong></div><div class="smc-lineage-item"><span>BROKERAGE ORDERS</span><strong id="smc-lineage-orders" class="smc-lineage-safe">—</strong></div></div></details>
+    <div id="smc-method-note" class="smc-warning">V6 and V7 are intentionally excluded. V8 is its frozen historical reconstruction and V10 is the frozen Cycle 3 development reconstruction. V11 is an explicitly post-hoc Phase 2 development reconstruction—not a frozen model—and excludes all fresh September confirmation evidence. Genuine V8, V10 and V11 forward evidence remains separate.</div>
+    <details id="smc-lineage" class="smc-lineage"><summary>DATA INTEGRITY &amp; MODEL LINEAGE</summary><div class="smc-lineage-grid"><div class="smc-lineage-item"><span>V8 FROZEN SHA</span><strong id="smc-lineage-v8">—</strong></div><div class="smc-lineage-item"><span>V10 CYCLE 3 CANDIDATE</span><strong id="smc-lineage-v10-id">—</strong></div><div class="smc-lineage-item"><span>V10 FROZEN SHA</span><strong id="smc-lineage-v10-sha">—</strong></div><div class="smc-lineage-item"><span>V11 PHASE 2 CONTRACT</span><strong id="smc-lineage-v11-sha">—</strong></div><div class="smc-lineage-item"><span>V11 CLASSIFICATION</span><strong id="smc-lineage-v11-class">—</strong></div><div class="smc-lineage-item"><span>GENERATED</span><strong id="smc-lineage-generated">—</strong></div><div class="smc-lineage-item"><span>FORWARD EVIDENCE INCLUDED</span><strong id="smc-lineage-forward" class="smc-lineage-safe">—</strong></div><div class="smc-lineage-item"><span>BROKERAGE ORDERS</span><strong id="smc-lineage-orders" class="smc-lineage-safe">—</strong></div></div></details>
     <div class="smc-holdout" id="smc-v8-holdout-interaction">
       <div class="smc-holdout-head"><div><div class="label">V8 HOLDOUT INTERACTION</div><div class="smc-holdout-title">Frozen V8 → append-only forward evidence</div><div class="smc-holdout-sub">This chart shows how the frozen V8 model is progressing through the genuine holdout lifecycle: decision, next-open entry, and completed 5-session exit. Before Sep 1, the correct state is zero holdout evidence.</div></div><span id="smc-holdout-state" class="smc-holdout-state">LOADING</span></div>
       <div class="smc-holdout-metrics"><div class="smc-holdout-metric"><span>DECISIONS</span><strong id="smc-holdout-decisions">—</strong></div><div class="smc-holdout-metric"><span>ENTRIES</span><strong id="smc-holdout-entries">—</strong></div><div class="smc-holdout-metric"><span>COMPLETED COHORTS</span><strong id="smc-holdout-exits">—</strong></div><div class="smc-holdout-metric"><span>HOLDOUT START</span><strong id="smc-holdout-start">—</strong></div></div>
@@ -119,7 +119,7 @@
     });
     const note=document.createElement('div');
     note.className='smc-eligibility-note';
-    note.innerHTML='<strong>Why different start dates?</strong> Each curve begins at its first scientifically eligible observation. V5 begins Jul 1, 2021; earlier performance is intentionally not backfilled.';
+    note.innerHTML='<strong>Why different start dates?</strong> Each curve begins at its first scientifically eligible observation. V5 begins Jul 1, 2021; earlier performance is intentionally not backfilled. V11 begins only where the complete five-minute development dataset is eligible.';
     const noteHost=card.querySelector('#smc-eligibility-footer')||host;
     noteHost.appendChild(note);
   }
@@ -129,6 +129,8 @@
     set('smc-lineage-v8',lineage.v8_frozen_sha256||'UNVERIFIED');
     set('smc-lineage-v10-id',lineage.v10_candidate_id||'UNVERIFIED');
     set('smc-lineage-v10-sha',lineage.v10_frozen_sha256||'UNVERIFIED');
+    set('smc-lineage-v11-sha',lineage.v11_contract_sha256||'UNVERIFIED');
+    set('smc-lineage-v11-class',lineage.v11_classification==='POST_HOC_DEVELOPMENT_RECONSTRUCTION'?'POST-HOC DEVELOPMENT · NOT FROZEN':'INVALID');
     set('smc-lineage-generated',payload?.generated_at_utc?dateTime(Date.parse(payload.generated_at_utc)):'UNAVAILABLE');
     set('smc-lineage-forward',lineage.forward_evidence_included===false?'NO — SEPARATE':'INVALID');
     set('smc-lineage-orders',lineage.brokerage_orders===false?'OFF':'INVALID');
@@ -147,9 +149,9 @@
     const x=t=>p.l+(W-p.l-p.r)*(t-a)/Math.max(1,b-a),y=v=>p.t+(H-p.t-p.b)*(1-(v-minV)/Math.max(.000001,maxV-minV));
     for(let i=0;i<5;i++){const v=minV+(maxV-minV)*i/4,yy=y(v);svg.appendChild(el('line',{x1:p.l,y1:yy,x2:W-p.r,y2:yy,stroke:'rgba(145,166,194,.13)'}));const n=el('text',{x:p.l-10,y:yy+4,'text-anchor':'end',fill:'#91a6c2','font-size':11});n.textContent=mode==='normalized'?v.toFixed(1):money(v);svg.appendChild(n);}
     for(let i=0;i<5;i++){const t=a+(b-a)*i/4,n=el('text',{x:x(t),y:H-24,'text-anchor':i===0?'start':i===4?'end':'middle',fill:'#91a6c2','font-size':11});n.textContent=date(t);svg.appendChild(n);}
-    activeSeries.forEach(id=>{const rows=vis[id];if(rows.length<2)return;const pts=rows.map(r=>[x(r.t),y(value(series[id],r))]),width=(id==='V8'||id==='V10')?3.2:2.7;svg.appendChild(el('polyline',{points:pts.map(q=>q.join(',')).join(' '),fill:'none',stroke:COLORS[id],'stroke-width':width,opacity:.94,'stroke-linejoin':'round','stroke-linecap':'round','data-model':id,'data-width':width}));});
+    activeSeries.forEach(id=>{const rows=vis[id];if(rows.length<2)return;const pts=rows.map(r=>[x(r.t),y(value(series[id],r))]),width=(id==='V8'||id==='V10'||id==='V11')?3.2:2.7;svg.appendChild(el('polyline',{points:pts.map(q=>q.join(',')).join(' '),fill:'none',stroke:COLORS[id],'stroke-width':width,opacity:.94,'stroke-linejoin':'round','stroke-linecap':'round','data-model':id,'data-width':width}));});
 
-    const endpointLabels=activeSeries.map(id=>{const rows=vis[id];if(!rows.length)return null;const r=rows.at(-1);return{id,r,anchorX:x(r.t),anchorY:y(value(series[id],r)),label:id==='V8'?'V8 FROZEN':id==='V10'?'V10 C3':id};}).filter(Boolean).sort((u,v)=>u.anchorY-v.anchorY);
+    const endpointLabels=activeSeries.map(id=>{const rows=vis[id];if(!rows.length)return null;const r=rows.at(-1);return{id,r,anchorX:x(r.t),anchorY:y(value(series[id],r)),label:id==='V8'?'V8 FROZEN':id==='V10'?'V10 C3':id==='V11'?'V11 DEV':id};}).filter(Boolean).sort((u,v)=>u.anchorY-v.anchorY);
     const minLabelY=p.t+12,maxLabelY=H-p.b-12,labelGap=25;
     endpointLabels.forEach((item,index)=>{
       item.labelY=Math.max(item.anchorY,index?endpointLabels[index-1].labelY+labelGap:minLabelY);
