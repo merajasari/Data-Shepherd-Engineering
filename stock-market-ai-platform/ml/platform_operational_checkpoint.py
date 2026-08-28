@@ -25,6 +25,7 @@ SERVICES = (
     "com.datashepherd.v8paper",
     "com.datashepherd.v10cycle3",
     "com.datashepherd.v11phase2",
+    "com.datashepherd.v11phase2alerts",
     "com.datashepherd.papershadow",
 )
 ENDPOINTS = {
@@ -138,6 +139,39 @@ def main():
     _check(v11_phase2.get("v8_modified") is False
            and v11_phase2.get("v10_modified") is False,
            "V11 Phase 2 V8/V10 isolation", "UNCHANGED", failures)
+
+    v11_alert_path = (
+        PROJECT_ROOT
+        / "data/research/v11/intraday/phase2/alerts/status.json"
+    )
+    try:
+        v11_alerts = _json(v11_alert_path)
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+        v11_alerts = {}
+        _check(
+            False,
+            "V11 Phase 2 alert monitor",
+            f"{type(exc).__name__}: {v11_alert_path}",
+            failures,
+        )
+    _check(
+        v11_alerts.get("status") == "HEALTHY",
+        "V11 Phase 2 alert health",
+        str(v11_alerts.get("status")),
+        failures,
+    )
+    _check(
+        v11_alerts.get("production_evidence_modified") is False,
+        "V11 Phase 2 alert evidence writes",
+        "NONE",
+        failures,
+    )
+    _check(
+        v11_alerts.get("brokerage_orders") is False,
+        "V11 Phase 2 alert brokerage authority",
+        "OFF",
+        failures,
+    )
 
     from ml.trading.paper_shadow_operational_change_control import verify as verify_paper_shadow_lock
     _, protected_files, lock_failures = verify_paper_shadow_lock()
@@ -309,6 +343,7 @@ def main():
     print(f"V10 Cycle 3 journal events: {len(v10_events)}")
     print(f"V11 Phase 2 journal events: {v11_phase2.get('journal_events')}")
     print(f"V11 Phase 2 status: {v11_phase2.get('status')}")
+    print(f"V11 Phase 2 alert status: {v11_alerts.get('status')}")
     print(f"Services registered: {len(SERVICES)}/{len(SERVICES)}")
     print(f"Local APIs healthy: {len(ENDPOINTS)}/{len(ENDPOINTS)}")
     print("Frozen identities: VERIFIED")
