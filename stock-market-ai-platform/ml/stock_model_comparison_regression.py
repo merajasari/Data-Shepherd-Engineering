@@ -163,6 +163,13 @@ def validate_dashboard_source():
         "overlay.addEventListener('pointermove'",
         "overlay.addEventListener('click'",
         "smc-lineage-grid",
+        "mode=\'normalized\'",
+        "normalizedBases[s.model_id]",
+        "first displayed eligible observation",
+        "no earlier intraday history is manufactured",
+        "Visible-range return",
+        "Math.max(0,minV-span*.1)",
+        "score:row?value(series[id],row):NaN",
     ]
     for marker in required:
         require(marker in source, f"dashboard regression marker missing: {marker}")
@@ -195,6 +202,8 @@ def main():
     print("[PASS] V8/V10 forward evidence and V11 fresh confirmation excluded")
     print("[PASS] Live paper balances excluded")
     print("[PASS] Brokerage orders: OFF")
+    print("[PASS] Visible-range normalization is the default; raw equity remains selectable and zero-clamped")
+    print("[PASS] Hover values, returns and ranks follow the selected chart mode")
     print("[PASS] Top placement, desktop/mobile layout, toggles, ranges, hover and pin markers present")
     print("Production holdout evidence modified: NO")
     print("Frozen model specifications modified: NO")
