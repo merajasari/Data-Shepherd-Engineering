@@ -61,7 +61,7 @@ def main() -> None:
     )
     require(
         schedule_state(
-            datetime(2026, 9, 1, 14, 15, tzinfo=timezone.utc)
+            datetime(2026, 9, 1, 14, 35, tzinfo=timezone.utc)
         ) == "CATCH_UP_WINDOW",
         "Post-checkpoint invocation enters bounded catch-up",
     )
@@ -146,7 +146,7 @@ def main() -> None:
 
         catch_up = run_scheduled(
             now_utc=datetime(
-                2026, 9, 1, 14, 15, tzinfo=timezone.utc
+                2026, 9, 1, 14, 35, tzinfo=timezone.utc
             ),
             status_path=status_path,
             production_journal_path=journal_path,
@@ -162,7 +162,7 @@ def main() -> None:
         )
         repeated_catch_up = run_scheduled(
             now_utc=datetime(
-                2026, 9, 1, 14, 20, tzinfo=timezone.utc
+                2026, 9, 1, 14, 40, tzinfo=timezone.utc
             ),
             status_path=status_path,
             production_journal_path=journal_path,
