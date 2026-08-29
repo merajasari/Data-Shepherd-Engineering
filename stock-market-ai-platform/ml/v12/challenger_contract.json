@@ -1,0 +1,146 @@
+{
+  "contract_id": "V12_V10_CHALLENGER_RESEARCH_V1",
+  "status": "PREREGISTERED_DEVELOPMENT_ONLY",
+  "registered_at_utc": "2026-08-28T00:00:00+00:00",
+  "research_question": "Can fixed intraday entry confirmation and non-levered volatility control improve frozen V10 Cycle 3 after costs under realistic $5,000 integer-share execution constraints?",
+  "baseline": {
+    "model_id": "V10_CYCLE3_FROZEN",
+    "candidate_id": "c3_confirm2_blend50",
+    "frozen_spec_sha256": "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38",
+    "ranking_contract_immutable": true,
+    "production_reads": false,
+    "production_writes": false,
+    "original_holdout_outcomes_read": false,
+    "fresh_holdout_outcomes_read": false
+  },
+  "v11_input_boundary": {
+    "contract_id": "V11_INTRADAY_PHASE2_BALANCED_MOMENTUM_CONFIRMATION_V1",
+    "contract_sha256": "f539fabe9532752adb2a3b6b98aa244671b5ec8d8ae86b5eaacf8076f812a6c8",
+    "role": "ENTRY_CONFIRMATION_ONLY",
+    "ranking_weight": 0,
+    "model_selection_authority": false,
+    "fresh_confirmation_outcomes_read": false,
+    "production_journal_reads": false,
+    "production_journal_writes": false
+  },
+  "candidate_set": [
+    {
+      "candidate_id": "V10_CONTROL_5K",
+      "intraday_confirmation": false,
+      "volatility_control": false
+    },
+    {
+      "candidate_id": "V12_INTRADAY_CONFIRM_5K",
+      "intraday_confirmation": true,
+      "volatility_control": false
+    },
+    {
+      "candidate_id": "V12_VOL_CONTROL_5K",
+      "intraday_confirmation": false,
+      "volatility_control": true
+    },
+    {
+      "candidate_id": "V12_COMBINED_5K",
+      "intraday_confirmation": true,
+      "volatility_control": true
+    }
+  ],
+  "intraday_confirmation_rule": {
+    "ranking_source": "UNCHANGED_V10_CYCLE3_RANKS",
+    "ranking_weight": 0,
+    "decision_time_eastern": "10:00",
+    "completed_five_minute_bars_only": true,
+    "confirm_symbol_if_all": [
+      "return_15m_minus_spy_return_15m >= 0",
+      "volume_acceleration >= 0",
+      "realized_volatility_30m <= cross_section_percentile_80"
+    ],
+    "minimum_confirmed_positions": 3,
+    "unconfirmed_symbol_action": "SKIP_AND_CONTINUE_DOWN_V10_RANKS",
+    "insufficient_confirmations_action": "HOLD_CASH",
+    "missing_or_stale_intraday_data_action": "HOLD_CASH"
+  },
+  "volatility_control_rule": {
+    "input": "SPY_REALIZED_DAILY_VOLATILITY_20_SESSIONS",
+    "annualization_sessions": 252,
+    "target_annualized_volatility": 0.15,
+    "minimum_exposure_multiplier": 0.5,
+    "maximum_exposure_multiplier": 1.0,
+    "formula": "clip(0.15 / spy_annualized_realized_volatility_20d, 0.5, 1.0)",
+    "leverage_allowed": false,
+    "missing_or_stale_volatility_action": "HOLD_CASH"
+  },
+  "small_account_execution": {
+    "starting_capital_usd": 5000,
+    "long_only": true,
+    "integer_shares_only": true,
+    "fractional_shares": false,
+    "margin": false,
+    "short_selling": false,
+    "options": false,
+    "extended_hours": false,
+    "maximum_deployed_capital_pct": 0.9,
+    "minimum_cash_buffer_pct": 0.1,
+    "maximum_position_notional_pct": 0.2,
+    "minimum_positions": 3,
+    "maximum_positions": 10,
+    "unaffordable_symbol_action": "SKIP_AND_CONTINUE_DOWN_V10_RANKS",
+    "insufficient_diversification_action": "HOLD_CASH",
+    "maximum_spread_bps": 20,
+    "missing_quote_or_spread_action": "HOLD_CASH"
+  },
+  "cost_contract": {
+    "modeled_fees_bps_round_trip": 2,
+    "modeled_slippage_bps_round_trip": 8,
+    "minimum_modeled_total_cost_bps_round_trip": 10,
+    "actual_spread_gate_applied_separately": true
+  },
+  "development_validation": {
+    "method": "EXPANDING_WALK_FORWARD_WITH_FIVE_SESSION_PURGE",
+    "minimum_folds": 5,
+    "purge_sessions": 5,
+    "candidate_set_fixed_before_evaluation": true,
+    "test_data_selection_allowed": false,
+    "primary_metric": "NET_ANNUALIZED_RETURN_DELTA_VS_V10_CONTROL_5K",
+    "required_gates": {
+      "net_annualized_return_delta_at_least": 0.03,
+      "terminal_wealth_greater_than_control": true,
+      "maximum_drawdown_not_worse_than_control": true,
+      "walk_forward_fold_win_rate_at_least": 0.7,
+      "positive_spy_regime_noninferior": true,
+      "negative_spy_regime_outperformance": true,
+      "high_volatility_regime_outperformance": true,
+      "turnover_not_more_than_control_multiple": 1.25,
+      "all_costs_included": true,
+      "small_account_feasibility_pass_rate": 1.0
+    },
+    "selection_rule": "A challenger is eligible only if every required gate passes. If multiple challengers pass, select the lowest maximum drawdown; break an exact tie by highest net annualized return, then candidate_id lexical order. If none pass, retain V10_CONTROL_5K.",
+    "multiple_comparison_policy": "Exactly three challengers plus one V10 control are fixed before evaluation. No thresholds, features, costs, portfolio limits, gates, or tie-breakers may change after results are inspected."
+  },
+  "fresh_paper_confirmation": {
+    "activation_status": "DISABLED_PENDING_DEVELOPMENT_FREEZE",
+    "minimum_sessions": 60,
+    "append_only": true,
+    "duplicate_safe": true,
+    "no_early_promotion": true,
+    "boundary_policy": "SET_ONLY_AFTER_ONE_CANDIDATE_PASSES_ALL_DEVELOPMENT_GATES_AND_A_SEPARATE_FREEZE_AUDIT"
+  },
+  "authority": {
+    "research_only": true,
+    "paper_trading_only": true,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "v8_production_reads": false,
+    "v8_production_writes": false,
+    "v10_production_reads": false,
+    "v10_production_writes": false,
+    "v10_holdout_outcomes_read": false,
+    "v11_production_reads": false,
+    "v11_production_writes": false,
+    "v11_fresh_outcomes_read": false,
+    "post_result_tuning_allowed": false,
+    "candidate_freeze_authorized": false,
+    "fresh_confirmation_activation_authorized": false
+  }
+}
