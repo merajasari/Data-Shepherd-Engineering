@@ -1,8 +1,8 @@
 """Build a single comparable stock-model performance artifact for the dashboard.
 
-The comparison intentionally excludes V6 and V7. It contains V4, V5, the
-exact frozen V8 candidate, the separately frozen V10 Cycle 3 candidate, the
-V11 Phase 2 post-hoc development reconstruction, and SPY. Every line is independently normalized to
+The comparison intentionally excludes V6, V7, and V11. It contains V4, V5,
+the exact frozen V8 candidate, the separately frozen V10 Cycle 3 candidate,
+and SPY. Every line is independently normalized to
 the same hypothetical $100,000 starting capital at its own first scientifically
 eligible observation. Live paper-account balances are never appended to these
 historical strategy curves.
@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 
 from ml.feature_source import require_feature_dataset
-from ml.v11.intraday_phase2_reconstruction import run as build_v11_reconstruction
 
 STARTING_CAPITAL = 100_000.0
 V4_PATH = Path("data/model/v4/full_history_equity.json")
@@ -256,46 +255,6 @@ def _load_v10():
     )
 
 
-def _load_v11():
-    payload = build_v11_reconstruction(write=True)
-    if payload.get("status") != "POST_HOC_DEVELOPMENT_RECONSTRUCTION":
-        raise ValueError("V11 reconstruction classification is invalid")
-    if payload.get("fresh_evidence_included") is not False:
-        raise ValueError("V11 fresh evidence entered development reconstruction")
-    if payload.get("model_frozen") is not False:
-        raise ValueError("V11 development reconstruction is mislabeled frozen")
-    rows = [
-        {
-            "timestamp": str(row["timestamp"]),
-            "equity": float(row["equity"]),
-            "source": str(row.get("source") or "V11 Phase 2 development reconstruction"),
-        }
-        for row in payload.get("history") or []
-    ]
-    series = _series_record(
-        "V11",
-        "V11 Phase 2 development",
-        rows,
-        (
-            "Post-hoc development reconstruction of the preregistered "
-            f"{payload.get('configuration')} rules, contract SHA "
-            f"{payload.get('contract_sha256')}; five-minute completed bars, "
-            "Top-10 equal weight, next-bar entry, six-bar hold and 10-bps "
-            "round-trip cost. This is not a frozen model or fresh confirmation."
-        ),
-        "post-hoc development reconstruction; fresh September confirmation remains separate",
-    )
-    series["research_lineage"] = {
-        "contract_sha256": payload["contract_sha256"],
-        "reconstruction_sha256": payload["reconstruction_sha256"],
-        "source_manifest_sha256": payload["source_manifest_sha256"],
-        "classification": payload["status"],
-        "model_frozen": False,
-        "fresh_evidence_included": False,
-    }
-    return series
-
-
 def _load_spy(start_ts):
     df = _spy_frame()
     df = df[df["timestamp_utc"] >= start_ts].copy()
@@ -318,13 +277,12 @@ def main():
     v5 = _load_v5()
     v8 = _load_v8()
     v10 = _load_v10()
-    v11 = _load_v11()
     earliest = min(
         pd.Timestamp(item["start_timestamp"])
-        for item in [v4, v5, v8, v10, v11]
+        for item in [v4, v5, v8, v10]
     )
     spy = _load_spy(earliest)
-    series = [v4, v5, v8, v10, v11, spy]
+    series = [v4, v5, v8, v10, spy]
     latest = max(pd.Timestamp(s["end_timestamp"]) for s in series)
 
     payload = {
@@ -333,10 +291,10 @@ def main():
         "title": "Stock model performance comparison",
         "starting_capital": STARTING_CAPITAL,
         "default_range": "3Y",
-        "excluded_models": ["V6", "V7"],
+        "excluded_models": ["V6", "V7", "V11"],
         "latest_timestamp": latest.isoformat(),
         "comparison_policy": "Each model is shown as its own historical strategy curve on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; no history is backfilled before eligibility.",
-        "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. The V11 line is an explicitly post-hoc Phase 2 development reconstruction and is not frozen. Genuine V8 forward evidence, V11 fresh paper confirmation beginning 2026-09-01, and genuine V10 Cycle 3 forward evidence beginning 2027-01-04 remain separate and are never backfilled.",
+        "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. Genuine V8 and V10 forward evidence remains separate and is never backfilled. V11 is intentionally excluded from this model-history chart while its research pipeline and fresh paper confirmation remain independently available.",
         "lineage": {
             "v8_candidate_id": V8_SCORE_ID,
             "v8_frozen_sha256": V8_EXPECTED_SHA,
@@ -345,13 +303,6 @@ def main():
             "v10_frozen_sha256": V10_EXPECTED_SHA,
             "v10_forward_holdout_start_utc": V10_HOLDOUT_START_UTC.isoformat(),
             "v10_classification": "FROZEN_CYCLE3_DEVELOPMENT_RECONSTRUCTION",
-            "v11_contract_sha256": v11["research_lineage"]["contract_sha256"],
-            "v11_reconstruction_sha256": v11["research_lineage"]["reconstruction_sha256"],
-            "v11_source_manifest_sha256": v11["research_lineage"]["source_manifest_sha256"],
-            "v11_classification": "POST_HOC_DEVELOPMENT_RECONSTRUCTION",
-            "v11_model_frozen": False,
-            "v11_fresh_confirmation_start_utc": "2026-09-01T14:00:00+00:00",
-            "v11_fresh_evidence_included": False,
             "forward_evidence_included": False,
             "live_paper_balances_included": False,
             "brokerage_orders": False,
@@ -365,8 +316,6 @@ def main():
             "v10_future_holdout_scored": False,
             "v10_cycle3_frozen_spec_modified": False,
             "v10_cycle3_forward_holdout_scored": False,
-            "v11_fresh_confirmation_scored": False,
-            "v11_model_frozen": False,
             "brokerage_orders": False,
         },
     }
@@ -378,7 +327,7 @@ def main():
     print(f"Output: {OUTPUT_PATH}")
     for s in series:
         print(f"{s['model_id']:>3}: {s['start_timestamp']} -> {s['end_timestamp']} | obs={s['observations']:,} | ${s['ending_equity']:,.2f} | {s['total_return_pct']:+.2f}%")
-    print("V6/V7 excluded. V8/V10 forward holdouts, V11 fresh confirmation, and live paper balance excluded. No orders or state changes.")
+    print("V6/V7/V11 excluded. V8/V10 forward holdouts and live paper balance excluded. No orders or state changes.")
 
 
 if __name__ == "__main__":
