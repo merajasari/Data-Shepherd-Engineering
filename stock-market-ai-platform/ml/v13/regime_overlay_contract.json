@@ -1,0 +1,138 @@
+{
+  "research_version": "stock_v13",
+  "contract_id": "V13_FRESH_NEGATIVE_HIGH_VOL_INTRADAY_OVERLAY_V1",
+  "status": "PREREGISTERED_FRESH_EVIDENCE_DISABLED",
+  "hypothesis_origin": {
+    "classification": "POST_V12_SUCCESSOR_HYPOTHESIS",
+    "description": "Test whether the already-registered V11 entry confirmation can improve frozen V10 only during confirmed negative, high-volatility regimes, without applying the rejected blanket V12 volatility scaler.",
+    "v12_tuning_or_reinterpretation": false,
+    "v12_development_observations_reused": 0,
+    "fresh_evidence_required": true
+  },
+  "predecessor_lock": {
+    "v12_status": "V12_DEVELOPMENT_CLOSED_RETAIN_V10",
+    "v12_decision": "RETAIN_FROZEN_V10_CONTROL",
+    "v12_selected_candidate": "V10_CONTROL_5K",
+    "v12_evaluation_sha256": "89fa9135324a041cb105d9acf21752775e838c9f6452d5bb1a192a86d5a6d6b7",
+    "v12_disposition_sha256": "d099f7cd1b915f05ef3e57dd1f5f2e6eff21962f3202821cb3a115290915d6f2",
+    "post_result_v12_tuning_allowed": false
+  },
+  "control": {
+    "candidate_id": "V10_CONTROL_5K",
+    "model_id": "V10_CYCLE3_FROZEN",
+    "v10_candidate_id": "c3_confirm2_blend50",
+    "v10_frozen_spec_sha256": "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38",
+    "ranking_contract_immutable": true
+  },
+  "challenger": {
+    "candidate_id": "V13_NEGATIVE_HIGH_VOL_CONFIRM_5K",
+    "candidate_count": 1,
+    "ranking_source": "UNCHANGED_V10_CYCLE3_RANKS",
+    "ranking_weight_from_v11": 0,
+    "blanket_volatility_scaling": false,
+    "leverage_allowed": false
+  },
+  "v11_input_boundary": {
+    "contract_id": "V11_INTRADAY_PHASE2_BALANCED_MOMENTUM_CONFIRMATION_V1",
+    "contract_sha256": "f539fabe9532752adb2a3b6b98aa244671b5ec8d8ae86b5eaacf8076f812a6c8",
+    "role": "ENTRY_CONFIRMATION_ONLY_IN_LOCKED_REGIME",
+    "ranking_weight": 0,
+    "fresh_outcomes_read": false,
+    "production_journal_reads": false,
+    "production_journal_writes": false
+  },
+  "regime_gate": {
+    "all_conditions_required": true,
+    "condition_1": "V10_CONFIRMED_NEGATIVE_REGIME",
+    "condition_1_definition": "Two consecutive completed negative SPY20 decisions under the frozen V10 Cycle 3 contract.",
+    "condition_2": "SPY_HIGH_VOLATILITY",
+    "condition_2_input": "SPY_REALIZED_DAILY_VOLATILITY_20_SESSIONS",
+    "condition_2_annualization_sessions": 252,
+    "condition_2_threshold": 0.25,
+    "condition_2_operator": ">=",
+    "missing_or_stale_regime_input_action": "HOLD_CASH"
+  },
+  "entry_confirmation_rule": {
+    "applies_only_when_regime_gate_true": true,
+    "outside_regime_action": "EXECUTE_UNCHANGED_V10_CONTROL",
+    "decision_time_eastern": "10:00",
+    "completed_five_minute_bars_only": true,
+    "confirm_symbol_if_all": [
+      "return_15m_minus_spy_return_15m >= 0",
+      "volume_acceleration >= 0",
+      "realized_volatility_30m <= cross_section_percentile_80"
+    ],
+    "minimum_confirmed_positions": 3,
+    "unconfirmed_symbol_action": "SKIP_AND_CONTINUE_DOWN_V10_RANKS",
+    "insufficient_confirmations_action": "HOLD_CASH",
+    "missing_or_stale_intraday_data_action": "HOLD_CASH"
+  },
+  "small_account_execution": {
+    "starting_capital_usd": 5000,
+    "long_only": true,
+    "integer_shares_only": true,
+    "fractional_shares": false,
+    "margin": false,
+    "short_selling": false,
+    "options": false,
+    "extended_hours": false,
+    "maximum_deployed_capital_pct": 0.9,
+    "minimum_cash_buffer_pct": 0.1,
+    "maximum_position_notional_pct": 0.2,
+    "minimum_positions": 3,
+    "maximum_positions": 10,
+    "unaffordable_symbol_action": "SKIP_AND_CONTINUE_DOWN_V10_RANKS",
+    "insufficient_diversification_action": "HOLD_CASH",
+    "maximum_spread_bps": 20,
+    "missing_quote_or_spread_action": "HOLD_CASH"
+  },
+  "fresh_evidence": {
+    "boundary_utc": "2026-09-01T14:00:00+00:00",
+    "minimum_completed_sessions": 60,
+    "minimum_regime_eligible_sessions": 15,
+    "same_session_control_required": true,
+    "development_or_preboundary_observations_allowed": false,
+    "v10_holdout_outcomes_allowed": false,
+    "v11_fresh_outcomes_allowed": false,
+    "raw_market_inputs_must_be_collected_after_boundary": true,
+    "activation_status": "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT"
+  },
+  "confirmation_gates": {
+    "all_gates_required": true,
+    "net_annualized_return_delta_vs_control_at_least": 0.03,
+    "terminal_wealth_greater_than_control": true,
+    "maximum_drawdown_not_worse_than_control": true,
+    "negative_high_vol_regime_net_return_greater_than_control": true,
+    "paired_session_win_rate_at_least": 0.6,
+    "turnover_not_more_than_control_multiple": 1.25,
+    "all_costs_included": true,
+    "small_account_feasibility_pass_rate": 1.0,
+    "failure_action": "RETAIN_FROZEN_V10_CONTROL"
+  },
+  "change_control": {
+    "candidate_set_fixed_before_fresh_evidence": true,
+    "regime_threshold_locked": true,
+    "entry_tests_locked": true,
+    "execution_rules_locked": true,
+    "confirmation_gates_locked": true,
+    "post_result_tuning_allowed": false,
+    "successor_requires_new_version": true
+  },
+  "authority": {
+    "research_only": true,
+    "paper_trading_only": true,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "candidate_freeze_authorized": false,
+    "fresh_evidence_activation_authorized": false,
+    "v8_production_reads": false,
+    "v8_production_writes": false,
+    "v10_production_reads": false,
+    "v10_production_writes": false,
+    "v11_production_reads": false,
+    "v11_production_writes": false,
+    "v12_development_evidence_reads": false,
+    "holdout_outcomes_read": false
+  }
+}
