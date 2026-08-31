@@ -63,6 +63,7 @@ HISTORICAL_SPREAD_POLICY = (
     "NOT_OBSERVABLE_FROM_FIVE_MINUTE_BARS; MODELED_10_BPS_ROUND_TRIP; "
     "NOT_ELIGIBLE_AS_FRESH_EVIDENCE"
 )
+EXPECTED_SAMPLING_POLICY = "OPENING_SIX_COMPLETED_BARS_PLUS_1555_SESSION_CLOSE"
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,10 @@ def validate_historical_manifest(manifest: Mapping[str, object]) -> None:
         raise ValueError("V13_REQUIRES_101_SYMBOL_HISTORY")
     if int(manifest.get("bar_interval_minutes", 0)) != 5:
         raise ValueError("V13_REQUIRES_FIVE_MINUTE_HISTORY")
+    if manifest.get("sampling_policy") != EXPECTED_SAMPLING_POLICY:
+        raise ValueError("V13_HISTORICAL_SAMPLING_POLICY_CHANGED")
+    if int(manifest.get("bars_retained_per_complete_session", 0)) != 7:
+        raise ValueError("V13_HISTORICAL_BAR_SET_CHANGED")
     if manifest.get("brokerage_orders") is not False:
         raise ValueError("V13_HISTORICAL_MANIFEST_HAS_BROKERAGE_AUTHORITY")
     last_common = date.fromisoformat(str(manifest["last_common_session"]))
@@ -240,6 +245,25 @@ def _confirmation_state(
         )
         for symbol in candidates
     }
+
+
+def _group_compact_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, list[Mapping[str, object]]]:
+    """Group without copying 1M+ historical row dictionaries."""
+    grouped: dict[str, list[Mapping[str, object]]] = {}
+    for row in rows:
+        try:
+            stamp = datetime.fromisoformat(str(row["timestamp_utc"]))
+            if stamp.tzinfo is None:
+                raise ValueError
+            session = stamp.astimezone(NEW_YORK).date().isoformat()
+        except (KeyError, TypeError, ValueError):
+            continue
+        grouped.setdefault(session, []).append(row)
+    for values in grouped.values():
+        values.sort(key=lambda row: str(row["timestamp_utc"]))
+    return grouped
 
 
 def _spy_annualized_volatility(
@@ -544,7 +568,6 @@ def load_retrospective_periods(
 
     from ml.v10 import cycle3
     from ml.v11.intraday_walk_forward import (
-        _group_sessions,
         get_v5_data_symbols,
         load_dataset,
     )
@@ -555,7 +578,9 @@ def load_retrospective_periods(
     symbols = tuple(get_v5_data_symbols())
     if len(symbols) != 101 or len(set(symbols)) != 101 or "SPY" not in symbols:
         raise ValueError("V13_REQUIRES_FIXED_101_SYMBOL_UNIVERSE")
-    grouped = {symbol: _group_sessions(dataset[symbol]) for symbol in symbols}
+    grouped = {
+        symbol: _group_compact_rows(dataset[symbol]) for symbol in symbols
+    }
     common_sessions = sorted(
         set.intersection(*(set(grouped[symbol]) for symbol in symbols))
     )
@@ -662,6 +687,10 @@ def load_retrospective_periods(
         "historical_last_common_session": manifest["last_common_session"],
         "provider": "Tiingo IEX historical five-minute bars",
         "provider_intraday_history_starts": "August 2017",
+        "sampling_policy": manifest["sampling_policy"],
+        "bars_retained_per_complete_session": manifest[
+            "bars_retained_per_complete_session"
+        ],
         "fixed_universe_symbols": 101,
         "v10_candidate_id": EXPECTED_V10_CANDIDATE,
         "v10_frozen_spec_sha256": EXPECTED_V10_SHA256,
