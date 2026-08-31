@@ -44,6 +44,8 @@ V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de938
 V8_EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 V13_EXPECTED_SHA = "42d7cb6397beb0016715b1dccf4ec070d14132198dc537a6823b68b9546f7702"
 V13_FRESH_BOUNDARY_UTC = pd.Timestamp("2026-09-01T14:00:00Z")
+V13_MAX_SOURCE_CHUNK_DAYS = 120
+V13_RESPONSE_CAP_GUARD = "MAX_120_CALENDAR_DAYS_PER_REQUEST"
 
 
 def _iso(value) -> str:
@@ -278,6 +280,14 @@ def _load_v13():
         raise RuntimeError("V13 retrospective result is mislabeled frozen")
     if payload.get("brokerage_orders") is not False:
         raise RuntimeError("V13 retrospective result has brokerage authority")
+    source_inputs = payload.get("source_inputs") or {}
+    source_chunk_days = int(source_inputs.get("source_chunk_days") or 0)
+    if source_chunk_days < 1 or source_chunk_days > V13_MAX_SOURCE_CHUNK_DAYS:
+        raise RuntimeError("V13 retrospective source chunks are unsafe")
+    if source_inputs.get("provider_response_cap_guard") != V13_RESPONSE_CAP_GUARD:
+        raise RuntimeError("V13 retrospective response-cap guard is missing")
+    if source_inputs.get("source_coverage_validated") is not True:
+        raise RuntimeError("V13 retrospective source coverage is not validated")
 
     body = dict(payload)
     identity = body.pop("reconstruction_sha256", None)
@@ -336,6 +346,9 @@ def _load_v13():
     record["ten_calendar_years_available"] = payload.get("ten_calendar_years_available")
     record["actual_first_eligible_session"] = payload.get("actual_first_eligible_session")
     record["historical_spread_policy"] = payload.get("historical_spread_policy")
+    record["source_chunk_days"] = source_chunk_days
+    record["source_coverage_validated"] = True
+    record["source_coverage"] = source_inputs.get("source_coverage")
     return record
 
 
@@ -394,6 +407,10 @@ def main():
             "v13_requested_start_date": v13["requested_start_date"],
             "v13_actual_first_eligible_session": v13["actual_first_eligible_session"],
             "v13_ten_calendar_years_available": v13["ten_calendar_years_available"],
+            "v13_source_chunk_days": v13["source_chunk_days"],
+            "v13_source_coverage_validated": v13[
+                "source_coverage_validated"
+            ],
             "v13_fresh_evidence_boundary_utc": V13_FRESH_BOUNDARY_UTC.isoformat(),
             "v13_fresh_evidence_included": False,
             "forward_evidence_included": False,

@@ -703,6 +703,14 @@ def load_retrospective_periods(
         "bars_retained_per_complete_session": manifest[
             "bars_retained_per_complete_session"
         ],
+        "source_chunk_days": manifest["source_chunk_days"],
+        "provider_response_cap_guard": manifest[
+            "provider_response_cap_guard"
+        ],
+        "source_coverage_validated": manifest[
+            "source_coverage_validated"
+        ],
+        "source_coverage": manifest["source_coverage"],
         "fixed_universe_symbols": 101,
         "v10_candidate_id": EXPECTED_V10_CANDIDATE,
         "v10_frozen_spec_sha256": EXPECTED_V10_SHA256,

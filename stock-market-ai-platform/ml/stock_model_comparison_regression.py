@@ -103,6 +103,8 @@ def validate_artifact():
     require(EXPECTED_V13_SHA in v13.get("methodology", ""), "V13 methodology lacks locked contract identity")
     require("not fresh evidence" in v13.get("status", ""), "V13 is not labeled separate from fresh evidence")
     require(bool(v13.get("reconstruction_sha256")), "V13 reconstruction identity is missing")
+    require(v13.get("source_chunk_days") == 120, "V13 source chunks are not response-cap safe")
+    require(v13.get("source_coverage_validated") is True, "V13 source coverage is not validated")
 
     lineage = payload.get("lineage") or {}
     require(lineage.get("v8_frozen_sha256") == EXPECTED_V8_SHA, "V8 lineage SHA mismatch")
@@ -113,6 +115,8 @@ def validate_artifact():
     require(lineage.get("v13_reconstruction_sha256") == v13.get("reconstruction_sha256"), "V13 reconstruction lineage mismatch")
     require(lineage.get("v13_classification") == "RETROSPECTIVE_DEVELOPMENT_ONLY_NOT_FRESH_EVIDENCE", "V13 classification mismatch")
     require(lineage.get("v13_ten_calendar_years_available") is False, "V13 source-history limitation missing")
+    require(lineage.get("v13_source_chunk_days") == 120, "V13 source chunk lineage is unsafe")
+    require(lineage.get("v13_source_coverage_validated") is True, "V13 source coverage lineage is missing")
     require(lineage.get("v13_fresh_evidence_included") is False, "V13 fresh evidence entered comparison")
     require(
         not any(str(key).lower().startswith("v11") for key in lineage),
