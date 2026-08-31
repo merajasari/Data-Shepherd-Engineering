@@ -1,8 +1,9 @@
 """Build a single comparable stock-model performance artifact for the dashboard.
 
-The comparison intentionally excludes V6, V7, and V11. It contains V4, V5,
+The comparison intentionally excludes V6, V7, V11, and V12. It contains V4, V5,
 the exact frozen V8 candidate, the separately frozen V10 Cycle 3 candidate,
-and SPY. Every line is independently normalized to
+the isolated V13 retrospective development reconstruction, and SPY. Every line
+is independently normalized to
 the same hypothetical $100,000 starting capital at its own first scientifically
 eligible observation. Live paper-account balances are never appended to these
 historical strategy curves.
@@ -29,6 +30,7 @@ V8_PATH = Path("data/model/v8/phase5/economic_period_results.csv")
 V8_FREEZE_PATH = Path("data/model/v8/phase7/frozen_candidate_spec.json")
 V10_PATH = Path("data/model/v10/cycle3/economic_period_results.csv")
 V10_FREEZE_PATH = Path("data/model/v10/cycle3/freeze/frozen_candidate_spec.json")
+V13_PATH = Path("data/research/v13/development/retrospective_reconstruction.json")
 OUTPUT_PATH = Path("webapp/static/generated/stock_model_comparison.json")
 
 V5_COST_BPS = 10.0
@@ -40,6 +42,8 @@ V10_COST_BPS = 10
 V10_HOLDOUT_START_UTC = pd.Timestamp("2027-01-04T00:00:00Z")
 V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
 V8_EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
+V13_EXPECTED_SHA = "42d7cb6397beb0016715b1dccf4ec070d14132198dc537a6823b68b9546f7702"
+V13_FRESH_BOUNDARY_UTC = pd.Timestamp("2026-09-01T14:00:00Z")
 
 
 def _iso(value) -> str:
@@ -255,6 +259,86 @@ def _load_v10():
     )
 
 
+def _load_v13():
+    if not V13_PATH.exists():
+        raise FileNotFoundError(
+            f"Missing {V13_PATH}; run python -m ml.v13.regime_overlay_backfill "
+            "then python -m ml.v13.regime_overlay_reconstruction"
+        )
+    payload = json.loads(V13_PATH.read_text(encoding="utf-8"))
+    if payload.get("status") != "V13_RETROSPECTIVE_DEVELOPMENT_RECONSTRUCTION":
+        raise ValueError("V13 retrospective reconstruction status is invalid")
+    if payload.get("classification") != "RETROSPECTIVE_DEVELOPMENT_ONLY_NOT_FRESH_EVIDENCE":
+        raise ValueError("V13 reconstruction is not labeled development-only")
+    if payload.get("v13_contract_sha256") != V13_EXPECTED_SHA:
+        raise RuntimeError("V13 retrospective contract SHA mismatch")
+    if payload.get("fresh_evidence_included") is not False:
+        raise RuntimeError("V13 fresh evidence entered the historical chart")
+    if payload.get("candidate_frozen") is not False:
+        raise RuntimeError("V13 retrospective result is mislabeled frozen")
+    if payload.get("brokerage_orders") is not False:
+        raise RuntimeError("V13 retrospective result has brokerage authority")
+
+    body = dict(payload)
+    identity = body.pop("reconstruction_sha256", None)
+    body.pop("generated_at_utc", None)
+    encoded = json.dumps(
+        body, separators=(",", ":"), sort_keys=True, ensure_ascii=True
+    ).encode("utf-8")
+    import hashlib
+    if identity != hashlib.sha256(encoded).hexdigest():
+        raise RuntimeError("V13 retrospective reconstruction SHA mismatch")
+
+    raw = payload.get("history") or []
+    if not raw:
+        raise ValueError("V13 retrospective reconstruction contains no history")
+    simulation_capital = float(payload.get("starting_capital_usd") or 0.0)
+    if simulation_capital != 5_000.0:
+        raise RuntimeError("V13 reconstruction did not use the locked $5,000 basis")
+    scale = STARTING_CAPITAL / simulation_capital
+    rows = [
+        {
+            "timestamp": str(row["timestamp"]),
+            "equity": float(row["mean_equity"]) * scale,
+            "source": (
+                "V13 $5,000 integer-share retrospective development path, "
+                "rebased to the chart's $100,000 display basis"
+            ),
+        }
+        for row in raw
+        if row.get("timestamp") is not None and row.get("mean_equity") is not None
+    ]
+    if not rows:
+        raise ValueError("V13 retrospective chart rows are empty")
+    if max(pd.Timestamp(row["timestamp"]) for row in rows) >= V13_FRESH_BOUNDARY_UTC:
+        raise RuntimeError("V13 retrospective chart reaches the fresh-evidence boundary")
+    methodology = (
+        f"Locked V13 contract SHA {V13_EXPECTED_SHA}; negative/high-volatility "
+        "entry-confirmation overlay applied "
+        "retrospectively to unchanged frozen V10 Cycle 3 ranks. Execution is "
+        "$5,000 integer-share, long-only, no-margin, five staggered cohort paths "
+        "with 10-bps modeled round-trip cost, then rebased to $100,000 for display. "
+        "Tiingo IEX five-minute history begins in August 2017 and the fixed "
+        "101-symbol universe can make the actual eligible start later. Historical "
+        "bid/ask spreads are unavailable from five-minute bars, so this remains "
+        "development-only and cannot be fresh evidence."
+    )
+    record = _series_record(
+        "V13",
+        "V13 regime overlay retrospective DEV",
+        rows,
+        methodology,
+        "retrospective development reconstruction; not frozen; not fresh evidence",
+    )
+    record["reconstruction_sha256"] = identity
+    record["simulation_starting_capital"] = simulation_capital
+    record["requested_start_date"] = payload.get("requested_start_date")
+    record["ten_calendar_years_available"] = payload.get("ten_calendar_years_available")
+    record["actual_first_eligible_session"] = payload.get("actual_first_eligible_session")
+    record["historical_spread_policy"] = payload.get("historical_spread_policy")
+    return record
+
+
 def _load_spy(start_ts):
     df = _spy_frame()
     df = df[df["timestamp_utc"] >= start_ts].copy()
@@ -277,24 +361,25 @@ def main():
     v5 = _load_v5()
     v8 = _load_v8()
     v10 = _load_v10()
+    v13 = _load_v13()
     earliest = min(
         pd.Timestamp(item["start_timestamp"])
-        for item in [v4, v5, v8, v10]
+        for item in [v4, v5, v8, v10, v13]
     )
     spy = _load_spy(earliest)
-    series = [v4, v5, v8, v10, spy]
+    series = [v4, v5, v8, v10, v13, spy]
     latest = max(pd.Timestamp(s["end_timestamp"]) for s in series)
 
     payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "title": "Stock model performance comparison",
         "starting_capital": STARTING_CAPITAL,
         "default_range": "3Y",
-        "excluded_models": ["V6", "V7", "V11"],
+        "excluded_models": ["V6", "V7", "V11", "V12"],
         "latest_timestamp": latest.isoformat(),
-        "comparison_policy": "Each model is shown as its own historical strategy curve on the same hypothetical $100,000 basis. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; no history is backfilled before eligibility.",
-        "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. Genuine V8 and V10 forward evidence remains separate and is never backfilled. V11 is intentionally excluded from this model-history chart while its research pipeline and fresh paper confirmation remain independently available.",
+        "comparison_policy": "Each model is shown as its own historical strategy curve on the same hypothetical $100,000 display basis. V13 is simulated under its locked $5,000 integer-share rules and only its percentage path is rebased for display. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; unavailable intraday history is never fabricated.",
+        "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. V13 is a retrospective development-only counterfactual, not frozen and not fresh evidence; its exact five-minute source begins in August 2017 and complete fixed-universe eligibility can begin later. Genuine V8, V10, and V13 forward/fresh evidence remains separate and is never backfilled. V11 and V12 remain excluded from this model-history chart.",
         "lineage": {
             "v8_candidate_id": V8_SCORE_ID,
             "v8_frozen_sha256": V8_EXPECTED_SHA,
@@ -303,6 +388,14 @@ def main():
             "v10_frozen_sha256": V10_EXPECTED_SHA,
             "v10_forward_holdout_start_utc": V10_HOLDOUT_START_UTC.isoformat(),
             "v10_classification": "FROZEN_CYCLE3_DEVELOPMENT_RECONSTRUCTION",
+            "v13_contract_sha256": V13_EXPECTED_SHA,
+            "v13_reconstruction_sha256": v13["reconstruction_sha256"],
+            "v13_classification": "RETROSPECTIVE_DEVELOPMENT_ONLY_NOT_FRESH_EVIDENCE",
+            "v13_requested_start_date": v13["requested_start_date"],
+            "v13_actual_first_eligible_session": v13["actual_first_eligible_session"],
+            "v13_ten_calendar_years_available": v13["ten_calendar_years_available"],
+            "v13_fresh_evidence_boundary_utc": V13_FRESH_BOUNDARY_UTC.isoformat(),
+            "v13_fresh_evidence_included": False,
             "forward_evidence_included": False,
             "live_paper_balances_included": False,
             "brokerage_orders": False,
@@ -316,6 +409,10 @@ def main():
             "v10_future_holdout_scored": False,
             "v10_cycle3_frozen_spec_modified": False,
             "v10_cycle3_forward_holdout_scored": False,
+            "v13_fresh_evidence_read": False,
+            "v13_fresh_evidence_written": False,
+            "v13_candidate_frozen": False,
+            "v13_production_evidence_modified": False,
             "brokerage_orders": False,
         },
     }
@@ -327,7 +424,7 @@ def main():
     print(f"Output: {OUTPUT_PATH}")
     for s in series:
         print(f"{s['model_id']:>3}: {s['start_timestamp']} -> {s['end_timestamp']} | obs={s['observations']:,} | ${s['ending_equity']:,.2f} | {s['total_return_pct']:+.2f}%")
-    print("V6/V7/V11 excluded. V8/V10 forward holdouts and live paper balance excluded. No orders or state changes.")
+    print("V6/V7/V11/V12 excluded. V13 is retrospective development only. V8/V10/V13 forward or fresh evidence and live paper balances are excluded. No orders or state changes.")
 
 
 if __name__ == "__main__":
