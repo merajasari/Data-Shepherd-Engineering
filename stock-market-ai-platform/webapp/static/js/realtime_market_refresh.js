@@ -23,7 +23,7 @@
   const fmtNum=(value,digits=2)=>Number.isFinite(Number(value))?Number(value).toFixed(digits):'—';
   const selectedSymbol=()=>(new URLSearchParams(location.search).get('symbol')||document.getElementById('stock-select')?.value||'AAPL').toUpperCase();
   const isLiveView=()=>location.pathname==='/dashboard'&&new URLSearchParams(location.search).get('view')==='live';
-  function renderStockHealth(h){regularSessionOpen=typeof h.regular_session_expected_open==='boolean'?h.regular_session_expected_open:null;const status=document.getElementById('stock-stream-health-status');if(!status)return;status.textContent=h.status||'UNKNOWN';status.style.color=h.status==='LIVE'?'var(--green)':(h.status==='ERROR'||h.status==='STALE'?'var(--red)':'var(--gold)');const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;};set('stock-stream-agent',h.launchagent_running?'RUNNING':'NOT RUNNING');set('stock-stream-live-count',String(h.live_symbol_count??0));set('stock-stream-configured-count',String(h.configured_symbol_count??0));set('stock-stream-cache-age',h.cache_age_seconds==null?'—':`${Math.max(0,h.cache_age_seconds).toFixed(1)}s`);set('stock-stream-session',h.regular_session_expected_open?'REGULAR OPEN':'CLOSED');set('stock-stream-health-detail',h.detail||'');}
+  function renderStockHealth(h){regularSessionOpen=typeof h.regular_session_expected_open==='boolean'?h.regular_session_expected_open:null;window.dispatchEvent(new CustomEvent('ds:stock-market-session-state',{detail:{marketOpen:regularSessionOpen}}));const status=document.getElementById('stock-stream-health-status');if(!status)return;status.textContent=h.status||'UNKNOWN';status.style.color=h.status==='LIVE'?'var(--green)':(h.status==='ERROR'||h.status==='STALE'?'var(--red)':'var(--gold)');const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;};set('stock-stream-agent',h.launchagent_running?'RUNNING':'NOT RUNNING');set('stock-stream-live-count',String(h.live_symbol_count??0));set('stock-stream-configured-count',String(h.configured_symbol_count??0));set('stock-stream-cache-age',h.cache_age_seconds==null?'—':`${Math.max(0,h.cache_age_seconds).toFixed(1)}s`);set('stock-stream-session',h.regular_session_expected_open?'REGULAR OPEN':'CLOSED');set('stock-stream-health-detail',h.detail||'');}
   async function refreshStockHealth(){if(location.pathname!=='/dashboard')return;try{renderStockHealth(await fetch(`/api/stock-stream-health?t=${Date.now()}`,{cache:'no-store'}).then(r=>r.json()));}catch(error){console.warn('[STOCK HEALTH REFRESH]',error);}}
   function findMarketCard(){return Array.from(document.querySelectorAll('.card')).find(card=>card.querySelector(':scope > .label')?.textContent?.trim()==='MARKET');}
   function technicalSection(){return Array.from(document.querySelectorAll('section.grid.metrics')).find(section=>Array.from(section.querySelectorAll('.metric span')).some(span=>span.textContent.trim()==='RSI 14'));}
@@ -128,7 +128,7 @@
         }
       });
       if(isLiveView()){
-        window.dispatchEvent(new CustomEvent('ds:all-live-stock-quotes',{detail:{quotes,updatedAt:stocks.updated_at||new Date().toISOString()}}));
+        window.dispatchEvent(new CustomEvent('ds:all-live-stock-quotes',{detail:{quotes,marketOpen:regularSessionOpen,updatedAt:stocks.updated_at||new Date().toISOString()}}));
         renderMarket(symbol,quote);
         renderRecentMarketData(symbol,quote);
         dispatchHistory(symbol,quote);

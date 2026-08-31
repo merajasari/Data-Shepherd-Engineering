@@ -111,20 +111,30 @@ def get_latest_cached_points(symbols: list[str]) -> dict[str, dict]:
     return result
 
 
-def _append_live(rows: list[dict], symbol: str, quotes: dict) -> list[dict]:
-    out = [dict(row) for row in rows]
-    quote = quotes.get(symbol) or {}
+def _validated_live_quote(quote: dict) -> tuple[float, datetime] | None:
     try:
         price = float(quote.get("reference_price"))
     except (TypeError, ValueError):
-        return out
+        return None
     if price <= 0:
-        return out
-    timestamp = quote.get("timestamp") or quote.get("received_at") or datetime.now(timezone.utc).isoformat()
+        return None
+    timestamp = quote.get("timestamp") or quote.get("received_at")
+    if not timestamp:
+        return None
     try:
-        ts = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).astimezone(timezone.utc)
+        parsed = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        ts = parsed.astimezone(timezone.utc)
     except Exception:
-        ts = datetime.now(timezone.utc)
+        return None
+    return price, ts
+
+
+def _append_live(rows: list[dict], symbol: str, quotes: dict) -> list[dict]:
+    out = [dict(row) for row in rows]
+    validated = _validated_live_quote(quotes.get(symbol) or {})
+    if validated is None:
+        return out
+    price, ts = validated
     bucket = ts.replace(minute=(ts.minute // 5) * 5, second=0, microsecond=0).isoformat()
     if out and out[-1].get("t") == bucket:
         out[-1] = {"t": bucket, "price": price, "live": True}
@@ -157,18 +167,15 @@ def get_symbol_24h_intraday(symbol: str) -> dict:
     rows = _append_live(series.get(symbol, []), symbol, quotes)
     rows = _with_provisional_daily_smas(symbol, rows)
     quote = quotes.get(symbol) or {}
-    try:
-        live_price = float(quote.get("reference_price"))
-    except (TypeError, ValueError):
-        live_price = None
-    if live_price is not None and live_price <= 0:
-        live_price = None
+    validated = _validated_live_quote(quote)
+    live_price = validated[0] if validated else None
+    live_timestamp = validated[1].isoformat() if validated else None
     return {
         "window_hours": 24,
         "symbol": symbol,
         "series": rows,
         "updated_at": cache_updated_at or live_state.get("updated_at"),
-        "live": {"reference_price": live_price, "timestamp": quote.get("timestamp")},
+        "live": {"reference_price": live_price, "timestamp": live_timestamp},
         "source": source,
         "point_count": len(rows),
     }
