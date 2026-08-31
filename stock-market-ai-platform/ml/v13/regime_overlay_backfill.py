@@ -7,11 +7,13 @@ touches a fresh-evidence journal, activation artifact, or brokerage surface.
 from __future__ import annotations
 
 import argparse
-from datetime import date
-from pathlib import Path
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 from ml.v11.intraday_backfill import (
     TiingoHistoricalIntradayClient,
+    _atomic_json_write,
+    _canonical_sha,
     run_backfill,
 )
 from ml.v13.regime_overlay_reconstruction import (
@@ -22,6 +24,58 @@ from ml.v13.regime_overlay_reconstruction import (
 
 
 OUTPUT_ROOT = ROOT / "data/research/v13/development/intraday_backfills"
+NEW_YORK = ZoneInfo("America/New_York")
+REQUIRED_BAR_TIMES = {
+    time(9, 30),
+    time(9, 35),
+    time(9, 40),
+    time(9, 45),
+    time(9, 50),
+    time(9, 55),
+    time(15, 55),
+}
+SAMPLING_POLICY = "OPENING_SIX_COMPLETED_BARS_PLUS_1555_SESSION_CLOSE"
+
+
+class CompactV13HistoricalClient:
+    """Retain only the bars required by the locked V13 rule."""
+
+    def __init__(self, *, timeout_seconds: int):
+        self._client = TiingoHistoricalIntradayClient(
+            timeout_seconds=timeout_seconds
+        )
+
+    def fetch(self, symbol, start_date, end_date) -> list[dict[str, object]]:
+        rows = self._client.fetch(symbol, start_date, end_date)
+        compact = []
+        for row in rows:
+            try:
+                stamp = datetime.fromisoformat(
+                    str(row["timestamp_utc"])
+                ).astimezone(NEW_YORK)
+            except (KeyError, TypeError, ValueError):
+                continue
+            if stamp.time().replace(tzinfo=None) in REQUIRED_BAR_TIMES:
+                compact.append(row)
+        return compact
+
+
+def _publish_sampling_contract(result: dict[str, object]) -> dict[str, object]:
+    if result.get("published") is not True:
+        return result
+    result["sampling_policy"] = SAMPLING_POLICY
+    result["bars_retained_per_complete_session"] = 7
+    result["retained_bar_times_eastern"] = [
+        "09:30", "09:35", "09:40", "09:45", "09:50", "09:55", "15:55"
+    ]
+    result["full_session_bars_retained"] = False
+    result["v13_development_only"] = True
+    result.pop("manifest_sha256", None)
+    result["manifest_sha256"] = _canonical_sha(result)
+    run_id = f"{result['start_date']}_{result['end_date']}"
+    _atomic_json_write(OUTPUT_ROOT / run_id / "manifest.json", result)
+    _atomic_json_write(OUTPUT_ROOT / "latest_complete_manifest.json", result)
+    return result
 
 
 def main() -> None:
@@ -46,14 +100,13 @@ def main() -> None:
     result = run_backfill(
         start_date=TIINGO_IEX_INTRADAY_START_DATE,
         end_date=DEVELOPMENT_END_DATE,
-        client=TiingoHistoricalIntradayClient(
-            timeout_seconds=args.timeout_seconds
-        ),
+        client=CompactV13HistoricalClient(timeout_seconds=args.timeout_seconds),
         output_root=OUTPUT_ROOT,
         chunk_days=args.chunk_days,
         workers=args.workers,
         progress=True,
     )
+    result = _publish_sampling_contract(result)
     print(f"Status: {result['status']}")
     print(f"Published: {result['published']}")
     print(
@@ -67,6 +120,7 @@ def main() -> None:
             f"{result['first_common_session']} -> {result['last_common_session']}"
         )
         print(f"Manifest SHA-256: {result['manifest_sha256']}")
+        print("Retained bars/session: 7 (09:30-09:55 and 15:55 Eastern)")
     for failure in result.get("failures", [])[:20]:
         print(f" - {failure}")
     print("V11 current historical manifest modified: NO")
