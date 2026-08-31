@@ -62,6 +62,13 @@ def manifest() -> dict[str, object]:
         "start_date": "2017-08-01",
         "end_date": "2026-08-28",
         "bar_interval_minutes": 5,
+        "sampling_policy": "OPENING_SIX_COMPLETED_BARS_PLUS_1555_SESSION_CLOSE",
+        "bars_retained_per_complete_session": 7,
+        "retained_bar_times_eastern": [
+            "09:30", "09:35", "09:40", "09:45", "09:50", "09:55", "15:55"
+        ],
+        "full_session_bars_retained": False,
+        "v13_development_only": True,
         "symbol_count": 101,
         "symbols": ["SPY", *[f"S{value:03d}" for value in range(100)]],
         "common_session_count": 100,
