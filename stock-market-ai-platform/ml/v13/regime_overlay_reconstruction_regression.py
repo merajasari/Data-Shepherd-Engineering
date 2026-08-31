@@ -69,6 +69,15 @@ def manifest() -> dict[str, object]:
         ],
         "full_session_bars_retained": False,
         "v13_development_only": True,
+        "source_chunk_days": 120,
+        "provider_response_cap_guard": "MAX_120_CALENDAR_DAYS_PER_REQUEST",
+        "source_coverage_validated": True,
+        "source_coverage": {
+            "spy_sessions": 2250,
+            "expected_weekdays": 2369,
+            "minimum_spy_sessions": 1539,
+            "minimum_weekday_coverage": 0.65,
+        },
         "symbol_count": 101,
         "symbols": ["SPY", *[f"S{value:03d}" for value in range(100)]],
         "common_session_count": 100,
@@ -178,6 +187,28 @@ def main() -> None:
         require(True, "Tampered manifest fails closed")
     else:
         raise AssertionError("Tampered manifest fails closed")
+    unsafe_chunk = manifest()
+    unsafe_chunk["source_chunk_days"] = 900
+    body = dict(unsafe_chunk)
+    body.pop("manifest_sha256", None)
+    unsafe_chunk["manifest_sha256"] = _canonical_sha(body)
+    try:
+        validate_historical_manifest(unsafe_chunk)
+    except ValueError:
+        require(True, "Oversized source chunk fails closed")
+    else:
+        raise AssertionError("Oversized source chunk fails closed")
+    truncated = manifest()
+    truncated["source_coverage_validated"] = False
+    body = dict(truncated)
+    body.pop("manifest_sha256", None)
+    truncated["manifest_sha256"] = _canonical_sha(body)
+    try:
+        validate_historical_manifest(truncated)
+    except ValueError:
+        require(True, "Truncated source coverage fails closed")
+    else:
+        raise AssertionError("Truncated source coverage fails closed")
     fresh = manifest()
     fresh["last_common_session"] = "2026-09-01"
     body = dict(fresh)

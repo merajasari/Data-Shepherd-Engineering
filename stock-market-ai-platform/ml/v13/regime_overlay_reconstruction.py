@@ -36,7 +36,7 @@ from ml.v13.regime_overlay_contract import (
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = (
     ROOT
-    / "data/research/v13/development/intraday_backfills/latest_complete_manifest.json"
+    / "data/research/v13/development/intraday_backfills_complete_v2/latest_complete_manifest.json"
 )
 OUTPUT_PATH = (
     ROOT / "data/research/v13/development/retrospective_reconstruction.json"
@@ -64,6 +64,8 @@ HISTORICAL_SPREAD_POLICY = (
     "NOT_ELIGIBLE_AS_FRESH_EVIDENCE"
 )
 EXPECTED_SAMPLING_POLICY = "OPENING_SIX_COMPLETED_BARS_PLUS_1555_SESSION_CLOSE"
+MAXIMUM_SOURCE_CHUNK_DAYS = 120
+EXPECTED_PROVIDER_RESPONSE_CAP_GUARD = "MAX_120_CALENDAR_DAYS_PER_REQUEST"
 
 
 @dataclass(frozen=True)
@@ -121,6 +123,16 @@ def validate_historical_manifest(manifest: Mapping[str, object]) -> None:
         raise ValueError("V13_HISTORICAL_SAMPLING_POLICY_CHANGED")
     if int(manifest.get("bars_retained_per_complete_session", 0)) != 7:
         raise ValueError("V13_HISTORICAL_BAR_SET_CHANGED")
+    source_chunk_days = int(manifest.get("source_chunk_days", 0))
+    if source_chunk_days < 1 or source_chunk_days > MAXIMUM_SOURCE_CHUNK_DAYS:
+        raise ValueError("V13_HISTORICAL_SOURCE_CHUNK_UNSAFE")
+    if (
+        manifest.get("provider_response_cap_guard")
+        != EXPECTED_PROVIDER_RESPONSE_CAP_GUARD
+    ):
+        raise ValueError("V13_HISTORICAL_RESPONSE_CAP_GUARD_MISSING")
+    if manifest.get("source_coverage_validated") is not True:
+        raise ValueError("V13_HISTORICAL_SOURCE_COVERAGE_NOT_VALIDATED")
     if manifest.get("brokerage_orders") is not False:
         raise ValueError("V13_HISTORICAL_MANIFEST_HAS_BROKERAGE_AUTHORITY")
     last_common = date.fromisoformat(str(manifest["last_common_session"]))
