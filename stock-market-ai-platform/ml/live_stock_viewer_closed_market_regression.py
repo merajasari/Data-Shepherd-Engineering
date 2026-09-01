@@ -26,6 +26,10 @@ def main() -> None:
 
     require("const positivePrice" in live, "Live quotes require a positive finite price")
     require("const normalizeLiveQuote" in live, "Live quotes require a timestamp")
+    require(
+        "regularSessionOpen !== true || !quote" in live,
+        "Live quotes require an explicitly open regular session",
+    )
     require("price == null || !timestamp" in live, "Null and untimestamped quotes fail closed")
     require("Last completed close · not a live quote" in live, "Market card labels completed-close fallback")
     require("market closed':'live quote unavailable" in live, "Closed-market status is explicit")
@@ -57,6 +61,10 @@ def main() -> None:
 
     require("function liveQuote(symbol)" in top, "Top 10 quotes require validation")
     require(
+        "if(marketOpen!==true)return null" in top,
+        "Top 10 live marks fail closed outside the regular session",
+    )
+    require(
         "Number.isFinite(timestamp)" in top,
         "Top 10 live marks require a timestamp",
     )
@@ -77,6 +85,11 @@ def main() -> None:
         "ds:stock-market-session-state" in live
         and "marketOpen:regularSessionOpen" in live,
         "Market session state is published to comparison charts",
+    )
+    require(
+        "def _regular_session_expected_open" in service
+        and service.count("if market_open else {}") == 2,
+        "Intraday APIs suppress cached quotes outside the regular session",
     )
     require(
         "def _validated_live_quote" in service,

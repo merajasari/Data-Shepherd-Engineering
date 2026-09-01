@@ -11,6 +11,7 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -20,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 V5_CACHE_PATH = ROOT / "data/live/iex_24h_5m_v5.json"
 LEGACY_COMPAT_PATH = ROOT / "data/live/iex_24h_5m.json"
 MEMORY_TTL_SECONDS = 5
+MARKET_TZ = ZoneInfo("America/New_York")
 
 _memory_cache = {"fetched": 0.0, "series": {}, "updated_at": None, "source": None}
 _daily_cache: dict[str, list[float]] = {}
@@ -111,6 +113,14 @@ def get_latest_cached_points(symbols: list[str]) -> dict[str, dict]:
     return result
 
 
+def _regular_session_expected_open(now_utc: datetime | None = None) -> bool:
+    """Fail closed outside the weekday 09:30-16:00 America/New_York session."""
+    current = now_utc or datetime.now(timezone.utc)
+    local = current.astimezone(MARKET_TZ)
+    minute_of_day = local.hour * 60 + local.minute
+    return local.weekday() < 5 and 9 * 60 + 30 <= minute_of_day < 16 * 60
+
+
 def _validated_live_quote(quote: dict) -> tuple[float, datetime] | None:
     try:
         price = float(quote.get("reference_price"))
@@ -163,7 +173,8 @@ def get_symbol_24h_intraday(symbol: str) -> dict:
     symbol = symbol.upper().strip()
     series, cache_updated_at, source = _read_small_cache()
     live_state = get_all_live_quotes()
-    quotes = live_state.get("quotes", {}) or {}
+    market_open = _regular_session_expected_open()
+    quotes = (live_state.get("quotes", {}) or {}) if market_open else {}
     rows = _append_live(series.get(symbol, []), symbol, quotes)
     rows = _with_provisional_daily_smas(symbol, rows)
     quote = quotes.get(symbol) or {}
@@ -185,7 +196,8 @@ def get_today_top10_intraday(symbols: list[str]) -> dict:
     """Return Top-10 rolling 24h series without network or log-scan latency."""
     local_series, cache_updated_at, source = _read_small_cache()
     live_state = get_all_live_quotes()
-    quotes = live_state.get("quotes", {}) or {}
+    market_open = _regular_session_expected_open()
+    quotes = (live_state.get("quotes", {}) or {}) if market_open else {}
 
     ranked = []
     for symbol in symbols:

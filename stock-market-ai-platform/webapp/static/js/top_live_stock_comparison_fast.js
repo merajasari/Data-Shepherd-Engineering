@@ -56,7 +56,7 @@
     }
     return open;
   }
-  function liveQuote(symbol){const q=quotes[symbol];if(!q||q.reference_price==null)return null;const price=Number(q.reference_price),timestamp=Date.parse(q.timestamp||q.received_at||'');return Number.isFinite(price)&&price>0&&Number.isFinite(timestamp)?{price,timestamp}:null;}
+  function liveQuote(symbol){if(marketOpen!==true)return null;const q=quotes[symbol];if(!q||q.reference_price==null)return null;const price=Number(q.reference_price),timestamp=Date.parse(q.timestamp||q.received_at||'');return Number.isFinite(price)&&price>0&&Number.isFinite(timestamp)?{price,timestamp}:null;}
   function appendLive(symbol,rows){const out=[...rows],quote=liveQuote(symbol);if(out.length&&quote){const last=out.at(-1);if(!last||Math.abs(last.t-quote.timestamp)>500)out.push({t:quote.timestamp,price:quote.price,live:true});else out[out.length-1]={t:quote.timestamp,price:quote.price,live:true};}return out;}
   function selectedRangeRows(symbol,rows){const now=Date.now();if(range==='TODAY'){const source=todayData.get(symbol)||[];const open=marketOpenMs(now);return appendLive(symbol,[...source].filter(x=>x.t>=open&&x.t<=now));}return appendLive(symbol,rows.filter(x=>x.t>=now-days[range]*864e5&&x.t<=now));}
   function rowsFor(symbol,rows){if(range==='TODAY')return selectedRangeRows(symbol,rows);const now=Date.now();let out=appendLive(symbol,rows.filter(x=>x.t>=now-days[range]*864e5&&x.t<=now));if(zoom>1&&out.length>2){const n=Math.max(2,Math.floor(out.length/zoom)),max=out.length-n,start=Math.round(max*pan);out=out.slice(start,start+n);}return out;}

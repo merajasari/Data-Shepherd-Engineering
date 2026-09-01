@@ -12,7 +12,7 @@
     return Number.isFinite(number) && number > 0 ? number : null;
   };
   const normalizeLiveQuote = quote => {
-    if (!quote) return null;
+    if (regularSessionOpen !== true || !quote) return null;
     const price = positivePrice(quote.reference_price);
     const timestamp = quote.timestamp || quote.received_at;
     if (price == null || !timestamp || !Number.isFinite(new Date(timestamp).getTime())) return null;
