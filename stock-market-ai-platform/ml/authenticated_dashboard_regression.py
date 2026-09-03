@@ -91,6 +91,13 @@ def main() -> None:
         "Shared and model-owned dashboard panels route to their proper tabs",
     )
     require(
+        "(?:DISTANCE-ONLY|COMPLETED-EOD) RANK SIGNAL" in research_tabs
+        and "moveV8ContractGrid" in research_tabs
+        and "FROZEN V8 STRATEGY CONTRACT" in research_tabs
+        and "V8 PORTFOLIO CONTRACT" in research_tabs,
+        "Completed-EOD rank signal and both V8 contracts route to V8",
+    )
+    require(
         'role="tablist"' in research_tabs
         and "setAttribute('role', 'tabpanel')" in research_tabs
         and "aria-selected" in research_tabs

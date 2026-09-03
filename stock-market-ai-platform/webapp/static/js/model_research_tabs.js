@@ -69,7 +69,9 @@
 
   function splitMarketAndSignal() {
     const signal = [...document.querySelectorAll('.card')].find(card =>
-      card.querySelector(':scope > .label')?.textContent.trim() === 'V8 DISTANCE-ONLY RANK SIGNAL'
+      /^V8 (?:DISTANCE-ONLY|COMPLETED-EOD) RANK SIGNAL$/.test(
+        card.querySelector(':scope > .label')?.textContent.trim() || ''
+      )
     );
     if (!signal) return;
     const row = signal.parentElement;
@@ -78,6 +80,20 @@
       row.classList.add('mrt-single-card-grid');
       move(row, 'overview');
     }
+  }
+
+  function moveV8ContractGrid() {
+    const strategy = [...document.querySelectorAll('.card')].find(card =>
+      card.querySelector(':scope > .label')?.textContent.trim() === 'FROZEN V8 STRATEGY CONTRACT'
+    );
+    if (!strategy) return;
+    const grid = strategy.parentElement;
+    const labels = grid ? [...grid.querySelectorAll(':scope > .card > .label')].map(label => label.textContent.trim()) : [];
+    if (
+      grid?.matches('section.grid')
+      && labels.includes('FROZEN V8 STRATEGY CONTRACT')
+      && labels.some(label => /^(?:V8 )?PORTFOLIO CONTRACT$/.test(label))
+    ) move(grid, 'v8');
   }
 
   function routeStaticSections() {
@@ -89,6 +105,7 @@
     V10_IDS.forEach(id => moveId(id, 'v10'));
     moveId('v11-phase2-status', 'v11');
     splitMarketAndSignal();
+    moveV8ContractGrid();
 
     [...shell.querySelectorAll(':scope > section')].forEach(section => {
       if (section.classList.contains('model-research-pane')) return;
