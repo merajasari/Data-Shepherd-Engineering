@@ -106,7 +106,7 @@ def main() -> None:
         "(?:DISTANCE-ONLY|COMPLETED-EOD) RANK SIGNAL" in research_tabs
         and "moveV8ContractGrid" in research_tabs
         and "FROZEN V8 STRATEGY CONTRACT" in research_tabs
-        and "V8 PORTFOLIO CONTRACT" in research_tabs,
+        and "(?:V8 )?PORTFOLIO CONTRACT" in research_tabs,
         "Completed-EOD rank signal and both V8 contracts route to V8",
     )
     require(
