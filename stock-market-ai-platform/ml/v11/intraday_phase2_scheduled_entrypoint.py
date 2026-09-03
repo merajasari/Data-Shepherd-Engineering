@@ -48,6 +48,32 @@ def _atomic_write(path: Path, payload: dict[str, object]) -> None:
     temporary.replace(path)
 
 
+def _attempt_diagnostics(
+    outcome: object,
+    *,
+    now: datetime,
+    session_date: str,
+    schedule_state: str,
+) -> dict[str, object]:
+    raw_reasons = getattr(outcome, "reasons", ())
+    reasons = (
+        [str(reason) for reason in raw_reasons]
+        if isinstance(raw_reasons, (list, tuple))
+        else []
+    )
+    symbol_count = getattr(outcome, "symbol_count", None)
+    return {
+        "attempted_at_utc": now.isoformat(),
+        "session_date": session_date,
+        "schedule_state": schedule_state,
+        "status": str(getattr(outcome, "status", outcome)),
+        "published": getattr(outcome, "published", None),
+        "symbol_count": symbol_count if isinstance(symbol_count, int) else None,
+        "completed_bar_utc": getattr(outcome, "completed_bar_utc", None),
+        "reasons": reasons,
+    }
+
+
 def schedule_state(now_utc: datetime) -> str:
     if now_utc.tzinfo is None:
         raise ValueError("NOW_MUST_BE_TIMEZONE_AWARE")
@@ -104,6 +130,16 @@ def run_scheduled(
             previous_status = json.loads(status_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             previous_status = None
+    previous_attempt = (
+        previous_status.get("last_collection_attempt")
+        if isinstance(previous_status, dict)
+        else None
+    )
+    last_collection_attempt = (
+        dict(previous_attempt)
+        if isinstance(previous_attempt, dict)
+        else None
+    )
     catch_up_already_attempted = (
         isinstance(previous_status, dict)
         and previous_status.get("catch_up_attempted_session") == local_date
@@ -133,6 +169,12 @@ def run_scheduled(
                     client=TiingoIntradayClient(),
                 )
                 runner_invoked = True
+                last_collection_attempt = _attempt_diagnostics(
+                    collection,
+                    now=now,
+                    session_date=local_date,
+                    schedule_state=window,
+                )
                 if collection.published:
                     observation = run_from_files(
                         catch_up=(window == "CATCH_UP_WINDOW")
@@ -145,6 +187,12 @@ def run_scheduled(
                 outcome = active_runner()
                 runner_status = str(
                     getattr(outcome, "status", outcome)
+                )
+                last_collection_attempt = _attempt_diagnostics(
+                    outcome,
+                    now=now,
+                    session_date=local_date,
+                    schedule_state=window,
                 )
             if window == "CATCH_UP_WINDOW":
                 catch_up_attempted_session = local_date
@@ -173,6 +221,7 @@ def run_scheduled(
         "contract_sha256": observed_sha,
         "runner_invoked": runner_invoked,
         "runner_status": runner_status,
+        "last_collection_attempt": last_collection_attempt,
         "session_complete": session_complete,
         "catch_up_attempted_session": catch_up_attempted_session,
         "production_evidence_modified": evidence_modified,
@@ -193,6 +242,24 @@ def main() -> None:
     print(f"Schedule state: {result['schedule_state']}")
     print(f"Activation: {result['activation']}")
     print(f"Runner invoked: {result['runner_invoked']}")
+    attempt = result.get("last_collection_attempt")
+    if isinstance(attempt, dict):
+        print(f"Last collection status: {attempt.get('status') or 'UNKNOWN'}")
+        print(
+            "Last collection symbols: "
+            f"{attempt.get('symbol_count') if attempt.get('symbol_count') is not None else 'UNKNOWN'}/101"
+        )
+        print(
+            "Last completed bar: "
+            f"{attempt.get('completed_bar_utc') or 'NONE'}"
+        )
+        reasons = [str(reason) for reason in attempt.get("reasons") or []]
+        if reasons:
+            print("Last collection rejection reasons:")
+            for reason in reasons[:20]:
+                print(f" - {reason}")
+            if len(reasons) > 20:
+                print(f" - ... {len(reasons) - 20} additional reasons")
     print(
         "Production evidence modified: "
         f"{'YES' if result['production_evidence_modified'] else 'NO'}"
