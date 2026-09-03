@@ -51,6 +51,10 @@ def main() -> None:
         b'/static/js/v8_holdout_snapshot.js' in research.data,
         "Synchronized V8 snapshot reader is loaded before dashboard panels",
     )
+    require(
+        b'/static/js/model_research_tabs.js' in research.data,
+        "Model Research loads its page-specific model tabs",
+    )
     v8_api = client.get("/api/v8/holdout")
     require(v8_api.status_code == 200, "V8 synchronized dashboard API responds")
     require(
@@ -69,6 +73,38 @@ def main() -> None:
     layout = (project_root / "webapp/static/js/dashboard_layout.js").read_text()
     operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
     comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
+    research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
+    require(
+        all(label in research_tabs for label in (
+            "Overview", "V4 Paper", "V8 Frozen", "V10 Cycle 3",
+            "V11 Intraday", "V13 Dev",
+        )),
+        "Model Research exposes the complete classified model-tab set",
+    )
+    require(
+        "stock-stream-health-card', 'overview'" in research_tabs
+        and "smc-full-width-card" in research_tabs
+        and "v4-dashboard'), 'v4'" in research_tabs
+        and "v8-holdout-monitor" in research_tabs
+        and "v10-cycle3-holdout-monitor" in research_tabs
+        and "v11-phase2-status', 'v11'" in research_tabs,
+        "Shared and model-owned dashboard panels route to their proper tabs",
+    )
+    require(
+        'role="tablist"' in research_tabs
+        and "setAttribute('role', 'tabpanel')" in research_tabs
+        and "aria-selected" in research_tabs
+        and "ArrowLeft" in research_tabs,
+        "Model tabs support accessible keyboard navigation",
+    )
+    require(
+        "development-only—not frozen and not fresh forward evidence" in research_tabs
+        and "V5" not in "".join(
+            line for line in research_tabs.splitlines()
+            if "label:" in line
+        ),
+        "V13 and legacy V5 are not mislabeled as active forward models",
+    )
     require(
         "LATEST COMPLETED-EOD RESEARCH SNAPSHOT" in layout
         and "PRODUCTION RANKING SESSION" in layout
@@ -114,6 +150,10 @@ def main() -> None:
     require(
         b'id="v11-phase2-status"' not in live.data,
         "V11 research panel remains off the live page",
+    )
+    require(
+        b'/static/js/model_research_tabs.js' not in live.data,
+        "Model-specific tabs remain exclusive to Model Research",
     )
 
     print("Status: PASSED")
