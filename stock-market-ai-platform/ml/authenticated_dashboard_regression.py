@@ -57,10 +57,18 @@ def main() -> None:
         len(v8_api.get_json().get("latest_research_rankings") or []) == 100,
         "V8 API exposes the complete lightweight 100-stock ranking snapshot",
     )
+    require(
+        all(
+            isinstance(event.get("symbols"), list)
+            for event in (v8_api.get_json().get("event_history") or [])
+        ),
+        "V8 lifecycle events expose their official symbol baskets for hover details",
+    )
 
     project_root = Path(__file__).resolve().parents[1]
     layout = (project_root / "webapp/static/js/dashboard_layout.js").read_text()
     operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
+    comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
     require(
         "LATEST COMPLETED-EOD RESEARCH SNAPSHOT" in layout
         and "PRODUCTION RANKING SESSION" in layout
@@ -80,6 +88,21 @@ def main() -> None:
         "fmtSession" in operations
         and "first holdout market session" in operations,
         "Market-session dates cannot shift to the prior local calendar day",
+    )
+    require(
+        "Y-axis = model lifecycle stage" in comparison
+        and "this is not a money or return axis" in comparison
+        and "DECISION · Top 10 selected" in comparison
+        and "ENTRY · Next open" in comparison
+        and "EXIT · 5 sessions complete" in comparison,
+        "V8 holdout Y-axis is an explicit categorical lifecycle stage",
+    )
+    require(
+        "data-holdout-event" in comparison
+        and "data-holdout-action" in comparison
+        and "holdoutPinned" in comparison
+        and "smc-holdout-tooltip" in comparison,
+        "V8 holdout chart supports filters, hover, pinning, zoom and navigation",
     )
 
     client = authenticated_client()

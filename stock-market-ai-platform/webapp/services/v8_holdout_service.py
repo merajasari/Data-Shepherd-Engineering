@@ -95,6 +95,7 @@ def _event_history(events):
             "decision_timestamp_utc": event.get("decision_timestamp_utc"),
             "cohort_offset": event.get("cohort_offset"),
             "symbol_count": len(event.get("symbols", [])),
+            "symbols": list(event.get("symbols", [])),
             "net_portfolio_return": event.get("net_portfolio_return") if event_type == "EXIT" else None,
             "spy_return": event.get("spy_return") if event_type == "EXIT" else None,
             "net_relative_return": event.get("net_relative_return") if event_type == "EXIT" else None,
