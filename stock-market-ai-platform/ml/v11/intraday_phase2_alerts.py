@@ -21,6 +21,7 @@ from ml.v11.intraday_phase2_journal import (
     Phase2EvidenceJournal,
 )
 from ml.v11.intraday_phase2_monitor import run_monitor as run_health_monitor
+from ml.v11.intraday_phase2_scheduled_entrypoint import STATUS_PATH
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE_PATH = (
@@ -95,6 +96,7 @@ def run(
     *,
     now: datetime | None = None,
     journal_path: Path = DEFAULT_JOURNAL_PATH,
+    status_path: Path = STATUS_PATH,
     state_path: Path = STATE_PATH,
     notifier: Callable[[str, str], bool] = _notify,
     scheduler_check: Callable[[], tuple[bool, str]] = _scheduler_health,
@@ -122,7 +124,9 @@ def run(
         notifications.append(event_type)
 
     health = dict(
-        health_runner(journal_path=journal_path)
+        health_runner(journal_path=journal_path, status_path=status_path)
+        if health_runner is run_health_monitor
+        else health_runner(journal_path=journal_path)
     )
     failures = [str(item) for item in health.get("failures") or []]
     scheduler_ok, scheduler_detail = scheduler_check()
