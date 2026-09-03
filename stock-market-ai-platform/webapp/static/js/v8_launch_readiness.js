@@ -1,6 +1,5 @@
 (() => {
   const CHECKLIST_URL = '/static/generated/v8_launch_checklist.json';
-  const HOLDOUT_URL = '/api/v8/holdout';
 
   const labels = {
     frozen_contract: 'Frozen contract',
@@ -50,13 +49,12 @@
     const card = ensureCard();
     if (!card) return false;
     try {
-      const [checklistResp, holdoutResp] = await Promise.all([
+      const [checklistResp, holdout] = await Promise.all([
         fetch(CHECKLIST_URL, {cache:'no-store'}),
-        fetch(HOLDOUT_URL, {cache:'no-store'})
+        window.DataShepherdV8Snapshot.get()
       ]);
       if (!checklistResp.ok) throw new Error(`checklist HTTP ${checklistResp.status}`);
       const checklist = await checklistResp.json();
-      const holdout = holdoutResp.ok ? await holdoutResp.json() : {};
       const keys = Object.keys(labels);
       const passes = keys.filter(k => checklist[k] === 'PASS').length;
       const status = checklist.status === 'READY' && passes === keys.length ? 'READY' : 'NOT READY';

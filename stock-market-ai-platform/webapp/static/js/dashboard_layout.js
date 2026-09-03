@@ -17,7 +17,7 @@
   const removeCompactV4Equity = () => { const compact=document.getElementById('v4-compact-equity-card'); if(compact){compact.remove();return true} return false; };
   const moveV8RankSignal = () => {
     const latestModelEquity=document.getElementById('v8-compact-equity-card'); if(!latestModelEquity)return false;
-    const signal=Array.from(document.querySelectorAll('.card')).find(node=>{const label=node.querySelector(':scope > .label')?.textContent?.trim()||'';return label==='V8 5-DAY RELATIVE-RANK SIGNAL'||label==='V5 5-DAY RELATIVE-RANK SIGNAL'}); if(!signal)return false;
+    const signal=Array.from(document.querySelectorAll('.card')).find(node=>{const label=node.querySelector(':scope > .label')?.textContent?.trim()||'';return /^(?:V5|V8).*RANK SIGNAL$/i.test(label)}); if(!signal)return false;
     if(latestModelEquity.nextElementSibling!==signal)latestModelEquity.insertAdjacentElement('afterend',signal); signal.style.marginTop='20px'; return true;
   };
   const findFullLiveViewer = () => {
@@ -61,6 +61,36 @@
     }
   };
 
+  const hydrateSelectedV8Signal = async () => {
+    const signal = Array.from(document.querySelectorAll('.card')).find(node => {
+      const label = node.querySelector(':scope > .label')?.textContent?.trim() || '';
+      return /^(?:V5|V8).*RANK SIGNAL$/i.test(label);
+    });
+    const symbol = document.getElementById('stock-select')?.value;
+    if (!signal || !symbol || signal.dataset.v8Hydrating === '1') return false;
+    signal.dataset.v8Hydrating = '1';
+    try {
+      const d = await window.DataShepherdV8Snapshot.get();
+      const rows = Array.isArray(d.latest_research_rankings) ? d.latest_research_rankings : [];
+      const row = rows.find(item => item.symbol === symbol);
+      if (!row) return false;
+      const key = `${symbol}:${d.latest_research_rankings_timestamp_utc || ''}:${row.rank}`;
+      if (signal.dataset.v8HydratedKey === key && !/unavailable/i.test(signal.textContent || '')) return true;
+      const score = Number(row.signal_score ?? row.score);
+      const percentile = Number(row.rank_percentile);
+      const selected = Boolean(row.selected_top10);
+      const session = String(d.latest_research_rankings_timestamp_utc || '').slice(0, 10) || '—';
+      signal.innerHTML = `<div class="label">V8 COMPLETED-EOD RANK SIGNAL</div><h2>#${row.rank} / ${d.ranking_eligible_count || rows.length}</h2><div class="hero-value ${score >= 0 ? 'positive' : 'negative'}">${Number.isFinite(score) ? `${score >= 0 ? '+' : ''}${score.toFixed(6)}` : '—'}</div><div class="muted">Completed-EOD research session ${session}; ranking signal only, not official forward evidence.</div><div class="grid grid-3" style="margin-top:18px"><div class="metric"><span>EOD RANK PERCENTILE</span><strong>${Number.isFinite(percentile) ? `${(percentile * 100).toFixed(1)}%` : '—'}</strong></div><div class="metric"><span>EOD TOP 10</span><strong>${selected ? 'YES' : 'NO'}</strong></div><div class="metric"><span>RESEARCH SIGNAL</span><strong>${selected ? 'TOP 10' : 'NOT SELECTED'}</strong></div></div>`;
+      signal.dataset.v8HydratedKey = key;
+      return true;
+    } catch (error) {
+      console.warn('Unable to synchronize selected-stock V8 signal.', error);
+      return false;
+    } finally {
+      signal.dataset.v8Hydrating = '0';
+    }
+  };
+
   const addV8OperationsDashboard = () => {
     if(document.getElementById('v8-forward-ops')) return;
     const anchor=document.getElementById('stock-stream-health-card') || document.querySelector('section.card'); if(!anchor)return;
@@ -84,8 +114,9 @@
     refresh(); window.setInterval(refresh,30000);
   };
 
-  removeCompactV4Equity(); moveV8RankSignal(); arrangeLiveStockViewer(); clarifyDashboardDataClocks(); addV8OperationsDashboard();
-  const layoutObserver=new MutationObserver(()=>{removeCompactV4Equity();moveV8RankSignal();arrangeLiveStockViewer();clarifyDashboardDataClocks();addV8OperationsDashboard()});layoutObserver.observe(document.documentElement,{childList:true,subtree:true});window.setTimeout(()=>layoutObserver.disconnect(),12000);
+  removeCompactV4Equity(); moveV8RankSignal(); arrangeLiveStockViewer(); clarifyDashboardDataClocks(); addV8OperationsDashboard(); hydrateSelectedV8Signal();
+  const layoutObserver=new MutationObserver(()=>{removeCompactV4Equity();moveV8RankSignal();arrangeLiveStockViewer();clarifyDashboardDataClocks();addV8OperationsDashboard();hydrateSelectedV8Signal()});layoutObserver.observe(document.documentElement,{childList:true,subtree:true});window.setTimeout(()=>layoutObserver.disconnect(),12000);
+  window.addEventListener('datashepherd:v8-snapshot',hydrateSelectedV8Signal);
   const sections=Array.from(document.querySelectorAll('section.card'));const rankingBoard=sections.find(section=>{const label=section.querySelector('.label')?.textContent?.trim()||'';const heading=section.querySelector('h2,h3')?.textContent?.trim()||'';return /100[- ]STOCK.*(?:V8|V5).*RANKING BOARD/i.test(`${label} ${heading}`)||/(?:V8|V5).*100[- ]STOCK.*RANKING BOARD/i.test(`${label} ${heading}`)});if(rankingBoard)rankingBoard.remove();
   const remainingSections=Array.from(document.querySelectorAll('section.card'));const recentMarketData=remainingSections.find(section=>section.querySelector('.label')?.textContent?.trim()==='RECENT MARKET DATA');const v5Leaders=remainingSections.find(section=>section.querySelector('.label')?.textContent?.trim()==='V5 LEADERS');if(recentMarketData&&v5Leaders)v5Leaders.parentNode.insertBefore(recentMarketData,v5Leaders);
 })();

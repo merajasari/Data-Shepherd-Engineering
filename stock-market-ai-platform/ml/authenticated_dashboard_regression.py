@@ -51,6 +51,12 @@ def main() -> None:
         b'/static/js/v8_holdout_snapshot.js' in research.data,
         "Synchronized V8 snapshot reader is loaded before dashboard panels",
     )
+    v8_api = client.get("/api/v8/holdout")
+    require(v8_api.status_code == 200, "V8 synchronized dashboard API responds")
+    require(
+        len(v8_api.get_json().get("latest_research_rankings") or []) == 100,
+        "V8 API exposes the complete lightweight 100-stock ranking snapshot",
+    )
 
     project_root = Path(__file__).resolve().parents[1]
     layout = (project_root / "webapp/static/js/dashboard_layout.js").read_text()
@@ -64,6 +70,11 @@ def main() -> None:
     require(
         "Latest Price" in layout and "Completed-EOD Change" in layout,
         "Live prices are labeled separately from completed-EOD fields",
+    )
+    require(
+        "hydrateSelectedV8Signal" in layout
+        and "V8 COMPLETED-EOD RANK SIGNAL" in layout,
+        "Selected-stock V8 signal is repaired from the synchronized ranking snapshot",
     )
     require(
         "fmtSession" in operations

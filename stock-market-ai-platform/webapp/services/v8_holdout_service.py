@@ -23,6 +23,7 @@ STATUS_PATH = ROOT / "status.json"
 READINESS_PATH = Path("data/model/v8/readiness/status.json")
 MONITOR_ALERT_PATH = Path("data/model/v8/monitor/alert_state.json")
 V8_RANKED_PATH = Path("data/model/v8/phase4/fixed_complementarity_ranked_panel.parquet")
+V8_CURRENT_RANKINGS_PATH = Path("data/live/v8_latest_rankings.json")
 
 # A dashboard page currently has multiple independently loaded V8 widgets.  A
 # short response cache collapses those requests into one filesystem pass per
@@ -47,6 +48,7 @@ def _dashboard_signature():
         _file_signature(READINESS_PATH),
         _file_signature(JOURNAL_PATH),
         _file_signature(MONITOR_ALERT_PATH),
+        _file_signature(V8_CURRENT_RANKINGS_PATH),
     )
 
 
@@ -101,13 +103,34 @@ def _event_history(events):
 
 
 def _latest_v8_rankings():
-    """Avoid loading the large historical Phase-4 Parquet in web workers.
+    """Serve the current 100-row JSON ranking without loading historical Parquet."""
+    signature = _file_signature(V8_CURRENT_RANKINGS_PATH)
+    if _rankings_cache["signature"] == signature and _rankings_cache["payload"] is not None:
+        return _rankings_cache["payload"]
 
-    The lightweight readiness artifact is the source for the current frozen
-    Top-10 snapshot. Full historical ranking data remains available to offline
-    research jobs, but is intentionally excluded from request-time serving.
-    """
-    return {"timestamp_utc": None, "rows": []}
+    source = _read_json(V8_CURRENT_RANKINGS_PATH)
+    raw_rows = source.get("rankings")
+    rows = []
+    if isinstance(raw_rows, list) and len(raw_rows) == 100:
+        for item in raw_rows:
+            score = item.get("signal_score", item.get("score"))
+            rows.append({
+                "rank": item.get("rank"),
+                "symbol": item.get("symbol"),
+                "score": score,
+                "signal_score": score,
+                "rank_percentile": item.get("rank_percentile"),
+                "selected_top10": bool(item.get("selected_top10")),
+                "target_weight": item.get("target_weight", 0.10 if item.get("selected_top10") else 0.0),
+            })
+        rows.sort(key=lambda row: int(row.get("rank") or 10_000))
+
+    payload = {
+        "timestamp_utc": source.get("decision_date_utc") or source.get("ranking_timestamp_utc"),
+        "rows": rows,
+    }
+    _rankings_cache.update({"signature": signature, "payload": payload})
+    return payload
 
 def _curve(exits):
     if not exits:
