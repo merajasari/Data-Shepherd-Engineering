@@ -76,15 +76,21 @@ def main() -> None:
     research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
     require(
         all(label in research_tabs for label in (
-            "Overview", "V4 Paper", "V8 Frozen", "V10 Cycle 3",
-            "V11 Intraday", "V13 Dev",
+            "Overview", "V8 Frozen", "V10 Cycle 3", "V11 Intraday",
+            "V13 Dev",
         )),
         "Model Research exposes the complete classified model-tab set",
     )
     require(
+        "label:'V4 Paper'" not in research_tabs
+        and "model-research-pane-v4" not in research_tabs
+        and "v4-dashboard'), 'v8'" in research_tabs,
+        "Standalone V4 tab is removed and its enhanced V8 shell routes to V8",
+    )
+    require(
         "stock-stream-health-card', 'overview'" in research_tabs
         and "smc-full-width-card" in research_tabs
-        and "v4-dashboard'), 'v4'" in research_tabs
+        and "v4-dashboard'), 'v8'" in research_tabs
         and "v8-holdout-monitor" in research_tabs
         and "v10-cycle3-holdout-monitor" in research_tabs
         and "v11-phase2-status', 'v11'" in research_tabs,
@@ -111,6 +117,11 @@ def main() -> None:
             if "label:" in line
         ),
         "V13 and legacy V5 are not mislabeled as active forward models",
+    )
+    require(
+        "V11 · PREREGISTERED RESEARCH · NOT FROZEN" in research_tabs
+        and "no production or brokerage authority" in research_tabs,
+        "V11 is explicitly distinguished from frozen production models",
     )
     require(
         "LATEST COMPLETED-EOD RESEARCH SNAPSHOT" in layout

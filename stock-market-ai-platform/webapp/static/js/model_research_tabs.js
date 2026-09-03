@@ -5,10 +5,9 @@
 
   const MODELS = [
     {id:'overview', label:'Overview', eyebrow:'SHARED RESEARCH CONTEXT', title:'Cross-model overview', note:'Common market data, platform health, and the normalized model-comparison chart remain together here.'},
-    {id:'v4', label:'V4 Paper', eyebrow:'V4 · PAPER STRATEGY', title:'V4 paper-trading monitor', note:'V4 portfolio equity, holdings, attribution, and journal-forward measurements. Simulation only.'},
     {id:'v8', label:'V8 Frozen', eyebrow:'V8 · FROZEN FORWARD MODEL', title:'V8 rankings and holdout evidence', note:'Frozen ranking research and genuine append-only forward evidence are labeled and kept separate within this tab.'},
     {id:'v10', label:'V10 Cycle 3', eyebrow:'V10 · FROZEN FUTURE HOLDOUT', title:'V10 research disposition and Cycle 3', note:'Original V10 research disposition plus the separately frozen Cycle 3 forward-holdout monitor.'},
-    {id:'v11', label:'V11 Intraday', eyebrow:'V11 · FRESH PAPER CONFIRMATION', title:'V11 intraday confirmation', note:'Five-minute fresh paper-confirmation operations and evidence, isolated from V8 and V10.'},
+    {id:'v11', label:'V11 Intraday', eyebrow:'V11 · PREREGISTERED RESEARCH · NOT FROZEN', title:'V11 intraday confirmation', note:'Its configuration and evidence contract are SHA-locked, but V11 remains a research candidate undergoing five-minute fresh paper confirmation. It has no production or brokerage authority.'},
     {id:'v13', label:'V13 Dev', eyebrow:'V13 · RETROSPECTIVE DEVELOPMENT', title:'V13 development research', note:'V13 is development-only—not frozen and not fresh forward evidence. Its eligible historical curve remains in the shared comparison.'}
   ];
 
@@ -100,7 +99,8 @@
     moveId('stock-stream-health-card', 'overview');
     moveId('stock-operations-health', 'overview');
     move(document.querySelector('.smc-full-width-card'), 'overview');
-    move(document.querySelector('.v4-dashboard'), 'v4');
+    // Legacy class name; dashboard enhancement scripts convert this shell to the V8 forward monitor.
+    move(document.querySelector('.v4-dashboard'), 'v8');
     V8_IDS.forEach(id => moveId(id, 'v8'));
     V10_IDS.forEach(id => moveId(id, 'v10'));
     moveId('v11-phase2-status', 'v11');
@@ -161,7 +161,7 @@
   });
 
   reconcile();
-  let requested = location.hash.match(/^#research-(overview|v4|v8|v10|v11|v13)$/)?.[1];
+  let requested = location.hash.match(/^#research-(overview|v8|v10|v11|v13)$/)?.[1];
   if (!requested) { try { requested = sessionStorage.getItem('data-shepherd-research-tab'); } catch (_) {} }
   activate(validTab(requested) ? requested : 'overview', {hash:false});
 
