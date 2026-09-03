@@ -24,6 +24,14 @@ def require(condition: bool, label: str) -> None:
     print(f"[PASS] {label}")
 
 
+class IncompleteCollection:
+    status = "WAITING_FOR_COMPLETE_INTRADAY_SNAPSHOT"
+    published = False
+    symbol_count = 99
+    completed_bar_utc = "2026-09-01T14:30:00.000Z"
+    reasons = ("MISSING_SYMBOLS:ABC,XYZ", "UNALIGNED_LATEST_TIMESTAMPS")
+
+
 def main() -> None:
     contract = load_contract()
     require(
@@ -95,6 +103,8 @@ def main() -> None:
         def paper_runner():
             nonlocal runner_calls
             runner_calls += 1
+            if runner_calls == 2:
+                return IncompleteCollection()
             return "SYNTHETIC_PAPER_RUNNER_COMPLETE"
 
         early = run_scheduled(
@@ -160,6 +170,14 @@ def main() -> None:
             catch_up["runner_invoked"] is True and runner_calls == 2,
             "First wake-up invokes one catch-up attempt",
         )
+        require(
+            catch_up["last_collection_attempt"]["symbol_count"] == 99
+            and catch_up["last_collection_attempt"]["completed_bar_utc"]
+            == "2026-09-01T14:30:00.000Z"
+            and catch_up["last_collection_attempt"]["reasons"]
+            == ["MISSING_SYMBOLS:ABC,XYZ", "UNALIGNED_LATEST_TIMESTAMPS"],
+            "Incomplete collection diagnostics are published",
+        )
         repeated_catch_up = run_scheduled(
             now_utc=datetime(
                 2026, 9, 1, 14, 40, tzinfo=timezone.utc
@@ -177,6 +195,11 @@ def main() -> None:
             repeated_catch_up["runner_invoked"] is False
             and runner_calls == 2,
             "Catch-up adds at most one collection",
+        )
+        require(
+            repeated_catch_up["last_collection_attempt"]
+            == catch_up["last_collection_attempt"],
+            "Suppressed catch-up preserves the last rejection diagnostics",
         )
         require(
             active["brokerage_orders"] is False,
