@@ -181,6 +181,9 @@ def validate_dashboard_source():
         "Visible-range return",
         "Math.max(0,minV-span*.1)",
         "score:row?value(series[id],row):NaN",
+        "LATEST ANY-SERIES OBS.",
+        "last obs.",
+        "endpoints may differ by model",
     ]
     for marker in required:
         require(marker in source, f"dashboard regression marker missing: {marker}")

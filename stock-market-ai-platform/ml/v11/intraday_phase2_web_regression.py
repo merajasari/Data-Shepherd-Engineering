@@ -24,6 +24,16 @@ def main() -> None:
         "V11 classification is explicit",
     )
     require(
+        payload["status_scope"]
+        == "CONTROL_HEALTH_SEPARATE_FROM_EVIDENCE",
+        "Control readiness is explicitly separate from evidence",
+    )
+    require(
+        payload["display_status"]
+        in {"AWAITING_FRESH_SESSION", "FRESH_EVIDENCE_ACTIVE", "ALERT"},
+        "Evidence-aware display status is exposed",
+    )
+    require(
         payload["contract_sha_verified"] is True,
         "V11 contract identity is verified",
     )
@@ -107,6 +117,11 @@ def main() -> None:
     require(
         "fetch('/api/v11/phase2'" in script,
         "V11 panel loads its read-only endpoint",
+    )
+    require(
+        "data.display_status" in script
+        and "Controls are healthy, but no fresh session has been accepted" in script,
+        "V11 panel does not present control health as collected evidence",
     )
     require(
         "<form" not in template[template.index('id="v11-phase2-status"'):],

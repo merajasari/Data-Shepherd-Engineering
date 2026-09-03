@@ -43,7 +43,7 @@
 
   card.innerHTML = `
     <div class="smc-head"><div><div class="label">MODEL PERFORMANCE COMPARISON</div><div class="smc-title">V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 vs V13 retrospective DEV vs SPY</div><div class="smc-subtitle">Every strategy is shown on the same hypothetical $100,000 display basis. V13 is actually simulated under its locked $5,000 integer-share rules and only its return path is rebased for comparison. Live paper-account balances are excluded.</div></div><span id="smc-load-status" class="mode">LOADING MODELS</span></div>
-    <div class="smc-metrics"><div class="metric"><span>VISIBLE RANGE</span><strong id="smc-visible-range">—</strong></div><div class="metric"><span>MODELS SHOWN</span><strong id="smc-model-count">—</strong></div><div class="metric"><span>START CAPITAL</span><strong>$100,000</strong></div><div class="metric"><span>LATEST DATA</span><strong id="smc-latest-date">—</strong></div></div>
+    <div class="smc-metrics"><div class="metric"><span>VISIBLE CHART RANGE</span><strong id="smc-visible-range">—</strong></div><div class="metric"><span>MODELS SHOWN</span><strong id="smc-model-count">—</strong></div><div class="metric"><span>DISPLAY BASIS</span><strong>$100,000</strong></div><div class="metric"><span>LATEST ANY-SERIES OBS.</span><strong id="smc-latest-date">—</strong></div></div>
     <div class="smc-toolbar"><strong class="muted">RANGE</strong><button class="smc-btn" data-range="ALL">ALL</button><button class="smc-btn" data-range="10Y">10Y</button><button class="smc-btn" data-range="5Y">5Y</button><button class="smc-btn active" data-range="3Y">3Y</button><button class="smc-btn" data-range="1Y">1Y</button><button class="smc-btn" data-range="90D">90D</button><button class="smc-btn" data-range="30D">30D</button><strong class="muted" style="margin-left:10px">VIEW</strong><button class="smc-btn" data-mode="equity">EQUITY USD</button><button class="smc-btn active" data-mode="normalized">NORMALIZED OVERLAP</button></div>
     <div id="smc-range-message" class="smc-range-message"></div>
     <div id="smc-models" class="smc-models"></div>
@@ -114,7 +114,7 @@
       b.type='button';b.className='smc-model';b.dataset.model=id;
       b.setAttribute('aria-pressed','true');
       b.title='Click to show or hide this model line';
-      b.innerHTML=`<span class="smc-dot" style="background:${COLORS[id]}"></span><strong>${s.label}</strong><span class="smc-model-value">${money(s.rows.at(-1)?.equity)} · ${pct(s.totalReturnPct)}</span><span class="smc-model-start">Eligible since ${date(s.rows[0]?.t)}</span><span class="smc-model-state">SHOWN</span>`;
+      b.innerHTML=`<span class="smc-dot" style="background:${COLORS[id]}"></span><strong>${s.label}</strong><span class="smc-model-value">${money(s.rows.at(-1)?.equity)} · ${pct(s.totalReturnPct)}</span><span class="smc-model-start">Eligible ${date(s.rows[0]?.t)} · last obs. ${date(s.rows.at(-1)?.t)}</span><span class="smc-model-state">SHOWN</span>`;
       host.appendChild(b);
     });
     const note=document.createElement('div');
@@ -142,7 +142,7 @@
     const activeSeries=ORDER.filter(id=>active.has(id)&&series[id]);
     if(mode==='normalized'&&activeSeries.length){const edges=activeSeries.map(id=>{const rows=rowsInDomain(series[id],requestedA,requestedB);return rows.length?{first:rows[0].t,last:rows.at(-1).t}:null;}).filter(Boolean);if(edges.length===activeSeries.length){a=Math.max(requestedA,...edges.map(edge=>edge.first));b=Math.min(requestedB,...edges.map(edge=>edge.last));}}
     card.querySelectorAll('[data-range]').forEach(x=>x.classList.toggle('active',x.dataset.range===range));card.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x.dataset.mode===mode));card.querySelectorAll('[data-model]').forEach(x=>{const shown=active.has(x.dataset.model);x.classList.toggle('off',!shown);x.setAttribute('aria-pressed',String(shown));const state=x.querySelector('.smc-model-state');if(state)state.textContent=shown?'SHOWN':'HIDDEN';});
-    set('smc-visible-range',`${date(a)} → ${date(b)}`);set('smc-model-count',String(active.size));set('smc-latest-date',date(endTime()));set('smc-zoom-status',zoomLevel>1?`${zoomLevel.toFixed(1)}× ZOOM`:'FULL RANGE');set('smc-range-message',mode==='normalized'?`${range} selected — common eligible overlap for ${active.size} lines begins ${date(a)}.`:`${range} selected — ${active.size} full-history equity lines shown.`);
+    set('smc-visible-range',`${date(a)} → ${date(b)}`);set('smc-model-count',String(active.size));set('smc-latest-date',date(endTime()));set('smc-zoom-status',zoomLevel>1?`${zoomLevel.toFixed(1)}× ZOOM`:'FULL RANGE');set('smc-range-message',mode==='normalized'?`${range} selected — common eligible overlap for ${active.size} lines is ${date(a)} through ${date(b)}. Each model's last observation is labeled in its line control.`:`${range} selected — ${active.size} full-history equity lines shown; endpoints may differ by model.`);
     set('smc-scale-note',mode==='normalized'?'Common-overlap growth index: every active line is rebased to 100 at the beginning of the shared eligible window.':'Equity USD preserves each model’s full eligible compounded history.');
 
     const W=1200,H=520,p={l:92,r:128,t:30,b:62};const vis={};let vals=[];
@@ -237,7 +237,7 @@
     set('smc-holdout-note',`Frozen SHA ${String(d.frozen_sha256||'').slice(0,12)}… · brokerage orders: ${d.brokerage_orders?'YES':'NO'} · strategy modified: ${d.strategy_modified?'YES':'NO'}.`);
   }
 
-  async function loadHoldoutInteraction(){try{const r=await fetch('/api/v8/holdout',{cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);renderHoldoutInteraction(await r.json());}catch(err){set('smc-holdout-state','MONITOR ERROR');const empty=card.querySelector('#smc-holdout-empty');if(empty)empty.textContent='V8 holdout interaction data is temporarily unavailable.';console.error(err);}}
+  async function loadHoldoutInteraction(){try{renderHoldoutInteraction(await window.DataShepherdV8Snapshot.get());}catch(err){set('smc-holdout-state','MONITOR ERROR');const empty=card.querySelector('#smc-holdout-empty');if(empty)empty.textContent='V8 holdout interaction data is temporarily unavailable.';console.error(err);}}
 
   card.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.modelAction==='all'){active=new Set(ORDER.filter(id=>series[id]));pinned=false;render();return;}if(b.dataset.range){range=b.dataset.range;zoomLevel=1;panOffset=1;pinned=false;render();return;}if(b.dataset.mode){mode=b.dataset.mode;pinned=false;render();return;}if(b.dataset.model){const id=b.dataset.model;if(active.has(id)&&active.size>1)active.delete(id);else active.add(id);pinned=false;render();return;}const action=b.dataset.action;if(!action)return;if(action==='reset'){zoomLevel=1;panOffset=1;}else if(action==='in'){zoomLevel=Math.min(12,zoomLevel*1.6);}else if(action==='out'){zoomLevel=Math.max(1,zoomLevel/1.6);}else if(action==='left'){panOffset=Math.max(0,panOffset-.18);}else if(action==='right'){panOffset=Math.min(1,panOffset+.18);}pinned=false;render();});
 
@@ -280,8 +280,7 @@
       </div>
     </div>`;
 
-  fetch('/api/v8/holdout',{cache:'no-store'})
-    .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+  window.DataShepherdV8Snapshot.get()
     .then(d => {
       const state = target.querySelector('#v8-structure-state');
       if (!state) return;

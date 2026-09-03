@@ -124,7 +124,7 @@ def main():
     from ml.v11.intraday_phase2_day_zero import run_checkpoint as run_v11_phase2_checkpoint
     v11_phase2 = run_v11_phase2_checkpoint(now_utc=now)
     _check(v11_phase2.get("status") == "READY_FOR_2026_09_01",
-           "V11 Phase 2 day-zero readiness", str(v11_phase2.get("status")), failures)
+           "V11 Phase 2 launch-contract readiness", str(v11_phase2.get("status")), failures)
     _check(v11_phase2.get("maximum_tiingo_requests_per_session") == 404,
            "V11 Phase 2 Tiingo request ceiling", "404/500", failures)
     _check(v11_phase2.get("production_evidence_modified") is False,
@@ -305,7 +305,9 @@ def main():
 
     v11_api = responses.get("v11_phase2", {})
     _check(v11_api.get("status") == "READY",
-           "V11 Phase 2 API readiness", str(v11_api.get("status")), failures)
+           "V11 Phase 2 API control readiness", str(v11_api.get("status")), failures)
+    _check(v11_api.get("status_scope") == "CONTROL_HEALTH_SEPARATE_FROM_EVIDENCE",
+           "V11 Phase 2 readiness scope", str(v11_api.get("status_scope")), failures)
     _check(v11_api.get("contract_sha_verified") is True,
            "V11 Phase 2 API contract identity", "VERIFIED", failures)
     _check(v11_api.get("maximum_tiingo_requests_per_session") == 404,
@@ -342,7 +344,9 @@ def main():
     print(f"V8 journal events: {len(v8_events)}")
     print(f"V10 Cycle 3 journal events: {len(v10_events)}")
     print(f"V11 Phase 2 journal events: {v11_phase2.get('journal_events')}")
-    print(f"V11 Phase 2 status: {v11_phase2.get('status')}")
+    print(f"V11 Phase 2 launch contract: {v11_phase2.get('status')}")
+    print(f"V11 Phase 2 current scheduler state: {v11_api.get('state')}")
+    print(f"V11 Phase 2 evidence stage: {v11_api.get('evidence_status')}")
     print(f"V11 Phase 2 alert status: {v11_alerts.get('status')}")
     print(f"Services registered: {len(SERVICES)}/{len(SERVICES)}")
     print(f"Local APIs healthy: {len(ENDPOINTS)}/{len(ENDPOINTS)}")

@@ -55,10 +55,8 @@
 
   const fixHoldoutDates = async () => {
     try {
-      const r = await fetch('/api/v8/holdout', {cache: 'no-store'});
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      const ranking = utcDate(d.ranking_timestamp_utc || d.latest_research_top10_timestamp_utc);
+      const d = await window.DataShepherdV8Snapshot.get();
+      const ranking = utcDate(d.ranking_timestamp_utc);
       const holdout = utcDate(d.holdout_start_utc);
       const features = utcDate(d.feature_common_latest_utc);
       const gold = utcDate(d.gold_common_latest_utc);
@@ -66,7 +64,8 @@
       setText('v8ops-date', ranking);
       const detail = document.getElementById('v8ops-detail');
       if (detail && !(d.readiness_failures || []).length && !(d.readiness_warnings || []).length) {
-        detail.textContent = `Features ${features} · Gold ${gold} · Brokerage orders: NO · Strategy modified: NO`;
+        const sync = window.DataShepherdV8Snapshot.info();
+        detail.textContent = `Feature session ${features} · Gold session ${gold} · Browser synchronized ${sync.fetchedAtUtc ? new Date(sync.fetchedAtUtc).toLocaleString() : '—'} · Brokerage orders: NO · Strategy modified: NO`;
       }
 
       forceLiteralHoldoutDate(holdout);

@@ -16,20 +16,20 @@
   const card = document.createElement('section');
   card.id = 'v8-launch-day-operations';
   card.innerHTML = `
-    <div class="v8ld-head"><div><div class="label">V8 LAUNCH-DAY OPERATIONS</div><h2 style="margin-bottom:4px">September 1 Forward-Holdout Control Panel</h2><div class="muted">Read-only operational readiness. Frozen research and evidence remain unchanged.</div></div><div class="v8ld-state" data-v8ld-state>CHECKING</div></div>
+    <div class="v8ld-head"><div><div class="label">V8 FORWARD-HOLDOUT OPERATIONS</div><h2 style="margin-bottom:4px">Operational Control Panel</h2><div class="muted">Control health and data readiness only. This status is not a performance conclusion.</div></div><div class="v8ld-state" data-v8ld-state>CHECKING</div></div>
     <div class="v8ld-grid">
       <div class="v8ld-item"><span>FROZEN SHA</span><strong data-v8ld-sha>—</strong></div>
       <div class="v8ld-item"><span>SCHEDULER</span><strong data-v8ld-scheduler>—</strong></div>
-      <div class="v8ld-item"><span>MARKET DATA</span><strong data-v8ld-market>—</strong></div>
+      <div class="v8ld-item"><span>MARKET DATA GATE</span><strong data-v8ld-market>—</strong></div>
       <div class="v8ld-item"><span>JOURNAL</span><strong data-v8ld-journal>—</strong></div>
-      <div class="v8ld-item"><span>LAST ORCHESTRATION</span><strong data-v8ld-last>—</strong></div>
+      <div class="v8ld-item"><span>LAST SUCCESSFUL ORCHESTRATION</span><strong data-v8ld-last>—</strong></div>
       <div class="v8ld-item"><span>NEXT EXPECTED DECISION</span><strong data-v8ld-next>—</strong></div>
       <div class="v8ld-item"><span>DECISIONS / ENTRIES / EXITS</span><strong data-v8ld-events>—</strong></div>
       <div class="v8ld-item"><span>ACTIVE ALERT</span><strong data-v8ld-alert>—</strong></div>
       <div class="v8ld-item"><span>BROKERAGE ORDERS</span><strong data-v8ld-orders>—</strong></div>
       <div class="v8ld-item"><span>WEB DATA PATH</span><strong data-v8ld-serving>—</strong></div>
     </div>
-    <div class="v8ld-foot"><span data-v8ld-detail>Waiting for operational status…</span><span>Refreshes every 30 seconds</span></div>`;
+    <div class="v8ld-foot"><span data-v8ld-detail>Waiting for synchronized operational status…</span><span>Shared snapshot · refreshes every 30 seconds</span></div>`;
 
   const tabs = document.querySelector('.ds-dashboard-tabs');
   if (tabs) tabs.insertAdjacentElement('afterend', card);
@@ -49,16 +49,14 @@
 
   async function load() {
     try {
-      const response = await fetch('/api/v8/holdout', {cache:'no-store'});
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const d = await response.json();
+      const d = await window.DataShepherdV8Snapshot.get();
       const o = d.launch_operations || {};
       const failures = o.monitor_failures || [];
       const healthy = o.frozen_sha_verified && o.scheduler_healthy && o.market_data_current && o.journal_writable && o.journal_duplicate_safe && !failures.length;
-      set('state', healthy ? 'READY' : 'ATTENTION REQUIRED', healthy ? 'v8ld-state v8ld-pass' : 'v8ld-state v8ld-warn');
+      set('state', healthy ? 'OPERATIONS READY' : 'ATTENTION REQUIRED', healthy ? 'v8ld-state v8ld-pass' : 'v8ld-state v8ld-warn');
       set('sha', o.frozen_sha_verified ? 'VERIFIED' : 'FAILED', o.frozen_sha_verified ? 'v8ld-pass' : 'v8ld-fail');
       set('scheduler', o.scheduler_healthy ? 'RUNNING' : o.monitor_status || 'UNKNOWN', o.scheduler_healthy ? 'v8ld-pass' : 'v8ld-warn');
-      set('market', o.market_data_current ? 'CURRENT / READY' : 'CHECK REQUIRED', o.market_data_current ? 'v8ld-pass' : 'v8ld-warn');
+      set('market', o.market_data_current ? `READY THROUGH ${String(d.gold_common_latest_utc||'—').slice(0,10)}` : 'CHECK REQUIRED', o.market_data_current ? 'v8ld-pass' : 'v8ld-warn');
       set('journal', o.journal_writable && o.journal_duplicate_safe ? 'WRITABLE · DUPLICATE-SAFE' : 'CHECK REQUIRED', o.journal_writable && o.journal_duplicate_safe ? 'v8ld-pass' : 'v8ld-fail');
       set('last', fmt(o.last_successful_orchestration_utc));
       set('next', fmt(o.next_expected_decision));
@@ -66,7 +64,8 @@
       set('alert', failures.length ? failures[0] : 'NONE', failures.length ? 'v8ld-fail' : 'v8ld-pass');
       set('orders', o.brokerage_orders ? 'ON' : 'OFF', o.brokerage_orders ? 'v8ld-fail' : 'v8ld-pass');
       set('serving', o.request_time_historical_parquet_load ? 'HEAVY LOAD DETECTED' : `LIGHTWEIGHT · ${o.response_cache_ttl_seconds||10}s CACHE`, o.request_time_historical_parquet_load ? 'v8ld-fail' : 'v8ld-pass');
-      set('detail', `Monitor checked ${fmt(o.monitor_checked_at_utc)} · Holdout state: ${String(d.state||'UNKNOWN').replaceAll('_',' ')}`);
+      const sync = window.DataShepherdV8Snapshot.info();
+      set('detail', `Monitor checked ${fmt(o.monitor_checked_at_utc)} · Browser synchronized ${fmt(sync.fetchedAtUtc)} · Holdout state: ${String(d.state||'UNKNOWN').replaceAll('_',' ')}`);
     } catch (error) {
       set('state','API UNAVAILABLE','v8ld-state v8ld-fail');
       set('detail',`Unable to load launch operations: ${error.message}`,'v8ld-fail');

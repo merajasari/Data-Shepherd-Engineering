@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import os
+from pathlib import Path
 
 os.environ.setdefault(
     "FLASK_SECRET_KEY",
@@ -45,6 +46,29 @@ def main() -> None:
     require(
         b'id="v11-phase2-status"' in research.data,
         "V11 Phase 2 panel survives authenticated rendering",
+    )
+    require(
+        b'/static/js/v8_holdout_snapshot.js' in research.data,
+        "Synchronized V8 snapshot reader is loaded before dashboard panels",
+    )
+
+    project_root = Path(__file__).resolve().parents[1]
+    layout = (project_root / "webapp/static/js/dashboard_layout.js").read_text()
+    operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
+    require(
+        "LATEST COMPLETED-EOD RESEARCH SNAPSHOT" in layout
+        and "PRODUCTION RANKING SESSION" in layout
+        and "OFFICIAL FORWARD EVIDENCE" in layout,
+        "V8 research, production ranking, and evidence labels are separated",
+    )
+    require(
+        "Latest Price" in layout and "Completed-EOD Change" in layout,
+        "Live prices are labeled separately from completed-EOD fields",
+    )
+    require(
+        "fmtSession" in operations
+        and "first holdout market session" in operations,
+        "Market-session dates cannot shift to the prior local calendar day",
     )
 
     client = authenticated_client()

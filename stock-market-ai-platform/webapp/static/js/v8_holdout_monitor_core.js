@@ -74,7 +74,7 @@
 
   async function refresh(){
     try{
-      const r=await fetch('/api/v8/holdout',{cache:'no-store'}); if(!r.ok)throw new Error(`HTTP ${r.status}`); const d=await r.json();
+      const d=await window.DataShepherdV8Snapshot.get();
       set('[data-v8h-state]',String(d.state||'UNKNOWN').replaceAll('_',' '));
       set('[data-v8h-decisions]',d.decisions??0);set('[data-v8h-entries]',d.entries??0);set('[data-v8h-exits]',d.completed_cohorts??0);
       colorMetric('[data-v8h-v8-return]',d.strategy_total_return);colorMetric('[data-v8h-spy-return]',d.spy_total_return);colorMetric('[data-v8h-edge]',d.total_relative_return);
@@ -393,8 +393,7 @@
       show(next.dataset.view);
     });
 
-    fetch('/api/v8/holdout',{cache:'no-store'})
-      .then(r=>r.ok?r.json():Promise.reject(new Error(`HTTP ${r.status}`)))
+    window.DataShepherdV8Snapshot.get()
       .then(d=>{holdout=d;if(host.querySelector('.v8si-tab.active')?.dataset.view==='holdout')show('holdout');})
       .catch(()=>{});
 
@@ -430,7 +429,7 @@
   card.id = 'v8-current-top10';
   card.innerHTML = `
     <div class="v8t-head">
-      <div><div class="label">CURRENT V8 TOP TEN</div><h3>Frozen DISTANCE_ONLY Ranking</h3></div>
+      <div><div class="label">LATEST COMPLETED-EOD RESEARCH TOP TEN</div><h3>Frozen DISTANCE_ONLY Ranking Snapshot</h3></div>
       <span class="v8t-state" id="v8t-state">LOADING</span>
     </div>
     <div class="v8t-note" id="v8t-note">Loading the latest eligible frozen-model snapshot…</div>
@@ -442,15 +441,13 @@
 
   async function loadTop10(){
     try{
-      const r = await fetch('/api/v8/holdout',{cache:'no-store'});
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
+      const d = await window.DataShepherdV8Snapshot.get();
       const rows = Array.isArray(d.latest_research_top10) ? d.latest_research_top10 : [];
       state.textContent = String(d.state || 'FROZEN').replaceAll('_',' ');
       const ts = d.latest_research_top10_timestamp_utc ? new Date(d.latest_research_top10_timestamp_utc) : null;
       note.textContent = ts && !Number.isNaN(ts.getTime())
-        ? `Latest eligible frozen-model development snapshot: ${ts.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}. Not forward holdout evidence.`
-        : 'Latest eligible frozen-model development snapshot. Not forward holdout evidence.';
+        ? `Completed-EOD research session: ${ts.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'})}. Reference ranking only; not official forward evidence.`
+        : 'No completed-EOD research session is currently published. This card never represents official forward evidence.';
       list.innerHTML = rows.length ? rows.map(row => `
         <div class="v8-list-row">
           <div class="v8-rank">${row.rank}</div>

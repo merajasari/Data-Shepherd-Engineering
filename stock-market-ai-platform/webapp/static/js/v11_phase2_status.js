@@ -18,8 +18,9 @@
       const response = await fetch('/api/v11/phase2', {cache: 'no-store'});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const badge = set('status', data.status || 'UNKNOWN');
-      if (badge) badge.className = `v11p-badge ${data.status === 'READY' ? 'v11p-good' : 'v11p-alert'}`;
+      const displayStatus = data.display_status || data.status || 'UNKNOWN';
+      const badge = set('status', String(displayStatus).replaceAll('_', ' '));
+      if (badge) badge.className = `v11p-badge ${displayStatus === 'FRESH_EVIDENCE_ACTIVE' ? 'v11p-good' : displayStatus === 'ALERT' ? 'v11p-alert' : 'v11p-wait'}`;
       set('state', String(data.state || 'UNKNOWN').replaceAll('_', ' '));
       set('evidence', String(data.evidence_status || 'UNKNOWN').replaceAll('_', ' '));
       set('sessions', data.completed_sessions ?? 0);
@@ -37,7 +38,16 @@
       set('catch-up', data.catch_up_enabled ? data.catch_up_policy : 'DISABLED');
       set('sha', `${data.contract_sha_verified ? '✓' : '⚠'} ${data.contract_sha256 || '—'}`);
       const failures = data.operational_failures || [];
-      set('detail', failures.length ? failures.join(' · ') : 'Paper-only confirmation is healthy. No live orders, holdout-outcome reads, or V8/V10 production changes.');
+      const lastAttempt = data.last_collection_attempt;
+      const attemptDetail = lastAttempt?.status
+        ? ` Last collection attempt: ${String(lastAttempt.status).replaceAll('_', ' ')}${lastAttempt.attempted_at_utc ? ` at ${date(lastAttempt.attempted_at_utc)}` : ''}.`
+        : '';
+      const detail = failures.length
+        ? failures.join(' · ')
+        : data.completed_sessions === 0
+          ? `Controls are healthy, but no fresh session has been accepted. Scheduler state: ${String(data.state || 'UNKNOWN').replaceAll('_', ' ')}.${attemptDetail} No evidence was backfilled.`
+          : `Controls are healthy and ${data.completed_sessions} fresh session${data.completed_sessions === 1 ? '' : 's'} ${data.completed_sessions === 1 ? 'is' : 'are'} recorded.${attemptDetail}`;
+      set('detail', `${detail} Paper only; no live orders or V8/V10 production changes.`);
     } catch (error) {
       const badge = set('status', 'UNAVAILABLE');
       if (badge) badge.className = 'v11p-badge v11p-alert';

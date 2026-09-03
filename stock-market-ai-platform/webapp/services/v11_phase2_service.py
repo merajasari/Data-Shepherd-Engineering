@@ -100,10 +100,18 @@ def get_v11_phase2_dashboard() -> dict[str, object]:
         and journal_error is None
         and monitor["status"] == "HEALTHY_PAPER_CONFIRMATION"
     )
+    display_status = (
+        "ALERT" if not ready else
+        "AWAITING_FRESH_SESSION" if not observations else
+        "FRESH_EVIDENCE_ACTIVE"
+    )
     strategy_total = _compound(observations, "strategy_net_return")
     spy_total = _compound(observations, "spy_return")
     payload: dict[str, object] = {
         "status": "READY" if ready else "ALERT",
+        "control_status": "READY" if ready else "ALERT",
+        "display_status": display_status,
+        "status_scope": "CONTROL_HEALTH_SEPARATE_FROM_EVIDENCE",
         "state": state,
         "evidence_status": evidence,
         "classification": "PREREGISTERED_FRESH_PAPER_CONFIRMATION",
@@ -138,6 +146,7 @@ def get_v11_phase2_dashboard() -> dict[str, object]:
         "operational_status": monitor["status"],
         "operational_failures": monitor["failures"],
         "operational_checked_at_utc": operational.get("checked_at_utc"),
+        "last_collection_attempt": operational.get("last_collection_attempt"),
         "collection_windows_eastern": [
             "Decision 9:58-10:03",
             "Entry 10:03-10:08",

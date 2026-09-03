@@ -64,5 +64,7 @@
     }
   };
   core.onerror = () => console.error('Unable to load V8 dashboard core.');
-  document.head.appendChild(core);
+  loadScript('/static/js/v8_holdout_snapshot.js')
+    .then(() => document.head.appendChild(core))
+    .catch(error => console.error('Unable to load synchronized V8 snapshot reader.', error));
 })();

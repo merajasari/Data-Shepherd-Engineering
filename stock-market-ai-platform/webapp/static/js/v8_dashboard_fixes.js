@@ -31,10 +31,8 @@
 
   const updateV8Dates = async () => {
     try {
-      const r = await fetch('/api/v8/holdout', {cache: 'no-store'});
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      const rankingDate = literalDate(d.ranking_timestamp_utc || d.latest_research_top10_timestamp_utc);
+      const d = await window.DataShepherdV8Snapshot.get();
+      const rankingDate = literalDate(d.ranking_timestamp_utc);
       const holdoutDate = literalDate(d.holdout_start_utc);
 
       const opsDate = document.getElementById('v8ops-date');
@@ -54,7 +52,7 @@
       const leaders = document.getElementById('v8-leaders');
       const leadersNote = leaders?.querySelector('#v8l-note');
       if (leadersNote && rankingDate !== '—') {
-        leadersNote.textContent = `Latest frozen V8 readiness ranking: ${rankingDate}. Scores are ranking signals, not calibrated probabilities. Not forward holdout evidence.`;
+        leadersNote.textContent = `Production ranking session: ${rankingDate}. Scores are ranking signals, not calibrated probabilities. Official forward evidence is reported separately.`;
       }
     } catch (e) {
       console.warn('V8 date normalization failed:', e);
