@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -134,6 +135,59 @@ def main() -> None:
         require(
             recovered["brokerage_orders"] is False,
             "Alert monitor has no brokerage authority",
+        )
+
+        missing_journal_path = root / "missing-session-evidence.jsonl"
+        operational_path = root / "operational.json"
+        missing_alert_state = root / "missing-session-alerts.json"
+        operational_path.write_text(
+            json.dumps(
+                {
+                    "status": "CATCH_UP_ALREADY_ATTEMPTED",
+                    "contract_sha256": contract_sha256(load_contract()),
+                    "session_complete": False,
+                    "catch_up_attempted_session": "2026-09-03",
+                    "last_collection_attempt": {
+                        "status": "WAITING_FOR_COMPLETE_INTRADAY_SNAPSHOT",
+                        "published": False,
+                        "symbol_count": 99,
+                        "completed_bar_utc": "2026-09-03T14:30:00.000Z",
+                        "reasons": ["MISSING_SYMBOLS:ABC,XYZ"],
+                    },
+                    "brokerage_orders": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        missing = run(
+            journal_path=missing_journal_path,
+            status_path=operational_path,
+            state_path=missing_alert_state,
+            notifier=notifier,
+            scheduler_check=scheduler_ok,
+        )
+        require(
+            missing["status"] == "ALERT"
+            and any(
+                failure.startswith("FRESH_SESSION_MISSING_AFTER_CATCH_UP:")
+                for failure in missing["failures"]
+            ),
+            "Incomplete exhausted catch-up raises a missing-session alert",
+        )
+        missing_repeated = run(
+            journal_path=missing_journal_path,
+            status_path=operational_path,
+            state_path=missing_alert_state,
+            notifier=notifier,
+            scheduler_check=scheduler_ok,
+        )
+        require(
+            missing_repeated["operational_notification"] == "NONE",
+            "Missing-session alert is duplicate-safe",
+        )
+        require(
+            not missing_journal_path.exists(),
+            "Missing-session alert writes no research evidence",
         )
 
     require(
