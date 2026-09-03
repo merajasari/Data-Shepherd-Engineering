@@ -50,6 +50,22 @@ def run_monitor(
             failures.append("STATUS_CONTRACT_SHA_MISMATCH")
         if operational.get("brokerage_orders") is not False:
             failures.append("BROKERAGE_AUTHORITY_VIOLATION")
+        catch_up_session = operational.get("catch_up_attempted_session")
+        session_complete = operational.get("session_complete") is True
+        attempt = operational.get("last_collection_attempt")
+        if (
+            catch_up_session
+            and not session_complete
+            and isinstance(attempt, dict)
+            and attempt.get("published") is False
+        ):
+            attempt_status = str(attempt.get("status") or "UNKNOWN")
+            reasons = [str(reason) for reason in attempt.get("reasons") or []]
+            detail = reasons[0] if reasons else "NO_REJECTION_REASON_RECORDED"
+            failures.append(
+                "FRESH_SESSION_MISSING_AFTER_CATCH_UP:"
+                f"{catch_up_session}:{attempt_status}:{detail}"
+            )
 
     return {
         "checked_at_utc": datetime.now(timezone.utc).isoformat(),
