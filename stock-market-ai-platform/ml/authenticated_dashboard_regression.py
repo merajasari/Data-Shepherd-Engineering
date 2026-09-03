@@ -74,6 +74,7 @@ def main() -> None:
     operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
     comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
     research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
+    v11_status = (project_root / "webapp/static/js/v11_phase2_status.js").read_text()
     require(
         all(label in research_tabs for label in (
             "Overview", "V8 Frozen", "V10 Cycle 3", "V11 Intraday",
@@ -122,6 +123,12 @@ def main() -> None:
         "V11 · PREREGISTERED RESEARCH · NOT FROZEN" in research_tabs
         and "no production or brokerage authority" in research_tabs,
         "V11 is explicitly distinguished from frozen production models",
+    )
+    require(
+        "renderAttempt(lastAttempt)" in v11_status
+        and "attempt.symbol_count" in v11_status
+        and "attempt.reasons" in v11_status,
+        "V11 tab renders last collection coverage and rejection diagnostics",
     )
     require(
         "LATEST COMPLETED-EOD RESEARCH SNAPSHOT" in layout

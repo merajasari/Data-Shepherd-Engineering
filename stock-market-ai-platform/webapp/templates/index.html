@@ -138,7 +138,18 @@ const selectorForm=document.getElementById('stock-selector-form'),stockSelect=do
 #v11-phase2-status .v11p-detail-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-top:18px}
 #v11-phase2-status .v11p-line{padding-top:13px;margin-top:13px;border-top:1px solid rgba(120,155,205,.13)}
 #v11-phase2-status .v11p-sha{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;word-break:break-all}
+#v11-phase2-status .v11p-attempt{margin-top:18px;padding:18px;border:1px solid rgba(239,197,107,.25);border-radius:18px;background:rgba(7,16,31,.42)}
+#v11-phase2-status .v11p-attempt-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+#v11-phase2-status .v11p-attempt-badge{padding:7px 10px;border:1px solid rgba(145,166,194,.25);border-radius:999px;color:var(--muted);font-size:.68rem;font-weight:950;letter-spacing:.06em}
+#v11-phase2-status .v11p-attempt-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:14px}
+#v11-phase2-status .v11p-attempt-cell{padding:11px 12px;border:1px solid rgba(120,155,205,.14);border-radius:12px;background:rgba(8,20,36,.5);min-width:0}
+#v11-phase2-status .v11p-attempt-cell span{display:block;color:var(--muted);font-size:.61rem;font-weight:900;letter-spacing:.07em}
+#v11-phase2-status .v11p-attempt-cell strong{display:block;margin-top:5px;font-size:.78rem;overflow-wrap:anywhere}
+#v11-phase2-status .v11p-reasons{margin:9px 0 0;padding-left:20px;color:var(--muted);font-size:.75rem;line-height:1.5}
+#v11-phase2-status .v11p-reasons li{margin:5px 0;overflow-wrap:anywhere}
 @media(max-width:800px){ #v11-phase2-status .v11p-head{flex-direction:column} #v11-phase2-status .v11p-detail-grid{grid-template-columns:1fr}}
+@media(max-width:1050px){#v11-phase2-status .v11p-attempt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){#v11-phase2-status .v11p-attempt-grid{grid-template-columns:1fr}}
 </style>
 <section id="v11-phase2-status" class="card" style="margin-top:22px">
   <div class="v11p-head">
@@ -156,6 +167,17 @@ const selectorForm=document.getElementById('stock-selector-form'),stockSelect=do
   <div class="v11p-detail-grid">
     <div class="metric"><span>COLLECTION CONTROL</span><div class="v11p-line"><strong data-v11-windows>Loading checkpoint windows…</strong></div><div class="muted v11p-line">Wake-up catch-up: <span data-v11-catch-up>checking…</span></div><div class="muted v11p-line">Tiingo request ceiling: <strong data-v11-requests>404/500</strong></div></div>
     <div class="metric"><span>LATEST FRESH SESSION</span><div class="v11p-line"><strong data-v11-latest-session>Awaiting first fresh session</strong></div><div class="v11p-line" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><span>V11 NET</span><strong data-v11-strategy-return>—</strong></div><div><span>SPY</span><strong data-v11-spy-return>—</strong></div><div><span>EXCESS</span><strong data-v11-excess-return>—</strong></div></div></div>
+  </div>
+  <div class="v11p-attempt" aria-live="polite">
+    <div class="v11p-attempt-head"><div><div class="label">LAST COLLECTION ATTEMPT</div><h3 style="margin-bottom:4px">Atomic 101-symbol snapshot diagnostic</h3><div class="muted" data-v11-attempt-summary>No persisted post-patch collection attempt yet.</div></div><div class="v11p-attempt-badge v11p-wait" data-v11-attempt-status>AWAITING ATTEMPT</div></div>
+    <div class="v11p-attempt-grid">
+      <div class="v11p-attempt-cell"><span>ATTEMPTED</span><strong data-v11-attempt-time>—</strong></div>
+      <div class="v11p-attempt-cell"><span>CHECKPOINT</span><strong data-v11-attempt-window>—</strong></div>
+      <div class="v11p-attempt-cell"><span>SYMBOL COVERAGE</span><strong data-v11-attempt-symbols>— / 101</strong></div>
+      <div class="v11p-attempt-cell"><span>COMPLETED BAR</span><strong data-v11-attempt-bar>—</strong></div>
+      <div class="v11p-attempt-cell"><span>SNAPSHOT PUBLISHED</span><strong data-v11-attempt-published>—</strong></div>
+    </div>
+    <div class="v11p-line"><span class="label">REJECTION DETAILS</span><ul class="v11p-reasons" data-v11-attempt-reasons><li>Waiting for the next natural scheduled collection. No manual evidence run is required.</li></ul></div>
   </div>
   <div class="muted v11p-line">Fresh boundary: <strong data-v11-boundary>—</strong></div>
   <div class="muted v11p-line v11p-sha">Contract SHA-256: <span data-v11-sha>checking…</span></div>

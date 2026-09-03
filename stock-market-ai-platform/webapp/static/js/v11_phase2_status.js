@@ -12,6 +12,45 @@
     year: 'numeric', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
   }) : '—';
+  const attemptStatus = value => String(value || 'AWAITING_ATTEMPT').replaceAll('_', ' ');
+
+  const renderAttempt = attempt => {
+    const status = set('attempt-status', attemptStatus(attempt?.status));
+    const reasonsHost = root.querySelector('[data-v11-attempt-reasons]');
+    if (!attempt?.status) {
+      if (status) status.className = 'v11p-attempt-badge v11p-wait';
+      set('attempt-summary', 'No persisted post-patch collection attempt yet. The next natural scheduled session will populate this panel.');
+      set('attempt-time', '—');
+      set('attempt-window', '—');
+      set('attempt-symbols', '— / 101');
+      set('attempt-bar', '—');
+      set('attempt-published', '—');
+      if (reasonsHost) {
+        const item = document.createElement('li');
+        item.textContent = 'Waiting for the next natural scheduled collection. No manual evidence run is required.';
+        reasonsHost.replaceChildren(item);
+      }
+      return;
+    }
+    const published = attempt.published === true;
+    if (status) status.className = `v11p-attempt-badge ${published ? 'v11p-good' : attempt.published === false ? 'v11p-alert' : 'v11p-wait'}`;
+    set('attempt-summary', published ? 'A complete atomic snapshot was accepted.' : 'The attempted snapshot was rejected safely; no partial evidence was written.');
+    set('attempt-time', date(attempt.attempted_at_utc));
+    set('attempt-window', attempt.schedule_state ? attemptStatus(attempt.schedule_state) : '—');
+    set('attempt-symbols', `${Number.isInteger(attempt.symbol_count) ? attempt.symbol_count : '—'} / 101`);
+    set('attempt-bar', date(attempt.completed_bar_utc));
+    set('attempt-published', attempt.published === true ? 'YES' : attempt.published === false ? 'NO' : '—');
+    if (reasonsHost) {
+      const reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+      const visible = reasons.length ? reasons.slice(0, 20) : [published ? 'No rejection reasons; snapshot accepted.' : 'No rejection reason was recorded.'];
+      if (reasons.length > visible.length) visible.push(`… ${reasons.length - visible.length} additional rejection reasons are preserved in operational status.`);
+      reasonsHost.replaceChildren(...visible.map(reason => {
+        const item = document.createElement('li');
+        item.textContent = String(reason).replaceAll('_', ' ');
+        return item;
+      }));
+    }
+  };
 
   const refresh = async () => {
     try {
@@ -39,6 +78,7 @@
       set('sha', `${data.contract_sha_verified ? '✓' : '⚠'} ${data.contract_sha256 || '—'}`);
       const failures = data.operational_failures || [];
       const lastAttempt = data.last_collection_attempt;
+      renderAttempt(lastAttempt);
       const attemptDetail = lastAttempt?.status
         ? ` Last collection attempt: ${String(lastAttempt.status).replaceAll('_', ' ')}${lastAttempt.attempted_at_utc ? ` at ${date(lastAttempt.attempted_at_utc)}` : ''}.`
         : '';

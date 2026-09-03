@@ -124,6 +124,27 @@ def main() -> None:
         "V11 panel does not present control health as collected evidence",
     )
     require(
+        'data-v11-attempt-status' in template
+        and 'data-v11-attempt-symbols' in template
+        and 'data-v11-attempt-bar' in template
+        and 'data-v11-attempt-reasons' in template,
+        "V11 panel exposes the persisted collection diagnostic fields",
+    )
+    require(
+        "renderAttempt(lastAttempt)" in script
+        and "attempt.schedule_state" in script
+        and "attempt.symbol_count" in script
+        and "attempt.completed_bar_utc" in script
+        and "attempt.reasons" in script,
+        "V11 collection diagnostics render from the read-only API payload",
+    )
+    require(
+        "replaceChildren" in script
+        and "item.textContent" in script
+        and "No manual evidence run is required" in script,
+        "V11 rejection reasons render safely without triggering collection",
+    )
+    require(
         "<form" not in template[template.index('id="v11-phase2-status"'):],
         "V11 panel exposes no activation form",
     )
