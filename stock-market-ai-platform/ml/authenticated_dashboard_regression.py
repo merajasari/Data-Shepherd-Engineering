@@ -70,11 +70,16 @@ def main() -> None:
     )
 
     project_root = Path(__file__).resolve().parents[1]
+    dashboard_template = (project_root / "webapp/templates/index.html").read_text()
     layout = (project_root / "webapp/static/js/dashboard_layout.js").read_text()
     operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
     comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
     research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
     v11_status = (project_root / "webapp/static/js/v11_phase2_status.js").read_text()
+    require(
+        "{#" not in dashboard_template,
+        "Dashboard CSS contains no accidental Jinja comment opener",
+    )
     require(
         all(label in research_tabs for label in (
             "Overview", "V8 Frozen", "V10 Cycle 3", "V11 Intraday",

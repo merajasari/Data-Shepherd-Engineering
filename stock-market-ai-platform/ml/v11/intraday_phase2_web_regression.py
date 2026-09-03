@@ -95,8 +95,8 @@ def main() -> None:
         "V11 panel is limited to Model Research",
     )
     require(
-        "{#v11-phase2-status" not in template,
-        "Responsive V11 CSS cannot open a Jinja comment",
+        "{#" not in template,
+        "Dashboard CSS cannot accidentally open a Jinja comment",
     )
     require(
         "FIVE-MINUTE FRESH CONFIRMATION" in template,
