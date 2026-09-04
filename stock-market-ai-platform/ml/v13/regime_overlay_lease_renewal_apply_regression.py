@@ -13,6 +13,7 @@ from ml.v13.regime_overlay_lease_renewal_apply import (
     renew,
     validate_renewal_chain,
 )
+from ml.v13.regime_overlay_lease_renewal import validate_renewal_readiness
 
 
 def require(condition: bool, label: str) -> None:
@@ -79,6 +80,19 @@ def main() -> None:
         require(not journal_path.exists() and first["evidence_appended"] is False, "Renewal binds but does not append evidence")
         require(first["scheduler_changed"] is False and first["market_data_requested"] is False, "Renewal changes no scheduler and requests no data")
         require(first["paper_trading_only"] is True and first["live_trading_enabled"] is False and first["brokerage_orders"] is False, "Renewal retains paper-only authority")
+        chain_readiness = validate_renewal_readiness(
+            now_utc=issued + timedelta(hours=25),
+            approval_path=approval_path,
+            lease_path=lease_path,
+            renewals_path=renewals_path,
+            journal_path=journal_path,
+        )
+        require(
+            chain_readiness["status"] == "CURRENT_LEASE_STILL_ACTIVE"
+            and chain_readiness["renewal_count"] == 1
+            and chain_readiness["previous_lease_sha256"] == first["lease_sha256"],
+            "Read-only readiness follows the latest effective renewal",
+        )
 
         try:
             renew(
