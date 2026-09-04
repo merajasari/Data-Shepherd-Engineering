@@ -91,6 +91,12 @@ def main() -> None:
         "V13 panel loads only its read-only status endpoint",
     )
     require(
+        "+${(returnDelta * 100).toFixed(1)} percentage points"
+        in renderer
+        and "versus V10 control" in renderer,
+        "V13 return gate is expressed as a percentage-point comparison",
+    )
+    require(
         "textContent" in renderer and "document.createElement('li')" in renderer,
         "V13 diagnostics render as text rather than executable markup",
     )
