@@ -1,0 +1,19 @@
+{
+  "bar_interval_minutes": 5,
+  "brokerage_orders": false,
+  "completed_bars_required": 6,
+  "entry_time_eastern": "10:00",
+  "feature_contract": "V11_INTRADAY_PHASE2_BALANCED_MOMENTUM_CONFIRMATION_V1",
+  "file_writes": false,
+  "input_authority": "CALLER_SUPPLIED_RAW_MARKET_INPUTS_ONLY",
+  "live_trading_enabled": false,
+  "market_data_request": false,
+  "paper_trading_only": true,
+  "ranking_symbols_required": 100,
+  "snapshot_symbols_required": 101,
+  "status": "PREREGISTERED_IN_MEMORY_INPUT_SNAPSHOT_BUILDER",
+  "v8_modified": false,
+  "v10_modified": false,
+  "v11_modified": false,
+  "v12_modified": false
+}
