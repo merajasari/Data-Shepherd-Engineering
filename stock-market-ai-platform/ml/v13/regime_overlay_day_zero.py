@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+import ml.v13.regime_overlay_activation as activation_module
 import ml.v13.regime_overlay_activation_transition as transition_module
 import ml.v13.regime_overlay_manual_approval as approval_module
 from ml.v13.regime_overlay_activation_transition import (
@@ -213,23 +214,25 @@ def run_checkpoint(
         "no apply, approval, lease, contract, evidence, scheduler or data writes",
     )
     check(
-        "approval_creator_absent",
+        "approval_validator_remains_read_only",
         not hasattr(approval_module, "create_approval"),
-        "creation implementation absent",
+        "approval validator contains no creator",
     )
     check(
-        "transition_applier_absent",
+        "transition_planner_remains_non_applying",
         not hasattr(transition_module, "apply_transition"),
-        "apply implementation absent",
+        "transition planner contains no applier",
     )
     check(
-        "activation_lease_writer_absent",
-        not hasattr(transition_module, "write_activation_lease"),
-        "lease writer absent",
+        "guarded_activation_implementation_present",
+        hasattr(activation_module, "activate")
+        and hasattr(activation_module, "validate_activation_lease"),
+        "separate fail-closed activation ceremony present",
     )
     source = (
         inspect.getsource(approval_module)
         + inspect.getsource(transition_module)
+        + inspect.getsource(activation_module)
     ).lower()
     check(
         "brokerage_sdk_absent",
@@ -310,7 +313,7 @@ def main() -> None:
     print("Manual approval artifact: ABSENT")
     print("Activation lease: ABSENT")
     print("Fresh evidence activation: DISABLED")
-    print("Apply implementation: ABSENT")
+    print("Apply implementation: PRESENT (GUARDED PAPER ONLY)")
     print("Production evidence modified: NO")
     print("Paper trading only: YES")
     print("Live trading: DISABLED")
