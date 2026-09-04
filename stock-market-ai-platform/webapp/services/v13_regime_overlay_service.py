@@ -17,6 +17,15 @@ from ml.v13.regime_overlay_journal import (
     V13EvidenceJournalCorrupt,
 )
 from ml.v13.regime_overlay_monitor import run_monitor
+from ml.v13.regime_overlay_manual_approval import (
+    APPROVAL_PATH,
+    get_manual_approval_status,
+)
+from ml.v13.regime_overlay_activation_transition import (
+    ACTIVATION_LEASE_PATH,
+    plan_transition,
+)
+from ml.v13.regime_overlay_preflight import run_preflight
 from ml.v13.regime_overlay_scheduled_entrypoint import STATUS_PATH
 
 
@@ -45,7 +54,12 @@ def _read_status() -> dict[str, object]:
 def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     """Return control/evidence metadata without loading historical research data."""
     now = time.monotonic()
-    signature = (_signature(STATUS_PATH), _signature(DEFAULT_JOURNAL_PATH))
+    signature = (
+        _signature(STATUS_PATH),
+        _signature(DEFAULT_JOURNAL_PATH),
+        _signature(APPROVAL_PATH),
+        _signature(ACTIVATION_LEASE_PATH),
+    )
     cached = _CACHE.get("payload")
     if (
         isinstance(cached, dict)
@@ -65,6 +79,9 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     control = dict(contract.get("control") or {})
     operational = _read_status()
     monitor = run_monitor()
+    preflight = run_preflight()
+    approval = get_manual_approval_status(preflight=preflight)
+    transition = plan_transition(preflight=preflight, approval=approval)
 
     journal_error: str | None = None
     try:
@@ -132,6 +149,19 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "collection_expected": operational.get("collection_expected") is True,
         "market_data_requests": int(operational.get("market_data_requests") or 0),
         "scheduler_installation_expected": False,
+        "manual_approval_status": approval.get("status"),
+        "manual_approval_present": approval.get("manual_approval_present") is True,
+        "manual_approval_valid": approval.get("valid") is True,
+        "activation_lease_present": ACTIVATION_LEASE_PATH.exists(),
+        "transition_status": transition.get("status"),
+        "transition_eligible": transition.get("eligible") is True,
+        "transition_gates_passed": transition.get("gates_passed"),
+        "transition_gates_total": transition.get("gates_total"),
+        "planned_activation_state": transition.get("planned_post_state"),
+        "transition_application_present": (
+            transition.get("application_implementation_present") is True
+        ),
+        "transition_applied": transition.get("transition_applied") is True,
         "confirmation_gates": {
             "annualized_return_delta_minimum": gates.get(
                 "net_annualized_return_delta_vs_control_at_least"
