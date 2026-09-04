@@ -35,6 +35,37 @@ LOCK_PATH = Path(__file__).with_name(
 EXPECTED_CONTRACT_SHA256 = (
     "2445260818b4c18f999e5cd72f7042f6c3da7999461cc545c037b6fc524e7d0b"
 )
+APPLICATION_MODULE_PATH = Path(__file__).with_name(
+    "regime_overlay_lease_renewal_apply.py"
+)
+APPLICATION_CONTRACT_PATH = Path(__file__).with_name(
+    "regime_overlay_lease_renewal_apply_contract.json"
+)
+APPLICATION_LOCK_PATH = Path(__file__).with_name(
+    "regime_overlay_lease_renewal_apply_contract.sha256"
+)
+EXPECTED_APPLICATION_CONTRACT_SHA256 = (
+    "db3cfdade2600beb094454f8fce18ffc0eaf7ef28c16fec8be16324bdcd4d79c"
+)
+
+
+def _application_implementation_present() -> bool:
+    try:
+        raw = APPLICATION_CONTRACT_PATH.read_bytes()
+        locked = APPLICATION_LOCK_PATH.read_text(encoding="utf-8").strip().split()[0]
+        contract = json.loads(raw)
+    except (OSError, json.JSONDecodeError, IndexError):
+        return False
+    return (
+        APPLICATION_MODULE_PATH.is_file()
+        and hashlib.sha256(raw).hexdigest() == EXPECTED_APPLICATION_CONTRACT_SHA256
+        and locked == EXPECTED_APPLICATION_CONTRACT_SHA256
+        and isinstance(contract, dict)
+        and contract.get("renewal_application_implementation_present") is True
+        and contract.get("paper_trading_only") is True
+        and contract.get("live_trading_enabled") is False
+        and contract.get("brokerage_orders") is False
+    )
 
 
 def _utc(value: datetime) -> datetime:
@@ -153,7 +184,12 @@ def validate_renewal_readiness(
         "existing_evidence_allowed": contract.get(
             "validated_existing_evidence_allowed"
         ) is True,
-        "renewal_implementation_present": False,
+        "readiness_contract_implementation_present": contract.get(
+            "renewal_implementation_present"
+        ) is True,
+        "renewal_application_implementation_present": (
+            _application_implementation_present()
+        ),
         "artifacts_modified": False,
         "scheduler_changed": False,
         "market_data_requested": False,
@@ -175,7 +211,10 @@ def main() -> None:
     print(f"Status: {result['status']}")
     print(f"Lease expires: {result['lease_expires_at_utc']}")
     print(f"Journal events: {result['journal_events']}")
-    print("Renewal implementation present: NO")
+    print(
+        "Renewal application implementation present: "
+        + ("YES" if result["renewal_application_implementation_present"] else "NO")
+    )
     print("Activation artifacts modified: NO")
     print("Scheduler changed: NO")
     print("Market data requested: NO")
