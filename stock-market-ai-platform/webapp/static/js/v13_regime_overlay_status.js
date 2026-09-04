@@ -40,7 +40,14 @@
     root.querySelector('[data-v13-regime-bar]')?.style.setProperty('--v13-progress', `${percent(eligible, eligibleMinimum)}%`);
 
     const gates = data.confirmation_gates || {};
-    text(root, '[data-v13-return-gate]', `≥ ${percentText(gates.annualized_return_delta_minimum)} annualized net return delta`);
+    const returnDelta = Number(gates.annualized_return_delta_minimum);
+    text(
+      root,
+      '[data-v13-return-gate]',
+      Number.isFinite(returnDelta)
+        ? `≥ +${(returnDelta * 100).toFixed(1)} percentage points annualized net return versus V10 control`
+        : 'Annualized net return delta versus V10 control —'
+    );
     text(root, '[data-v13-win-gate]', `≥ ${percentText(gates.paired_session_win_rate_minimum)} paired-session win rate`);
     text(root, '[data-v13-turnover-gate]', `≤ ${numberText(gates.turnover_control_multiple_maximum)}× control turnover`);
     text(root, '[data-v13-feasibility-gate]', `${percentText(gates.small_account_feasibility_pass_rate)} small-account feasibility`);
