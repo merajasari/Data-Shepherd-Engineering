@@ -153,6 +153,7 @@ def validate_renewal_chain(
     rows = RegimeOverlayEvidenceJournal(journal_path).read()
     previous_lease = root_lease
     previous_sha = canonical_sha256(previous_lease)
+    latest_issued = root_issued
     previous_expiry = _utc(datetime.fromisoformat(str(previous_lease["expires_at_utc"])))
     directories = _renewal_directories(renewals_path)
 
@@ -221,9 +222,10 @@ def validate_renewal_chain(
             raise V13LeaseRenewalRejected("V13_RENEWAL_DURATION_INVALID")
         previous_lease = lease
         previous_sha = canonical_sha256(lease)
+        latest_issued = issued
         previous_expiry = expires
 
-    active = now < previous_expiry
+    active = latest_issued <= now < previous_expiry
     return {
         "status": "ACTIVE_PAPER_ONLY" if active else "EXPIRED_RENEWAL_READY",
         "valid": True,
@@ -231,6 +233,7 @@ def validate_renewal_chain(
         "operator": operator,
         "renewal_count": len(directories),
         "latest_lease_sha256": previous_sha,
+        "latest_lease_issued_at_utc": latest_issued.isoformat(),
         "latest_lease_expires_at_utc": previous_expiry.isoformat(),
         "journal_event_count": len(rows),
         "journal_head_sha256": str(rows[-1]["record_sha256"]) if rows else GENESIS_HASH,
