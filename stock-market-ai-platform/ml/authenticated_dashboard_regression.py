@@ -87,6 +87,13 @@ def main() -> None:
         and v13_payload.get("retrospective_reconstruction_read") is False,
         "V13 API separates retrospective reconstruction from fresh thresholds",
     )
+    require(
+        v13_payload.get("manual_approval_present") is False
+        and v13_payload.get("activation_lease_present") is False
+        and v13_payload.get("transition_application_present") is False
+        and v13_payload.get("transition_applied") is False,
+        "V13 API exposes a non-applying activation governance state",
+    )
 
     project_root = Path(__file__).resolve().parents[1]
     dashboard_template = (project_root / "webapp/templates/index.html").read_text()
@@ -154,10 +161,23 @@ def main() -> None:
         "V13 tab separates retrospective development from fresh evidence",
     )
     require(
+        "ACTIVATION GOVERNANCE · NON-APPLYING" in research_tabs
+        and "MANUAL APPROVAL STATUS" in research_tabs
+        and "ACTIVATION LEASE" in research_tabs
+        and "APPLY IMPLEMENTATION" in research_tabs,
+        "V13 tab shows its manual approval and transition boundary",
+    )
+    require(
         "fetch('/api/v13/regime-overlay'" in v13_status
         and "data-v13-failures" in v13_status
         and "textContent" in v13_status,
         "V13 tab renders read-only status and safe diagnostics",
+    )
+    require(
+        "data-v13-approval" in v13_status
+        and "data-v13-transition" in v13_status
+        and "data-v13-lease" in v13_status,
+        "V13 tab renders approval, transition and lease status",
     )
     require(
         "+${(returnDelta * 100).toFixed(1)} percentage points" in v13_status
