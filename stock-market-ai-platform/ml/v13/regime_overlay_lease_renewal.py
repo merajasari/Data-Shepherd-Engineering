@@ -38,6 +38,7 @@ EXPECTED_CONTRACT_SHA256 = (
 APPLICATION_MODULE_PATH = Path(__file__).with_name(
     "regime_overlay_lease_renewal_apply.py"
 )
+DEFAULT_RENEWALS_PATH = ACTIVATION_LEASE_PATH.parent / "renewals"
 APPLICATION_CONTRACT_PATH = Path(__file__).with_name(
     "regime_overlay_lease_renewal_apply_contract.json"
 )
@@ -121,6 +122,7 @@ def validate_renewal_readiness(
     now_utc: datetime | None = None,
     approval_path: Path = APPROVAL_PATH,
     lease_path: Path = ACTIVATION_LEASE_PATH,
+    renewals_path: Path = DEFAULT_RENEWALS_PATH,
     journal_path: Path = DEFAULT_JOURNAL_PATH,
 ) -> dict[str, object]:
     """Return renewal readiness without mutating any supplied path."""
@@ -157,6 +159,29 @@ def validate_renewal_readiness(
     except V13EvidenceJournalCorrupt as exc:
         failures.append(f"CURRENT_EVIDENCE_JOURNAL_INVALID:{exc}")
 
+    latest_lease_sha = canonical_sha256(lease) if lease else None
+    renewal_count = 0
+    if _application_implementation_present() and approval and lease:
+        try:
+            from ml.v13.regime_overlay_lease_renewal_apply import (
+                validate_renewal_chain,
+            )
+
+            chain = validate_renewal_chain(
+                approval_path=approval_path,
+                lease_path=lease_path,
+                renewals_path=renewals_path,
+                journal_path=journal_path,
+                now_utc=now,
+            )
+            expires = _utc(
+                datetime.fromisoformat(str(chain["latest_lease_expires_at_utc"]))
+            )
+            latest_lease_sha = str(chain["latest_lease_sha256"])
+            renewal_count = int(chain["renewal_count"])
+        except (RuntimeError, TypeError, ValueError, KeyError) as exc:
+            failures.append(f"RENEWAL_CHAIN_INVALID:{exc}")
+
     expired = expires is not None and now >= expires
     operator = approval.get("operator") if isinstance(approval, dict) else None
     if not isinstance(operator, str) or len(operator.strip()) < 3:
@@ -177,7 +202,8 @@ def validate_renewal_readiness(
         "ready": ready,
         "failures": failures,
         "contract_sha256": contract_sha,
-        "previous_lease_sha256": canonical_sha256(lease) if lease else None,
+        "previous_lease_sha256": latest_lease_sha,
+        "renewal_count": renewal_count,
         "operator": operator,
         "lease_expires_at_utc": expires.isoformat() if expires else None,
         "journal_events": journal_events,
