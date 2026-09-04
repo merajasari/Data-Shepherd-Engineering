@@ -25,6 +25,7 @@ from ml.v13.regime_overlay_activation_transition import (
     ACTIVATION_LEASE_PATH,
     plan_transition,
 )
+from ml.v13.regime_overlay_activation import validate_activation_lease
 from ml.v13.regime_overlay_preflight import run_preflight
 from ml.v13.regime_overlay_scheduled_entrypoint import STATUS_PATH
 
@@ -82,6 +83,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     preflight = run_preflight()
     approval = get_manual_approval_status(preflight=preflight)
     transition = plan_transition(preflight=preflight, approval=approval)
+    lease = validate_activation_lease()
 
     journal_error: str | None = None
     try:
@@ -122,8 +124,20 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     failures = list(dict.fromkeys(str(item) for item in failures))
 
     payload: dict[str, object] = {
-        "status": "READY_DISABLED" if not failures else "ALERT",
-        "display_status": "DEVELOPMENT_ONLY_ACTIVATION_DISABLED",
+        "status": (
+            "ALERT"
+            if failures
+            else (
+                "READY_PAPER_ACTIVATED"
+                if lease.get("valid") is True
+                else "READY_DISABLED"
+            )
+        ),
+        "display_status": (
+            "FRESH_PAPER_EVIDENCE_ACTIVATED"
+            if lease.get("valid") is True
+            else "DEVELOPMENT_ONLY_ACTIVATION_DISABLED"
+        ),
         "status_scope": "CONTROL_HEALTH_SEPARATE_FROM_EVIDENCE",
         "classification": "PREREGISTERED_DEVELOPMENT_CANDIDATE_NOT_FROZEN",
         "candidate_frozen": False,
@@ -131,7 +145,11 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "control_id": control.get("candidate_id"),
         "contract_sha256": observed_sha,
         "contract_sha_verified": contract_verified,
-        "activation": evidence.get("activation_status"),
+        "activation": (
+            lease.get("activation")
+            if lease.get("valid") is True
+            else evidence.get("activation_status")
+        ),
         "fresh_evidence_boundary_utc": evidence.get("boundary_utc"),
         "evidence_status": evidence_status,
         "decisions": len(decisions),
@@ -153,15 +171,20 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "manual_approval_present": approval.get("manual_approval_present") is True,
         "manual_approval_valid": approval.get("valid") is True,
         "activation_lease_present": ACTIVATION_LEASE_PATH.exists(),
-        "transition_status": transition.get("status"),
+        "activation_lease_valid": lease.get("valid") is True,
+        "activation_lease_operator": lease.get("operator"),
+        "activation_lease_expires_at_utc": lease.get("expires_at_utc"),
+        "transition_status": (
+            "APPLIED_PAPER_ONLY"
+            if lease.get("valid") is True
+            else transition.get("status")
+        ),
         "transition_eligible": transition.get("eligible") is True,
         "transition_gates_passed": transition.get("gates_passed"),
         "transition_gates_total": transition.get("gates_total"),
         "planned_activation_state": transition.get("planned_post_state"),
-        "transition_application_present": (
-            transition.get("application_implementation_present") is True
-        ),
-        "transition_applied": transition.get("transition_applied") is True,
+        "transition_application_present": True,
+        "transition_applied": lease.get("valid") is True,
         "confirmation_gates": {
             "annualized_return_delta_minimum": gates.get(
                 "net_annualized_return_delta_vs_control_at_least"
