@@ -70,9 +70,9 @@ def main() -> None:
         payload["transition_status"]
         in {"WAITING_FOR_BOUNDARY", "WAITING_FOR_MANUAL_APPROVAL"}
         and payload["transition_eligible"] is False
-        and payload["transition_application_present"] is False
+        and payload["transition_application_present"] is True
         and payload["transition_applied"] is False,
-        "Activation transition remains a non-applying plan",
+        "Activation implementation exists but current transition remains unapplied",
     )
     require(
         payload["activation_lease_present"] is False
@@ -110,7 +110,7 @@ def main() -> None:
         and "MANUAL APPROVAL STATUS" in tabs
         and "ACTIVATION LEASE" in tabs
         and "APPLY IMPLEMENTATION" in tabs
-        and "cannot create approval, write a lease, apply activation" in tabs,
+        and "read-only panel cannot create approval, write a lease, apply activation" in tabs,
         "V13 tab exposes governance without an activation surface",
     )
     require(
