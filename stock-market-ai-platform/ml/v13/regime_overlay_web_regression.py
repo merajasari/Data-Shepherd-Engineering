@@ -40,9 +40,12 @@ def main() -> None:
         payload["contract_sha_verified"] is True,
         "V13 contract identity is verified",
     )
+    activated = payload["activation"] == "ENABLED_FRESH_EVIDENCE_PAPER_ONLY"
     require(
-        payload["activation"] == "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT",
-        "Fresh evidence activation remains disabled",
+        activated
+        or payload["activation"]
+        == "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT",
+        "Fresh evidence activation is disabled or validly paper-only",
     )
     require(
         payload["minimum_completed_sessions"] == 60
@@ -61,24 +64,57 @@ def main() -> None:
         "Disabled collection state is explicit",
     )
     require(
-        payload["manual_approval_status"] in {"WAITING_FOR_BOUNDARY", "NOT_PRESENT"}
-        and payload["manual_approval_present"] is False
-        and payload["manual_approval_valid"] is False,
-        "Manual approval remains absent and is never synthesized",
+        (
+            activated
+            and payload["manual_approval_status"]
+            == "VALID_FOR_SEPARATE_ACTIVATION_STEP"
+            and payload["manual_approval_present"] is True
+            and payload["manual_approval_valid"] is True
+        )
+        or (
+            not activated
+            and payload["manual_approval_status"]
+            in {"WAITING_FOR_BOUNDARY", "NOT_PRESENT"}
+            and payload["manual_approval_present"] is False
+            and payload["manual_approval_valid"] is False
+        ),
+        "Manual approval state is consistent with effective activation",
     )
     require(
-        payload["transition_status"]
-        in {"WAITING_FOR_BOUNDARY", "WAITING_FOR_MANUAL_APPROVAL"}
-        and payload["transition_eligible"] is False
-        and payload["transition_application_present"] is True
-        and payload["transition_applied"] is False,
-        "Activation implementation exists but current transition remains unapplied",
+        payload["transition_application_present"] is True
+        and (
+            (
+                activated
+                and payload["transition_status"] == "APPLIED_PAPER_ONLY"
+                and payload["transition_eligible"] is True
+                and payload["transition_applied"] is True
+            )
+            or (
+                not activated
+                and payload["transition_status"]
+                in {"WAITING_FOR_BOUNDARY", "WAITING_FOR_MANUAL_APPROVAL"}
+                and payload["transition_eligible"] is False
+                and payload["transition_applied"] is False
+            )
+        ),
+        "Transition state is consistent with effective activation",
     )
     require(
-        payload["activation_lease_present"] is False
-        and payload["planned_activation_state"]
-        == "ENABLED_FRESH_EVIDENCE_PAPER_ONLY",
-        "No activation lease exists and the planned state remains paper only",
+        payload["planned_activation_state"]
+        == "ENABLED_FRESH_EVIDENCE_PAPER_ONLY"
+        and (
+            (
+                activated
+                and payload["activation_lease_present"] is True
+                and payload["activation_lease_valid"] is True
+            )
+            or (
+                not activated
+                and payload["activation_lease_present"] is False
+                and payload["activation_lease_valid"] is False
+            )
+        ),
+        "Activation lease state is valid and remains paper only",
     )
     require(
         payload["paper_trading_only"] is True
@@ -106,7 +142,7 @@ def main() -> None:
         "Retrospective and fresh evidence labels cannot be conflated",
     )
     require(
-        "ACTIVATION GOVERNANCE · NON-APPLYING" in tabs
+        "ACTIVATION GOVERNANCE · FAIL-CLOSED" in tabs
         and "MANUAL APPROVAL STATUS" in tabs
         and "ACTIVATION LEASE" in tabs
         and "APPLY IMPLEMENTATION" in tabs
@@ -148,7 +184,10 @@ def main() -> None:
     print("Status: PASSED")
     print("V13 Model Research panel: VERIFIED READ ONLY")
     print("Historical reconstruction load: DISABLED")
-    print("Fresh evidence activation: DISABLED")
+    print(
+        "Fresh evidence activation: "
+        + ("ENABLED PAPER ONLY" if activated else "DISABLED")
+    )
     print("Brokerage orders: OFF")
     print("V8/V10/V11/V12 production evidence modified: NO")
 
