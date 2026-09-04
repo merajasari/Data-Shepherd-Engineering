@@ -55,6 +55,10 @@ def main() -> None:
         b'/static/js/model_research_tabs.js' in research.data,
         "Model Research loads its page-specific model tabs",
     )
+    require(
+        b'/static/js/v13_regime_overlay_status.js' in research.data,
+        "Model Research loads its read-only V13 status renderer",
+    )
     v8_api = client.get("/api/v8/holdout")
     require(v8_api.status_code == 200, "V8 synchronized dashboard API responds")
     require(
@@ -68,6 +72,21 @@ def main() -> None:
         ),
         "V8 lifecycle events expose their official symbol baskets for hover details",
     )
+    v13_api = client.get("/api/v13/regime-overlay")
+    require(v13_api.status_code == 200, "V13 read-only dashboard API responds")
+    v13_payload = v13_api.get_json()
+    require(
+        v13_payload.get("classification")
+        == "PREREGISTERED_DEVELOPMENT_CANDIDATE_NOT_FROZEN"
+        and v13_payload.get("candidate_frozen") is False,
+        "V13 API cannot be mistaken for a frozen model",
+    )
+    require(
+        v13_payload.get("minimum_completed_sessions") == 60
+        and v13_payload.get("minimum_regime_eligible_sessions") == 15
+        and v13_payload.get("retrospective_reconstruction_read") is False,
+        "V13 API separates retrospective reconstruction from fresh thresholds",
+    )
 
     project_root = Path(__file__).resolve().parents[1]
     dashboard_template = (project_root / "webapp/templates/index.html").read_text()
@@ -76,6 +95,7 @@ def main() -> None:
     comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
     research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
     v11_status = (project_root / "webapp/static/js/v11_phase2_status.js").read_text()
+    v13_status = (project_root / "webapp/static/js/v13_regime_overlay_status.js").read_text()
     require(
         "{#" not in dashboard_template,
         "Dashboard CSS contains no accidental Jinja comment opener",
@@ -117,12 +137,26 @@ def main() -> None:
         "Model tabs support accessible keyboard navigation",
     )
     require(
-        "development-only—not frozen and not fresh forward evidence" in research_tabs
+        "PREREGISTERED DEVELOPMENT · NOT FROZEN" in research_tabs
+        and "activation disabled" in research_tabs
         and "V5" not in "".join(
             line for line in research_tabs.splitlines()
             if "label:" in line
         ),
         "V13 and legacy V5 are not mislabeled as active forward models",
+    )
+    require(
+        "v13-regime-overlay-status" in research_tabs
+        and "COMPLETED FRESH PAIRED SESSIONS" in research_tabs
+        and "COMPLETED REGIME-ELIGIBLE SESSIONS" in research_tabs
+        and "Only completed post-boundary paired observations" in research_tabs,
+        "V13 tab separates retrospective development from fresh evidence",
+    )
+    require(
+        "fetch('/api/v13/regime-overlay'" in v13_status
+        and "data-v13-failures" in v13_status
+        and "textContent" in v13_status,
+        "V13 tab renders read-only status and safe diagnostics",
     )
     require(
         "V11 · PREREGISTERED RESEARCH · NOT FROZEN" in research_tabs
@@ -184,6 +218,10 @@ def main() -> None:
     require(
         b'/static/js/model_research_tabs.js' not in live.data,
         "Model-specific tabs remain exclusive to Model Research",
+    )
+    require(
+        b'/static/js/v13_regime_overlay_status.js' not in live.data,
+        "V13 research renderer remains off the live page",
     )
 
     print("Status: PASSED")
