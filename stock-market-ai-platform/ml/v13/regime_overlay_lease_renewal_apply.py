@@ -112,10 +112,15 @@ def _load_object(path: Path) -> dict[str, object]:
 def _renewal_directories(path: Path) -> list[Path]:
     if not path.exists():
         return []
-    entries = sorted(item for item in path.iterdir() if item.is_dir())
+    entries = sorted(path.iterdir())
+    if any(not item.is_dir() for item in entries):
+        raise V13LeaseRenewalRejected("V13_RENEWAL_ROOT_CONTENT_INVALID")
     expected = [f"{number:06d}" for number in range(1, len(entries) + 1)]
     if [item.name for item in entries] != expected:
         raise V13LeaseRenewalRejected("V13_RENEWAL_SEQUENCE_INVALID")
+    for item in entries:
+        if {child.name for child in item.iterdir()} != {"approval.json", "lease.json"}:
+            raise V13LeaseRenewalRejected("V13_RENEWAL_DIRECTORY_CONTENT_INVALID")
     return entries
 
 
@@ -317,8 +322,10 @@ def renew(
 
     renewals_path.mkdir(parents=True, exist_ok=True)
     directory = renewals_path / f"{sequence:06d}"
+    directory_created = False
     try:
         directory.mkdir(mode=0o700)
+        directory_created = True
         _write_exclusive(directory / "approval.json", approval)
         _write_exclusive(directory / "lease.json", lease)
         validated = validate_renewal_chain(
@@ -329,12 +336,13 @@ def renew(
             now_utc=now,
         )
     except Exception:
-        for name in ("lease.json", "approval.json"):
-            (directory / name).unlink(missing_ok=True)
-        try:
-            directory.rmdir()
-        except OSError:
-            pass
+        if directory_created:
+            for name in ("lease.json", "approval.json"):
+                (directory / name).unlink(missing_ok=True)
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
         raise
     return {
         **validated,
