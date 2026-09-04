@@ -1,0 +1,117 @@
+"""Regression checks for the read-only V13 Model Research status panel."""
+from __future__ import annotations
+
+from pathlib import Path
+
+from webapp.services.v13_regime_overlay_service import (
+    get_v13_regime_overlay_dashboard,
+)
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def require(condition: bool, label: str) -> None:
+    if not condition:
+        raise AssertionError(label)
+    print(f"[PASS] {label}")
+
+
+def main() -> None:
+    payload = get_v13_regime_overlay_dashboard()
+    tabs = (ROOT / "webapp/static/js/model_research_tabs.js").read_text(
+        encoding="utf-8"
+    )
+    renderer = (ROOT / "webapp/static/js/v13_regime_overlay_status.js").read_text(
+        encoding="utf-8"
+    )
+    app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
+
+    require(
+        payload["classification"]
+        == "PREREGISTERED_DEVELOPMENT_CANDIDATE_NOT_FROZEN",
+        "V13 candidate is explicitly not frozen",
+    )
+    require(
+        payload["status_scope"] == "CONTROL_HEALTH_SEPARATE_FROM_EVIDENCE",
+        "Control readiness remains separate from evidence maturity",
+    )
+    require(
+        payload["contract_sha_verified"] is True,
+        "V13 contract identity is verified",
+    )
+    require(
+        payload["activation"] == "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT",
+        "Fresh evidence activation remains disabled",
+    )
+    require(
+        payload["minimum_completed_sessions"] == 60
+        and payload["minimum_regime_eligible_sessions"] == 15,
+        "Fresh evidence thresholds are exposed exactly",
+    )
+    require(
+        payload["retrospective_reconstruction_read"] is False
+        and payload["request_time_historical_data_load"] is False,
+        "Endpoint performs no historical reconstruction load",
+    )
+    require(
+        payload["scheduler_installation_expected"] is False
+        and payload["collection_expected"] is False
+        and payload["market_data_requests"] == 0,
+        "Disabled collection state is explicit",
+    )
+    require(
+        payload["paper_trading_only"] is True
+        and payload["live_trading_enabled"] is False
+        and payload["brokerage_orders"] is False,
+        "V13 web payload has no trading authority",
+    )
+    require(
+        payload["holdout_outcomes_read"] is False
+        and all(
+            payload[field] is False
+            for field in ("v8_modified", "v10_modified", "v11_modified", "v12_modified")
+        ),
+        "V8 through V12 and holdout outcomes remain isolated",
+    )
+    require(
+        "v13-regime-overlay-status" in tabs
+        and "COMPLETED FRESH PAIRED SESSIONS" in tabs
+        and "COMPLETED REGIME-ELIGIBLE SESSIONS" in tabs,
+        "V13 tab exposes fresh evidence progress separately",
+    )
+    require(
+        "retrospective development reconstruction" in tabs
+        and "Only completed post-boundary paired observations" in tabs,
+        "Retrospective and fresh evidence labels cannot be conflated",
+    )
+    require(
+        "fetch('/api/v13/regime-overlay'" in renderer
+        and "data-v13-failures" in renderer,
+        "V13 panel loads only its read-only status endpoint",
+    )
+    require(
+        "textContent" in renderer and "document.createElement('li')" in renderer,
+        "V13 diagnostics render as text rather than executable markup",
+    )
+    require(
+        '@app.get("/api/v13/regime-overlay")' in app_source
+        and "no-historical-reconstruction-load" in app_source,
+        "V13 lightweight API route is registered",
+    )
+    require(
+        "activation form" not in tabs.lower()
+        and "brokerage credential" not in tabs.lower(),
+        "V13 panel exposes no activation or credential form",
+    )
+
+    print("Status: PASSED")
+    print("V13 Model Research panel: VERIFIED READ ONLY")
+    print("Historical reconstruction load: DISABLED")
+    print("Fresh evidence activation: DISABLED")
+    print("Brokerage orders: OFF")
+    print("V8/V10/V11/V12 production evidence modified: NO")
+
+
+if __name__ == "__main__":
+    main()
