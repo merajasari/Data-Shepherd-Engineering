@@ -90,9 +90,9 @@ def main() -> None:
     require(
         v13_payload.get("manual_approval_present") is False
         and v13_payload.get("activation_lease_present") is False
-        and v13_payload.get("transition_application_present") is False
+        and v13_payload.get("transition_application_present") is True
         and v13_payload.get("transition_applied") is False,
-        "V13 API exposes a non-applying activation governance state",
+        "V13 API exposes guarded activation governance state",
     )
 
     project_root = Path(__file__).resolve().parents[1]
