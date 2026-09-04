@@ -59,6 +59,11 @@ def main() -> None:
             and active["ready"] is False,
             "Overlapping lease renewal is rejected",
         )
+        require(
+            active["renewal_application_implementation_present"] is True
+            and active["readiness_contract_implementation_present"] is False,
+            "Application implementation is distinguished from the historical readiness contract",
+        )
         expired = validate_renewal_readiness(
             now_utc=datetime(2026, 9, 5, 14, 0, tzinfo=timezone.utc),
             approval_path=approval_path,
@@ -111,7 +116,7 @@ def main() -> None:
 
     print("Status: PASSED")
     print("V13 lease renewal readiness: VERIFIED READ ONLY")
-    print("Renewal implementation present: NO")
+    print("Renewal application implementation present: YES")
     print("Activation artifacts modified: NO")
     print("Evidence modified: NO")
     print("Brokerage orders: OFF")
