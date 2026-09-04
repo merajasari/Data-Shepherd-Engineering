@@ -61,6 +61,26 @@ def main() -> None:
         "Disabled collection state is explicit",
     )
     require(
+        payload["manual_approval_status"] in {"WAITING_FOR_BOUNDARY", "NOT_PRESENT"}
+        and payload["manual_approval_present"] is False
+        and payload["manual_approval_valid"] is False,
+        "Manual approval remains absent and is never synthesized",
+    )
+    require(
+        payload["transition_status"]
+        in {"WAITING_FOR_BOUNDARY", "WAITING_FOR_MANUAL_APPROVAL"}
+        and payload["transition_eligible"] is False
+        and payload["transition_application_present"] is False
+        and payload["transition_applied"] is False,
+        "Activation transition remains a non-applying plan",
+    )
+    require(
+        payload["activation_lease_present"] is False
+        and payload["planned_activation_state"]
+        == "ENABLED_FRESH_EVIDENCE_PAPER_ONLY",
+        "No activation lease exists and the planned state remains paper only",
+    )
+    require(
         payload["paper_trading_only"] is True
         and payload["live_trading_enabled"] is False
         and payload["brokerage_orders"] is False,
@@ -86,6 +106,14 @@ def main() -> None:
         "Retrospective and fresh evidence labels cannot be conflated",
     )
     require(
+        "ACTIVATION GOVERNANCE · NON-APPLYING" in tabs
+        and "MANUAL APPROVAL STATUS" in tabs
+        and "ACTIVATION LEASE" in tabs
+        and "APPLY IMPLEMENTATION" in tabs
+        and "cannot create approval, write a lease, apply activation" in tabs,
+        "V13 tab exposes governance without an activation surface",
+    )
+    require(
         "fetch('/api/v13/regime-overlay'" in renderer
         and "data-v13-failures" in renderer,
         "V13 panel loads only its read-only status endpoint",
@@ -99,6 +127,12 @@ def main() -> None:
     require(
         "textContent" in renderer and "document.createElement('li')" in renderer,
         "V13 diagnostics render as text rather than executable markup",
+    )
+    require(
+        "data-v13-approval" in renderer
+        and "data-v13-transition" in renderer
+        and "data-v13-lease" in renderer,
+        "V13 renderer publishes approval, transition and lease state",
     )
     require(
         '@app.get("/api/v13/regime-overlay")' in app_source
