@@ -1,0 +1,19 @@
+{
+  "activation_authority": "VALID_EFFECTIVE_PAPER_ONLY_LEASE_REQUIRED",
+  "brokerage_orders": false,
+  "decision_window_eastern": "09:58_INCLUSIVE_TO_10:05_EXCLUSIVE",
+  "input_provider": "CALLER_INJECTED_ONLY",
+  "live_trading_enabled": false,
+  "market_data_request": false,
+  "market_session_open_required": true,
+  "paper_trading_only": true,
+  "production_evidence_append": false,
+  "production_journal_mutation": false,
+  "rehearsal_journal": "ISOLATED_TEMPORARY_ONLY",
+  "scheduler_install_or_change": false,
+  "status": "PREREGISTERED_SCHEDULED_COLLECTION_REHEARSAL",
+  "v8_modified": false,
+  "v10_modified": false,
+  "v11_modified": false,
+  "v12_modified": false
+}
