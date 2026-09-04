@@ -87,12 +87,28 @@ def main() -> None:
         and v13_payload.get("retrospective_reconstruction_read") is False,
         "V13 API separates retrospective reconstruction from fresh thresholds",
     )
+    v13_activated = (
+        v13_payload.get("activation") == "ENABLED_FRESH_EVIDENCE_PAPER_ONLY"
+    )
     require(
-        v13_payload.get("manual_approval_present") is False
-        and v13_payload.get("activation_lease_present") is False
-        and v13_payload.get("transition_application_present") is True
-        and v13_payload.get("transition_applied") is False,
-        "V13 API exposes guarded activation governance state",
+        v13_payload.get("transition_application_present") is True
+        and (
+            (
+                v13_activated
+                and v13_payload.get("manual_approval_present") is True
+                and v13_payload.get("manual_approval_valid") is True
+                and v13_payload.get("activation_lease_present") is True
+                and v13_payload.get("activation_lease_valid") is True
+                and v13_payload.get("transition_applied") is True
+            )
+            or (
+                not v13_activated
+                and v13_payload.get("manual_approval_present") is False
+                and v13_payload.get("activation_lease_present") is False
+                and v13_payload.get("transition_applied") is False
+            )
+        ),
+        "V13 API exposes internally consistent activation governance",
     )
 
     project_root = Path(__file__).resolve().parents[1]
@@ -146,7 +162,7 @@ def main() -> None:
     )
     require(
         "PREREGISTERED DEVELOPMENT · NOT FROZEN" in research_tabs
-        and "activation disabled" in research_tabs
+        and "short-lived paper-only lease" in research_tabs
         and "V5" not in "".join(
             line for line in research_tabs.splitlines()
             if "label:" in line
@@ -161,7 +177,7 @@ def main() -> None:
         "V13 tab separates retrospective development from fresh evidence",
     )
     require(
-        "ACTIVATION GOVERNANCE · NON-APPLYING" in research_tabs
+        "ACTIVATION GOVERNANCE · FAIL-CLOSED" in research_tabs
         and "MANUAL APPROVAL STATUS" in research_tabs
         and "ACTIVATION LEASE" in research_tabs
         and "APPLY IMPLEMENTATION" in research_tabs,
