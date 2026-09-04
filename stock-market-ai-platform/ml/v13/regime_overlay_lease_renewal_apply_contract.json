@@ -1,0 +1,23 @@
+{
+  "artifact_layout": "IMMUTABLE_NUMBERED_SHA_CHAIN",
+  "artifact_overwrite_allowed": false,
+  "brokerage_orders": false,
+  "current_lease_must_be_expired": true,
+  "evidence_append": false,
+  "exact_operator_acknowledgement_required": true,
+  "journal_head_binding_required": true,
+  "live_trading_enabled": false,
+  "market_data_request": false,
+  "paper_trading_only": true,
+  "previous_lease_sha256_binding_required": true,
+  "renewal_application_implementation_present": true,
+  "renewal_lease_hours": 24,
+  "root_activation_artifact_modification_allowed": false,
+  "same_operator_required": true,
+  "scheduler_install_or_change": false,
+  "status": "PREREGISTERED_FAIL_CLOSED_APPLICATION",
+  "v10_modified": false,
+  "v11_modified": false,
+  "v12_modified": false,
+  "v8_modified": false
+}
