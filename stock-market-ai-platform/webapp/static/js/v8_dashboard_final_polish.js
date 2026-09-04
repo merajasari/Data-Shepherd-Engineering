@@ -17,7 +17,7 @@
 
   const fixBranding = () => {
     const subtitle = document.querySelector('header .brand .muted');
-    if (subtitle) subtitle.textContent = 'Frozen V8 cross-sectional ranking + forward holdout monitor';
+    if (subtitle) subtitle.textContent = 'Multi-model research, forward evidence, and operational monitoring';
 
     document.querySelectorAll('div,span,strong').forEach(el => {
       if (el.children.length) return;
