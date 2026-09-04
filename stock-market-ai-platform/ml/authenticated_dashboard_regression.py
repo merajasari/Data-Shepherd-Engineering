@@ -96,6 +96,7 @@ def main() -> None:
     research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
     v11_status = (project_root / "webapp/static/js/v11_phase2_status.js").read_text()
     v13_status = (project_root / "webapp/static/js/v13_regime_overlay_status.js").read_text()
+    final_polish = (project_root / "webapp/static/js/v8_dashboard_final_polish.js").read_text()
     require(
         "{#" not in dashboard_template,
         "Dashboard CSS contains no accidental Jinja comment opener",
@@ -157,6 +158,18 @@ def main() -> None:
         and "data-v13-failures" in v13_status
         and "textContent" in v13_status,
         "V13 tab renders read-only status and safe diagnostics",
+    )
+    require(
+        "+${(returnDelta * 100).toFixed(1)} percentage points" in v13_status
+        and "versus V10 control" in v13_status,
+        "V13 return gate uses percentage points versus its control",
+    )
+    require(
+        "Multi-model research, forward evidence, and operational monitoring"
+        in dashboard_template
+        and "Multi-model research, forward evidence, and operational monitoring"
+        in final_polish,
+        "Model Research header describes the complete multi-model platform",
     )
     require(
         "V11 · PREREGISTERED RESEARCH · NOT FROZEN" in research_tabs
