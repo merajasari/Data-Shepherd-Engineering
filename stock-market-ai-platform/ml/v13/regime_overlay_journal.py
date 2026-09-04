@@ -15,7 +15,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Mapping
+from typing import Callable, Mapping
 
 from ml.v13.regime_overlay_contract import (
     EXPECTED_CONTRACT_SHA256,
@@ -37,6 +37,9 @@ ALLOWED_EVENT_TYPES = (
 )
 DISABLED_ACTIVATION = "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT"
 FRESH_BOUNDARY_UTC = "2026-09-01T14:00:00+00:00"
+EXPECTED_COLLECTION_CONTRACT_SHA256 = (
+    "c1bd50ab35efac51b0450399af167b739138a9082be6bc2c31756c918f3cb077"
+)
 
 
 class V13EvidenceJournalCorrupt(RuntimeError):
@@ -95,10 +98,12 @@ class RegimeOverlayEvidenceJournal:
         path: Path | str = DEFAULT_JOURNAL_PATH,
         *,
         rehearsal: bool = False,
+        activation_validator: Callable[[datetime], Mapping[str, object]] | None = None,
         lock_timeout_seconds: float = 5.0,
     ):
         self.path = Path(path)
         self.rehearsal = rehearsal
+        self.activation_validator = activation_validator
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lockdir")
         self.lock_timeout_seconds = lock_timeout_seconds
 
@@ -201,6 +206,30 @@ class RegimeOverlayEvidenceJournal:
                 raise V13EvidenceJournalCorrupt(
                     f"safety boundary invalid line {line_number}"
                 )
+            rehearsal = row.get("rehearsal")
+            fresh = row.get("fresh_evidence")
+            lease_sha = row.get("activation_lease_sha256")
+            if rehearsal is True:
+                if fresh is not False or lease_sha is not None:
+                    raise V13EvidenceJournalCorrupt(
+                        f"rehearsal evidence boundary invalid line {line_number}"
+                    )
+            elif rehearsal is False:
+                if (
+                    fresh is not True
+                    or not isinstance(lease_sha, str)
+                    or len(lease_sha) != 64
+                    or any(character not in "0123456789abcdef" for character in lease_sha)
+                    or row.get("collection_contract_sha256")
+                    != EXPECTED_COLLECTION_CONTRACT_SHA256
+                ):
+                    raise V13EvidenceJournalCorrupt(
+                        f"production lease binding invalid line {line_number}"
+                    )
+            else:
+                raise V13EvidenceJournalCorrupt(
+                    f"evidence mode invalid line {line_number}"
+                )
             if row["previous_record_sha256"] != previous_hash:
                 raise V13EvidenceJournalCorrupt(
                     f"hash chain broken line {line_number}"
@@ -242,9 +271,44 @@ class RegimeOverlayEvidenceJournal:
         contract = _require_contract()
         activation = contract["fresh_evidence"]["activation_status"]
         if activation == DISABLED_ACTIVATION:
-            if not self.rehearsal or event.get("rehearsal") is not True:
+            if self.rehearsal and event.get("rehearsal") is True:
+                if event.get("fresh_evidence") is not False:
+                    raise V13EvidenceActivationDisabled(
+                        "V13 rehearsal event cannot be fresh evidence"
+                    )
+            elif not self.rehearsal and event.get("rehearsal") is False:
+                if event.get("fresh_evidence") is not True:
+                    raise V13EvidenceActivationDisabled(
+                        "V13 production event must be fresh evidence"
+                    )
+                timestamp = _parse_timestamp(event.get("timestamp_utc"))
+                if self.activation_validator is None:
+                    from ml.v13.regime_overlay_lease_renewal_apply import (
+                        validate_renewal_chain,
+                    )
+
+                    state = validate_renewal_chain(now_utc=timestamp)
+                else:
+                    state = self.activation_validator(timestamp)
+                if state.get("valid") is not True or state.get("active") is not True:
+                    raise V13EvidenceActivationDisabled(
+                        "V13 valid active paper-only lease required"
+                    )
+                if (
+                    state.get("paper_trading_only") is not True
+                    or state.get("live_trading_enabled") is not False
+                    or state.get("brokerage_orders") is not False
+                    or event.get("activation_lease_sha256")
+                    != state.get("latest_lease_sha256")
+                    or event.get("collection_contract_sha256")
+                    != EXPECTED_COLLECTION_CONTRACT_SHA256
+                ):
+                    raise V13EvidenceActivationDisabled(
+                        "V13 event activation lease binding invalid"
+                    )
+            else:
                 raise V13EvidenceActivationDisabled(
-                    "V13 production evidence activation is disabled"
+                    "V13 journal mode and event mode do not match"
                 )
         else:
             raise V13EvidenceActivationDisabled(
