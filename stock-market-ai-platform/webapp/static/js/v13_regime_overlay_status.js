@@ -29,6 +29,13 @@
     text(root, '[data-v13-brokerage]', data.brokerage_orders ? 'ON' : 'OFF');
     text(root, '[data-v13-checked]', datetimeText(data.operational_checked_at_utc));
     text(root, '[data-v13-sha]', `${data.contract_sha_verified ? '✓' : '✕'} ${data.contract_sha256 || 'unavailable'}`);
+    text(root, '[data-v13-approval]', words(data.manual_approval_status));
+    text(root, '[data-v13-approval-artifact]', data.manual_approval_present ? 'PRESENT' : 'ABSENT');
+    text(root, '[data-v13-lease]', data.activation_lease_present ? 'PRESENT' : 'ABSENT');
+    text(root, '[data-v13-transition]', words(data.transition_status));
+    text(root, '[data-v13-transition-gates]', `${numberText(data.transition_gates_passed)} / ${numberText(data.transition_gates_total)}`);
+    text(root, '[data-v13-apply]', data.transition_application_present ? 'PRESENT' : 'ABSENT');
+    text(root, '[data-v13-planned-state]', words(data.planned_activation_state));
 
     const completed = Number(data.completed_sessions || 0);
     const minimum = Number(data.minimum_completed_sessions || 60);
