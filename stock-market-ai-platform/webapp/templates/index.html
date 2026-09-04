@@ -36,7 +36,7 @@ main > .card, .container > .card, body > .card{content-visibility:auto;contain-i
 <body>
 <div class="shell">
 <header>
-  <div class="brand"><a href="{{ url_for('dashboard') }}"><img src="{{ url_for('static', filename='images/data-shepherd-logo.png') }}" alt="Data Shepherd Engineering"></a><div><div class="eyebrow">DATA SHEPHERD ENGINEERING</div><h1>Stock Market AI Platform</h1><div class="muted">Frozen V8 DISTANCE_ONLY Top-10 inference + V4 paper-trading monitor</div></div></div>
+  <div class="brand"><a href="{{ url_for('dashboard') }}"><img src="{{ url_for('static', filename='images/data-shepherd-logo.png') }}" alt="Data Shepherd Engineering"></a><div><div class="eyebrow">DATA SHEPHERD ENGINEERING</div><h1>Stock Market AI Platform</h1><div class="muted">{% if live_view %}Live stock research viewer and completed-market context{% else %}Multi-model research, forward evidence, and operational monitoring{% endif %}</div></div></div>
   <div class="actions"><div class="pill">PLATFORM ONLINE</div><a class="logout" href="{{ url_for('logout') }}">LOGOUT</a></div>
 </header>
 
