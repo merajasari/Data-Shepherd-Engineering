@@ -67,7 +67,7 @@ def main() -> None:
         (
             activated
             and payload["manual_approval_status"]
-            == "VALID_FOR_SEPARATE_ACTIVATION_STEP"
+            in {"VALID_FOR_SEPARATE_ACTIVATION_STEP", "VALID_FOR_ACTIVE_RENEWAL"}
             and payload["manual_approval_present"] is True
             and payload["manual_approval_valid"] is True
         )
