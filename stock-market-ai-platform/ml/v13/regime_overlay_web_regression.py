@@ -177,13 +177,6 @@ def main() -> None:
         "V13 tab exposes current context publication and lease timing",
     )
     require(
-        "Signed context inbox" in tabs
-        and "Effective paper lease" in tabs
-        and "SIGNED CONTEXT IDENTITIES" in tabs
-        and "Next decision window" in tabs,
-        "V13 tab exposes current context publication and lease timing",
-    )
-    require(
         "fetch('/api/v13/regime-overlay'" in renderer
         and "data-v13-failures" in renderer,
         "V13 panel loads only its read-only status endpoint",
