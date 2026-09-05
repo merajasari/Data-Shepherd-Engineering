@@ -1,7 +1,7 @@
 """Deterministic regression checks for accelerated V10 paper-forward evidence."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -67,8 +67,8 @@ def _exit(offset: int, block: int) -> dict[str, object]:
         "event_type": "EXIT",
         "cohort_offset": offset,
         "exit_timestamp_utc": (
-            pd.Timestamp("2026-09-08", tz="UTC")
-            + pd.Timedelta(days=block * 7 + offset)
+            datetime(2026, 9, 8, tzinfo=timezone.utc)
+            + timedelta(days=int(block * 7 + offset))
         ).isoformat(),
         "net_portfolio_return": 0.02,
         "v8_control_net_portfolio_return": 0.015,
