@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from ml.v13.regime_overlay_contract import (
@@ -32,6 +33,48 @@ from ml.v13.regime_overlay_scheduled_entrypoint import STATUS_PATH
 
 CACHE_TTL_SECONDS = 10.0
 _CACHE: dict[str, object] = {"at": 0.0, "signature": None, "payload": None}
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CONTEXT_INBOX_ROOT = PROJECT_ROOT / "data" / "research" / "v13" / "fresh_regime_overlay" / "inbox"
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _read_signed_context_metadata() -> dict[str, object]:
+    """Read only signed V13 inbox metadata; never load outcomes or history."""
+    try:
+        targets = sorted(path for path in CONTEXT_INBOX_ROOT.iterdir() if path.is_dir())
+    except OSError:
+        targets = []
+    if not targets:
+        return {
+            "status": "NOT_PUBLISHED",
+            "target_session": None,
+            "source_decision_session": None,
+            "ranking_sha256": None,
+            "control_context_sha256": None,
+        }
+    target = targets[-1]
+    ranking = _read_json(target / "ranking_snapshot.json")
+    control = _read_json(target / "control_context.json")
+    source_sessions = control.get("source_decision_sessions")
+    source = (
+        source_sessions[-1]
+        if isinstance(source_sessions, list) and source_sessions
+        else ranking.get("source_decision_session")
+    )
+    return {
+        "status": "PUBLISHED_SIGNED_V13_CONTEXT" if ranking and control else "INCOMPLETE",
+        "target_session": ranking.get("session_date") or target.name,
+        "source_decision_session": source,
+        "ranking_sha256": ranking.get("ranking_sha256"),
+        "control_context_sha256": control.get("control_context_sha256"),
+    }
 
 
 def _signature(path: Path) -> tuple[int, int] | None:
@@ -60,6 +103,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         _signature(DEFAULT_JOURNAL_PATH),
         _signature(APPROVAL_PATH),
         _signature(ACTIVATION_LEASE_PATH),
+        _signature(CONTEXT_INBOX_ROOT),
     )
     cached = _CACHE.get("payload")
     if (
@@ -79,6 +123,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     challenger = dict(contract.get("challenger") or {})
     control = dict(contract.get("control") or {})
     operational = _read_status()
+    context = _read_signed_context_metadata()
     monitor = run_monitor()
     preflight = run_preflight()
     approval = get_manual_approval_status(preflight=preflight)
@@ -233,6 +278,16 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "v10_modified": False,
         "v11_modified": False,
         "v12_modified": False,
+        "context_status": context["status"],
+        "context_target_session": context["target_session"],
+        "context_source_decision_session": context["source_decision_session"],
+        "context_ranking_sha256": context["ranking_sha256"],
+        "context_control_context_sha256": context["control_context_sha256"],
+        "next_decision_window_utc": (
+            f"{context['target_session']}T14:00:00+00:00"
+            if context["target_session"]
+            else None
+        ),
     }
     _CACHE.update({"at": now, "signature": signature, "payload": dict(payload)})
     return payload
