@@ -1,0 +1,20 @@
+{
+  "activation_authority": "VALID_EFFECTIVE_PAPER_ONLY_LEASE_REQUIRED",
+  "brokerage_orders": false,
+  "collection_window_eastern": "10:00_INCLUSIVE_TO_10:05_EXCLUSIVE",
+  "exact_operator_acknowledgement_required": true,
+  "input_files": "V13_INBOX_ONLY",
+  "lease_timing": "SAME_LEASE_ACTIVE_AT_DECISION_AND_COLLECTION",
+  "live_trading_enabled": false,
+  "manual_apply_flag_required": true,
+  "market_session_open_required": true,
+  "maximum_market_data_requests": 103,
+  "paper_trading_only": true,
+  "production_event": "ONE_DUPLICATE_SAFE_SESSION_DECISION",
+  "scheduler_install_or_change": false,
+  "status": "PREREGISTERED_V13_GUARDED_ONE_SHOT_COLLECTOR",
+  "v8_modified": false,
+  "v10_modified": false,
+  "v11_modified": false,
+  "v12_modified": false
+}
