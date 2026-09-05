@@ -1,0 +1,21 @@
+{
+  "bar_requests": 101,
+  "brokerage_orders": false,
+  "control_context": "CALLER_SUPPLIED_CANONICALLY_SIGNED_ONLY",
+  "daily_requests": 1,
+  "entry_quote_policy": "VALID_POSITIVE_BID_AND_ASK_REQUIRED",
+  "file_writes": false,
+  "intraday_bars": "OPENING_SIX_COMPLETED_FIVE_MINUTE_BARS",
+  "live_trading_enabled": false,
+  "maximum_requests_per_collection": 103,
+  "missing_data_action": "FAIL_CLOSED_NO_SNAPSHOT",
+  "paper_trading_only": true,
+  "quote_batch_requests": 1,
+  "ranking_symbols": 100,
+  "source": "TIINGO_IEX_AND_DAILY",
+  "status": "PREREGISTERED_V13_TIINGO_INPUT_PROVIDER",
+  "v8_modified": false,
+  "v10_modified": false,
+  "v11_modified": false,
+  "v12_modified": false
+}
