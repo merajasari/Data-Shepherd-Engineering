@@ -132,9 +132,13 @@ def main() -> None:
             )
             or (
                 not v13_activated
-                and v13_payload.get("manual_approval_present") is False
-                and v13_payload.get("activation_lease_present") is False
+                and v13_payload.get("manual_approval_valid") is False
+                and v13_payload.get("activation_lease_valid") is False
                 and v13_payload.get("transition_applied") is False
+                and (
+                    v13_payload.get("activation_lease_present") is False
+                    or v13_payload.get("manual_approval_present") is True
+                )
             )
         ),
         "V13 API exposes internally consistent activation governance",
