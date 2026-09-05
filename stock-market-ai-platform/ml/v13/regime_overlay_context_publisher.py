@@ -45,6 +45,35 @@ class ContextPublication:
     brokerage_orders: bool = False
 
 
+def source_availability(
+    *, source_decision_session: str, completed_dates: Sequence[object]
+) -> dict[str, object]:
+    """Describe source-date availability without ranking, network, or writes."""
+    requested = date.fromisoformat(source_decision_session)
+    parsed = sorted({date.fromisoformat(str(value)[:10]) for value in completed_dates})
+    eligible = [value for value in parsed if value <= requested]
+    latest = eligible[-1].isoformat() if eligible else None
+    return {
+        "requested_source_session": requested.isoformat(),
+        "latest_available_completed_session": latest,
+        "available_completed_session_count": len(parsed),
+        "requested_source_available": bool(eligible and eligible[-1] == requested),
+        "status": "AVAILABLE" if eligible and eligible[-1] == requested else "UNAVAILABLE",
+    }
+
+
+def inspect_source_availability(source_decision_session: str) -> dict[str, object]:
+    """Inspect the frozen source's local completed-date index without writes."""
+    from ml.v10 import cycle3_accelerated_forward_runner as frozen
+
+    frozen.verify_frozen_source()
+    _, _, dates, _ = frozen._load_market()
+    return source_availability(
+        source_decision_session=source_decision_session,
+        completed_dates=dates,
+    )
+
+
 def _require_contract() -> str:
     expected: dict[str, object] = {
         "brokerage_orders": False,
@@ -149,9 +178,16 @@ def _production_source(
     frozen.verify_frozen_source()
     symbols, frames, dates, date_to_idx = frozen._load_market()
     source_date = date.fromisoformat(source_decision_session)
+    availability = source_availability(
+        source_decision_session=source_decision_session,
+        completed_dates=dates,
+    )
     eligible = [stamp for stamp in dates if stamp.date() <= source_date]
     if not eligible or eligible[-1].date() != source_date:
-        raise RuntimeError("V13_DECLARED_SOURCE_SESSION_NOT_AVAILABLE")
+        raise RuntimeError(
+            "V13_DECLARED_SOURCE_SESSION_NOT_AVAILABLE:"
+            f"LATEST_AVAILABLE={availability['latest_available_completed_session']}"
+        )
     if dates.index(eligible[-1]) < 1:
         raise RuntimeError("V13_TWO_COMPLETED_REGIME_SESSIONS_REQUIRED")
     source_stamp = eligible[-1]
@@ -310,6 +346,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Publish signed frozen-V10 context for V13")
     parser.add_argument("--session-date")
     parser.add_argument("--source-decision-session")
+    parser.add_argument("--diagnose-source", action="store_true")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     digest = _require_contract()
@@ -323,6 +360,13 @@ def main() -> None:
         status = result.status
         ranking_path = result.ranking_path
         control_path = result.control_context_path
+    elif args.diagnose_source:
+        if not args.source_decision_session:
+            parser.error("--source-decision-session is required with --diagnose-source")
+        availability = inspect_source_availability(args.source_decision_session)
+        status = f"SOURCE_{availability['status']}"
+        ranking_path = str(availability["latest_available_completed_session"] or "NONE")
+        control_path = "NO_WRITES"
     else:
         status = "IMPLEMENTED_NOT_INVOKED"
         ranking_path = "NONE"
@@ -333,6 +377,10 @@ def main() -> None:
     print(f"Contract SHA-256: {digest}")
     print(f"Ranking snapshot: {ranking_path}")
     print(f"Control context: {control_path}")
+    if args.diagnose_source:
+        print(f"Requested source session: {args.source_decision_session}")
+        print(f"Latest available completed session: {ranking_path}")
+        print("Source availability diagnostic: READ ONLY")
     print("Holdout outcomes read: NO")
     print("Market data requested: NO")
     print("V13 evidence appended: NO")
