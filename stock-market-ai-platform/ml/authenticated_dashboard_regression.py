@@ -259,6 +259,14 @@ def main() -> None:
         "V13 tab renders approval, transition and lease status",
     )
     require(
+        "data-v13-context-status" in v13_status
+        and "data-v13-context-target" in v13_status
+        and "data-v13-context-source" in v13_status
+        and "data-v13-lease-expires" in v13_status
+        and "data-v13-next-window" in v13_status,
+        "V13 tab renders signed-context and lease timing metadata",
+    )
+    require(
         "+${(returnDelta * 100).toFixed(1)} percentage points" in v13_status
         and "versus V10 control" in v13_status,
         "V13 return gate uses percentage points versus its control",
