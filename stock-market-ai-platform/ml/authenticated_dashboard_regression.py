@@ -263,15 +263,10 @@ def main() -> None:
         and "data-v13-context-target" in v13_status
         and "data-v13-context-source" in v13_status
         and "data-v13-lease-expires" in v13_status
-        and "data-v13-next-window" in v13_status,
-        "V13 tab renders signed-context and lease timing metadata",
-    )
-    require(
-        "data-v13-context-status" in v13_status
-        and "data-v13-context-target" in v13_status
-        and "data-v13-context-source" in v13_status
-        and "data-v13-lease-expires" in v13_status
-        and "data-v13-next-window" in v13_status,
+        and "data-v13-next-window" in v13_status
+        and "data-v13-candidate" in v13_status
+        and "data-v13-control-id" in v13_status
+        and "data-v13-boundary" in v13_status,
         "V13 tab renders signed-context and lease timing metadata",
     )
     require(
