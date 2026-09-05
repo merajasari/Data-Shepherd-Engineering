@@ -30,6 +30,63 @@ from ml.v13.regime_overlay_manual_approval import APPROVAL_PATH
 from ml.v13.regime_overlay_preflight import run_preflight
 
 
+def _effective_lease(
+    *,
+    now: datetime,
+    approval_path: Path,
+    lease_path: Path,
+    journal_path: Path,
+    lease_validator: Callable[..., dict[str, object]],
+    renewal_validator: Callable[..., dict[str, object]] | None,
+) -> dict[str, object]:
+    """Validate the root lease, then the latest immutable renewal if present."""
+    root = lease_validator(
+        approval_path=approval_path,
+        lease_path=lease_path,
+        now_utc=now,
+    )
+    if root.get("valid") is True:
+        return root
+    if renewal_validator is None:
+        try:
+            from ml.v13.regime_overlay_lease_renewal_apply import (
+                validate_renewal_chain,
+            )
+            renewal_validator = validate_renewal_chain
+        except ImportError:
+            return root
+    try:
+        chain = renewal_validator(
+            approval_path=approval_path,
+            lease_path=lease_path,
+            renewals_path=lease_path.parent / "renewals",
+            journal_path=journal_path,
+            now_utc=now,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError, KeyError):
+        return root
+    if chain.get("valid") is not True:
+        return root
+    return {
+        **root,
+        "status": "ACTIVE_PAPER_ONLY" if chain.get("active") is True else "EXPIRED_RENEWAL_READY",
+        "valid": chain.get("active") is True,
+        "active": chain.get("active") is True,
+        "activation": "ENABLED_FRESH_EVIDENCE_PAPER_ONLY"
+        if chain.get("active") is True
+        else "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT",
+        "operator": chain.get("operator"),
+        "expires_at_utc": chain.get("latest_lease_expires_at_utc"),
+        "lease_sha256": chain.get("latest_lease_sha256"),
+        "paper_trading_only": chain.get("paper_trading_only") is True,
+        "live_trading_enabled": chain.get("live_trading_enabled") is True,
+        "brokerage_orders": chain.get("brokerage_orders") is True,
+        "scheduler_installed": False,
+        "market_data_requested": False,
+        "evidence_appended": False,
+    }
+
+
 def _utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         raise ValueError("V13_CHECKPOINT_TIMESTAMP_MUST_BE_TIMEZONE_AWARE")
@@ -48,6 +105,7 @@ def run_checkpoint(
     lease_path: Path = ACTIVATION_LEASE_PATH,
     preflight_runner: Callable[..., dict[str, object]] = run_preflight,
     lease_validator: Callable[..., dict[str, object]] = validate_activation_lease,
+    renewal_validator: Callable[..., dict[str, object]] | None = None,
 ) -> dict[str, object]:
     """Evaluate effective V13 status without modifying protected paths."""
     now = _utc(now_utc or datetime.now(timezone.utc))
@@ -92,10 +150,13 @@ def run_checkpoint(
         journal_detail = str(exc)
     check("journal_integrity", journal_valid, journal_detail)
 
-    lease = lease_validator(
+    lease = _effective_lease(
+        now=now,
         approval_path=approval_path,
         lease_path=lease_path,
-        now_utc=now,
+        journal_path=journal_path,
+        lease_validator=lease_validator,
+        renewal_validator=renewal_validator,
     )
     active = lease.get("valid") is True and lease.get("status") == "ACTIVE_PAPER_ONLY"
     check("paper_lease_valid", active, str(lease.get("status")))
