@@ -11,6 +11,7 @@ from ml.v13.regime_overlay_context_publisher import (
     build_signed_context,
     derive_and_publish,
     publish_signed_context,
+    source_availability,
 )
 from ml.v13.regime_overlay_observation import canonical_sha256
 
@@ -34,6 +35,24 @@ def fake_source(_: str):
 
 def main() -> None:
     require(len(_require_contract()) == 64, "Context publisher contract identity is locked")
+    availability = source_availability(
+        source_decision_session=SOURCE_SESSION,
+        completed_dates=["2026-09-03", "2026-09-04"],
+    )
+    require(
+        availability["requested_source_available"] is True
+        and availability["latest_available_completed_session"] == SOURCE_SESSION,
+        "Available source date is identified without ranking or writes",
+    )
+    unavailable = source_availability(
+        source_decision_session=SOURCE_SESSION,
+        completed_dates=["2026-08-27"],
+    )
+    require(
+        unavailable["requested_source_available"] is False
+        and unavailable["latest_available_completed_session"] == "2026-08-27",
+        "Unavailable source date fails closed with latest available date",
+    )
     ranking, control = build_signed_context(
         session_date=TARGET,
         source_decision_session=SOURCE_SESSION,
