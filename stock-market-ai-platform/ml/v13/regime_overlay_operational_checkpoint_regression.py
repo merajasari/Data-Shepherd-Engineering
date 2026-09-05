@@ -49,6 +49,20 @@ def expired_lease(**_: object) -> dict[str, object]:
     return {**lease(), "status": "NOT_ACTIVE", "valid": False}
 
 
+def active_renewal(**_: object) -> dict[str, object]:
+    return {
+        "status": "ACTIVE_PAPER_ONLY",
+        "valid": True,
+        "active": True,
+        "operator": "Meraj Asari",
+        "latest_lease_expires_at_utc": "2026-09-06T17:45:09.531984+00:00",
+        "latest_lease_sha256": "b" * 64,
+        "paper_trading_only": True,
+        "live_trading_enabled": False,
+        "brokerage_orders": False,
+    }
+
+
 def main() -> None:
     with TemporaryDirectory(prefix="v13_operational_checkpoint_regression_") as directory:
         root = Path(directory)
@@ -89,6 +103,18 @@ def main() -> None:
         )
         require(expired["status"] == "EXPIRED_OR_BLOCKED", "Expired lease fails closed")
         require(expired["activation"] == "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT", "Expired lease cannot claim active authority")
+
+        renewed = run_checkpoint(
+            now_utc=NOW,
+            journal_path=journal,
+            approval_path=approval,
+            lease_path=activation_lease,
+            preflight_runner=preflight,
+            lease_validator=expired_lease,
+            renewal_validator=active_renewal,
+        )
+        require(renewed["status"] == "ACTIVE_PAPER_ONLY", "Active immutable renewal becomes the effective lease")
+        require(renewed["activation_lease_expires_at_utc"] == "2026-09-06T17:45:09.531984+00:00", "Checkpoint reports latest renewal expiry")
 
     source = SOURCE.read_text(encoding="utf-8").lower()
     require(EXPECTED_CONTRACT_SHA256 not in source, "Checkpoint does not hard-code a replacement contract identity")
