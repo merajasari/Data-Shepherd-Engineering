@@ -338,7 +338,7 @@ def _review_projection(
         "promotion_gates": [
             _gate(
                 "net_return",
-                "Mean V10 return after modeled cost",
+                "Mean complete-block V10 return after modeled cost",
                 "PROVISIONAL",
                 mean_v10,
                 "> 0.00%",
@@ -346,30 +346,30 @@ def _review_projection(
             ),
             _gate(
                 "v8_edge",
-                "Mean paired V10 minus V8 return",
+                "Mean paired V10 minus V8 edge",
                 "PROVISIONAL",
                 edge_v8,
-                ">= 0.00%",
+                "≥ 0.00%",
                 float(edge_v8) >= 0.0 if edge_v8 is not None else None,
             ),
             _gate(
                 "spy_edge",
-                "Mean paired V10 minus SPY return",
+                "Mean paired V10 minus SPY edge",
                 "PROVISIONAL",
                 edge_spy,
-                ">= 0.00%",
+                "≥ 0.00%",
                 float(edge_spy) >= 0.0 if edge_spy is not None else None,
             ),
             _gate(
                 "drawdown",
-                "V10 drawdown versus V8 control",
+                "V10 cohort drawdown versus V8 control",
                 "PROVISIONAL",
                 (
                     float(v10_drawdown) - float(v8_drawdown)
                     if v10_drawdown is not None and v8_drawdown is not None
                     else None
                 ),
-                "<= +10.00 percentage points",
+                "≤ +10.00 percentage points",
                 (
                     float(v10_drawdown) <= float(v8_drawdown) + 0.10
                     if v10_drawdown is not None and v8_drawdown is not None
@@ -555,6 +555,7 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
         "method_note": (
             "Only complete five-sleeve blocks enter promotion metrics and charts. "
             "Each block contains one completed exit from cohort offsets 0 through 4. "
+            "Normalized curves use a hypothetical $100,000 starting basis for display only. "
             "Overlapping exits remain diagnostic, automatic promotion is disabled, "
             "and every promotion requires human review."
         ),

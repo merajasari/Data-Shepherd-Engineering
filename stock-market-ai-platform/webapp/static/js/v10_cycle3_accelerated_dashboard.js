@@ -46,9 +46,15 @@
       #${panelId} .a10-gate.pass strong{color:#39e3a1}
       #${panelId} .a10-gate.fail strong{color:#ff8d8d}
       #${panelId} .a10-ops{margin-top:14px;color:#91a6c2;font-size:12px;line-height:1.6;word-break:break-word}
+      #${panelId} .a10-integrity{margin-top:12px;border:1px solid rgba(145,166,194,.17);border-radius:10px;background:rgba(7,16,31,.28)}
+      #${panelId} .a10-integrity summary{cursor:pointer;padding:10px 12px;color:#c5d4e8;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+      #${panelId} .a10-integrity-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:0 12px 12px}
+      #${panelId} .a10-integrity-grid div{min-width:0}
+      #${panelId} .a10-integrity-grid span{display:block;color:#91a6c2;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+      #${panelId} .a10-integrity-grid strong{display:block;margin-top:4px;font-size:11px;overflow-wrap:anywhere}
       #${panelId} .a10-alerts{margin-top:8px;color:#ff8d8d}
       @media(max-width:1050px){#${panelId} .a10-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}#${panelId} .a10-charts{grid-template-columns:1fr}}
-      @media(max-width:700px){#${panelId} .a10-head{flex-direction:column}#${panelId} .a10-boundaries,#${panelId} .a10-progress-grid,#${panelId} .a10-gate-list{grid-template-columns:1fr}#${panelId} .a10-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media(max-width:700px){#${panelId} .a10-head{flex-direction:column}#${panelId} .a10-boundaries,#${panelId} .a10-progress-grid,#${panelId} .a10-gate-list,#${panelId} .a10-integrity-grid{grid-template-columns:1fr}#${panelId} .a10-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
     </style>
     <div class="a10-head">
       <div>
@@ -70,7 +76,7 @@
         <div class="a10-progress" data-a10-provisional-progress role="progressbar" aria-label="Provisional review progress" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"><i></i></div>
       </div>
       <div class="a10-progress-card">
-        <span>Stronger limited-live review</span>
+        <span>Stronger human-review checkpoint</span>
         <strong data-a10-stronger>0 / 12 complete blocks</strong>
         <div class="a10-progress" data-a10-stronger-progress role="progressbar" aria-label="Stronger review progress" aria-valuemin="0" aria-valuemax="12" aria-valuenow="0"><i></i></div>
       </div>
@@ -81,15 +87,16 @@
       <div class="a10-metric"><span>Completed exits</span><strong data-a10-exits>—</strong></div>
       <div class="a10-metric"><span>Promotion-scored exits</span><strong data-a10-scored>—</strong></div>
       <div class="a10-metric"><span>Complete five-sleeve blocks</span><strong data-a10-blocks>—</strong></div>
-      <div class="a10-metric"><span>Mean V10 after cost</span><strong data-a10-return>—</strong></div>
-      <div class="a10-metric"><span>Mean V10 − V8</span><strong data-a10-v8-edge>—</strong></div>
-      <div class="a10-metric"><span>Mean V10 − SPY</span><strong data-a10-spy-edge>—</strong></div>
-      <div class="a10-metric"><span>Max drawdown · V10 / V8</span><strong data-a10-drawdown>—</strong></div>
-      <div class="a10-metric"><span>Defensive exits · edge</span><strong data-a10-defensive>—</strong></div>
+      <div class="a10-metric"><span>Mean complete-block V10 return after modeled cost</span><strong data-a10-return>—</strong></div>
+      <div class="a10-metric"><span>Mean paired V10 − V8 edge</span><strong data-a10-v8-edge>—</strong></div>
+      <div class="a10-metric"><span>Mean paired V10 − SPY edge</span><strong data-a10-spy-edge>—</strong></div>
+      <div class="a10-metric"><span>Max cohort drawdown · V10 / V8</span><strong data-a10-drawdown>—</strong></div>
+      <div class="a10-metric"><span>Completed defensive-regime exits</span><strong data-a10-defensive-exits>—</strong></div>
+      <div class="a10-metric"><span>Mean defensive V10 − V8 edge</span><strong data-a10-defensive-edge>—</strong></div>
     </div>
     <div class="a10-charts">
       <figure class="a10-chart-card">
-        <figcaption><div class="a10-chart-title">Complete-block normalized comparison</div><div class="a10-chart-subtitle">V10, the same-date frozen V8 control, and SPY. Partial sleeves never enter this chart.</div></figcaption>
+        <figcaption><div class="a10-chart-title">Complete-block normalized comparison</div><div class="a10-chart-subtitle">Diagnostic hypothetical $100,000 starting basis for V10, the same-date frozen V8 control, and SPY. Partial sleeves never enter this chart.</div></figcaption>
         <div class="a10-legend"><span><i class="a10-swatch" style="background:#36d8ff"></i>V10 accelerated</span><span><i class="a10-swatch" style="background:#efc56b"></i>V8 control</span><span><i class="a10-swatch" style="background:#a78bfa"></i>SPY</span></div>
         <div class="a10-chart-host" data-a10-equity-chart></div>
       </figure>
@@ -104,6 +111,19 @@
       <ul class="a10-gate-list" data-a10-gates><li class="a10-placeholder">Loading gate status…</li></ul>
     </div>
     <div class="a10-ops" data-a10-method>Loading accelerated evidence integrity…</div>
+    <details class="a10-integrity">
+      <summary>Data integrity &amp; authority</summary>
+      <div class="a10-integrity-grid">
+        <div><span>Frozen SHA-256</span><strong data-a10-frozen-sha>—</strong></div>
+        <div><span>Contract SHA-256</span><strong data-a10-contract-sha>—</strong></div>
+        <div><span>Paper only</span><strong data-a10-paper>YES</strong></div>
+        <div><span>Automatic promotion</span><strong data-a10-auto-promotion>NO</strong></div>
+        <div><span>Human review</span><strong data-a10-human-review>YES</strong></div>
+        <div><span>Brokerage orders</span><strong data-a10-brokerage>OFF</strong></div>
+        <div><span>Runner invoked by dashboard</span><strong data-a10-runner>NO</strong></div>
+        <div><span>January evidence modified</span><strong data-a10-january-modified>NO</strong></div>
+      </div>
+    </details>
     <div class="a10-alerts" data-a10-alerts hidden></div>
   `;
 
@@ -234,12 +254,21 @@
       set('[data-a10-v8-edge]',pct(data.mean_v10_minus_v8_net_return));
       set('[data-a10-spy-edge]',pct(data.mean_v10_minus_spy_return));
       set('[data-a10-drawdown]',data.v10_max_cohort_drawdown==null?'—':`${unsignedPct(data.v10_max_cohort_drawdown)} / ${unsignedPct(data.v8_max_cohort_drawdown)}`);
-      set('[data-a10-defensive]',`${data.completed_defensive_exits ?? 0} · ${pct(data.mean_defensive_v10_minus_v8_net_return)}`);
+      set('[data-a10-defensive-exits]',data.completed_defensive_exits ?? 0);
+      set('[data-a10-defensive-edge]',pct(data.mean_defensive_v10_minus_v8_net_return));
       renderEquity(data.block_curve);
       renderEdges(data.block_edges);
       renderGates(data.promotion_gates);
       const checked=data.operational_checked_at_utc?new Date(data.operational_checked_at_utc).toLocaleString():'not yet published';
-      set('[data-a10-method]',`${data.method_note} Evidence: ${statusText(data.evidence_status)}. Operations: ${statusText(data.operational_status)} · checked ${checked} · scheduler every ${Math.round((Number(data.scheduler_interval_seconds)||300)/60)} minutes. Frozen SHA: ${data.frozen_sha256}. Contract SHA: ${data.contract_sha256}. Paper only: YES · automatic promotion: NO · human review required: YES · brokerage orders: OFF.`);
+      set('[data-a10-method]',`${data.method_note} Evidence: ${statusText(data.evidence_status)}. Operations: ${statusText(data.operational_status)} · checked ${checked} · scheduler every ${Math.round((Number(data.scheduler_interval_seconds)||300)/60)} minutes.`);
+      set('[data-a10-frozen-sha]',data.frozen_sha256 || '—');
+      set('[data-a10-contract-sha]',data.contract_sha256 || '—');
+      set('[data-a10-paper]',data.paper_trading_only === true ? 'YES' : 'NO');
+      set('[data-a10-auto-promotion]',data.automatic_promotion === true ? 'YES' : 'NO');
+      set('[data-a10-human-review]',data.human_review_required === true ? 'YES' : 'NO');
+      set('[data-a10-brokerage]',data.brokerage_orders === true ? 'ON' : 'OFF');
+      set('[data-a10-runner]',data.runner_invoked === true ? 'YES' : 'NO');
+      set('[data-a10-january-modified]',data.january_confirmation_modified === true ? 'YES' : 'NO');
       const alerts=section.querySelector('[data-a10-alerts]');
       const failures=Array.isArray(data.operational_failures)?data.operational_failures:[];
       if (alerts) { alerts.hidden=!failures.length; alerts.textContent=failures.length?`Active integrity alerts: ${failures.join(' · ')}`:''; }

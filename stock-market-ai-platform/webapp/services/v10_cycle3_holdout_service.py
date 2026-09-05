@@ -100,6 +100,7 @@ def _metrics(exits, curve):
     return {
         "evidence_status": evidence,
         "completed_cohorts": count,
+        "completed_exits": count,
         "strategy_total_return": strategy_total,
         "spy_total_return": spy_total,
         "total_relative_return": (

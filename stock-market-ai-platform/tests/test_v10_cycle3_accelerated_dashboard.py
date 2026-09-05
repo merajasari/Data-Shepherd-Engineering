@@ -249,16 +249,34 @@ class V10Cycle3AcceleratedDashboardTests(unittest.TestCase):
             tabs.index("'v10-confirmation-card'"),
         )
         self.assertIn("Complete-block normalized comparison", accelerated)
+        self.assertIn("Diagnostic hypothetical $100,000 starting basis", accelerated)
         self.assertIn("Paired edge by complete block", accelerated)
         self.assertIn("Preregistered promotion gates", accelerated)
+        self.assertIn("Mean complete-block V10 return after modeled cost", accelerated)
+        self.assertIn("Mean paired V10 − V8 edge", accelerated)
+        self.assertIn("Max cohort drawdown · V10 / V8", accelerated)
+        self.assertIn("Completed defensive-regime exits", accelerated)
+        self.assertIn("Mean defensive V10 − V8 edge", accelerated)
+        self.assertIn("Stronger human-review checkpoint", accelerated)
+        self.assertIn("Data integrity &amp; authority", accelerated)
         self.assertIn("@media(max-width:700px)", accelerated)
         self.assertIn("Accelerated September–December evidence never enters", january)
+        self.assertIn("Completed exits", january)
+        self.assertIn("Diagnostic V10 return", january)
+        self.assertIn("Operational readiness", january)
         self.assertIn("<details>", legacy)
         self.assertNotIn("cycle3_holdout_runner", service)
         self.assertNotIn("cycle3_accelerated_forward_runner", service)
         self.assertIn('"runner_invoked": False', service)
         self.assertIn('"january_holdout_outcomes_read": False', service)
         self.assertIn('"brokerage_orders": False', service)
+
+    def test_january_service_exposes_exit_alias_for_clear_dashboard_label(self):
+        holdout_service = (
+            PROJECT_ROOT / "webapp/services/v10_cycle3_holdout_service.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"completed_cohorts": count', holdout_service)
+        self.assertIn('"completed_exits": count', holdout_service)
 
 
 if __name__ == "__main__":

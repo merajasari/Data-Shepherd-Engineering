@@ -6,7 +6,7 @@
   const MODELS = [
     {id:'overview', label:'Overview', eyebrow:'SHARED RESEARCH CONTEXT', title:'Cross-model overview', note:'Common market data, platform health, and the normalized model-comparison chart remain together here.'},
     {id:'v8', label:'V8 Frozen', eyebrow:'V8 · FROZEN FORWARD MODEL', title:'V8 rankings and holdout evidence', note:'Frozen ranking research and genuine append-only forward evidence are labeled and kept separate within this tab.'},
-    {id:'v10', label:'V10 Cycle 3', eyebrow:'V10 · FROZEN · ACCELERATED PAPER-FORWARD', title:'V10 Cycle 3 evidence and review runway', note:'Prospective September–December evidence, the independent January confirmation, and rejected legacy V10 research remain visibly separate.'},
+    {id:'v10', label:'V10 Cycle 3', eyebrow:'V10 · FROZEN CYCLE 3 · PAPER-FORWARD', title:'V10 Cycle 3 evidence and review runway', note:'Prospective September–December evidence, the independent January confirmation, and rejected legacy V10 research remain visibly separate.'},
     {id:'v11', label:'V11 Intraday', eyebrow:'V11 · PREREGISTERED RESEARCH · NOT FROZEN', title:'V11 intraday confirmation', note:'Its configuration and evidence contract are SHA-locked, but V11 remains a research candidate undergoing five-minute fresh paper confirmation. It has no production or brokerage authority.'},
     {id:'v13', label:'V13 Dev', eyebrow:'V13 · PREREGISTERED DEVELOPMENT · NOT FROZEN', title:'V13 regime-overlay research', note:'V13 is a preregistered successor hypothesis with activation governed by an explicit short-lived paper-only lease. Its retrospective curve remains on Overview and never counts as fresh evidence.'}
   ];

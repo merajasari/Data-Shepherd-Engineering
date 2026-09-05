@@ -32,10 +32,10 @@
       <div class="c3-metric"><span>Evidence</span><strong data-c3-evidence>—</strong></div>
       <div class="c3-metric"><span>Decisions</span><strong data-c3-decisions>—</strong></div>
       <div class="c3-metric"><span>Entries</span><strong data-c3-entries>—</strong></div>
-      <div class="c3-metric"><span>Completed</span><strong data-c3-exits>—</strong></div>
-      <div class="c3-metric"><span>Cycle 3 Return</span><strong data-c3-return>—</strong></div>
-      <div class="c3-metric"><span>SPY Return</span><strong data-c3-spy>—</strong></div>
-      <div class="c3-metric"><span>Operations</span><strong data-c3-operations>—</strong></div>
+      <div class="c3-metric"><span>Completed exits</span><strong data-c3-exits>—</strong></div>
+      <div class="c3-metric"><span>Diagnostic V10 return</span><strong data-c3-return>—</strong></div>
+      <div class="c3-metric"><span>Diagnostic SPY return</span><strong data-c3-spy>—</strong></div>
+      <div class="c3-metric"><span>Operational readiness</span><strong data-c3-operations>—</strong></div>
       <div class="c3-metric"><span>Last Health Check</span><strong data-c3-health-time>—</strong></div>
     </div>
     <div class="c3-legend"><span><i class="c3-line" style="background:#36d8ff"></i>Cycle 3 January confirmation</span><span><i class="c3-line" style="background:#f5c451"></i>SPY benchmark</span></div>
@@ -64,14 +64,14 @@
       set('[data-c3-evidence]', String(data.evidence_status||'UNKNOWN').replaceAll('_',' '));
       set('[data-c3-decisions]', data.decisions ?? 0);
       set('[data-c3-entries]', data.entries ?? 0);
-      set('[data-c3-exits]', data.completed_cohorts ?? 0);
+      set('[data-c3-exits]', data.completed_exits ?? data.completed_cohorts ?? 0);
       set('[data-c3-return]', pct(data.strategy_total_return));
       set('[data-c3-spy]', pct(data.spy_total_return));
       set('[data-c3-operations]', String(data.operational_status||'UNKNOWN').replaceAll('_',' '));
       const healthTime=data.operational_checked_at_utc ? new Date(data.operational_checked_at_utc).toLocaleString() : '—';
       set('[data-c3-health-time]', healthTime);
       const failures=(data.operational_failures||[]).length;
-      set('[data-c3-note]', `${data.method_note} Accelerated September–December events are excluded. Operations: ${data.operational_status||'UNKNOWN'}${failures ? ` · ${failures} active alert(s)` : ''} · scheduler every 5 minutes. Frozen SHA: ${data.frozen_sha256}. Brokerage orders: OFF.`);
+      set('[data-c3-note]', `${data.method_note} Diagnostic outputs only; accelerated September–December events are excluded. Operational readiness: ${data.operational_status||'UNKNOWN'}${failures ? ` · ${failures} active alert(s)` : ''} · scheduler every 5 minutes. Frozen SHA: ${data.frozen_sha256}. Brokerage orders: OFF.`);
       renderChart(data.curve);
     })
     .catch(error => {
