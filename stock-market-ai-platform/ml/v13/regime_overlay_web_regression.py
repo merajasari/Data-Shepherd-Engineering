@@ -143,23 +143,9 @@ def main() -> None:
                 "activation_lease_operator",
                 "activation_lease_sequence",
                 "next_decision_window_utc",
-            )
-        ),
-        "V13 API exposes signed-context and lease timing metadata",
-    )
-    require(
-        all(
-            key in payload
-            for key in (
-                "context_status",
-                "context_target_session",
-                "context_source_decision_session",
-                "context_ranking_sha256",
-                "context_control_context_sha256",
-                "activation_lease_expires_at_utc",
-                "activation_lease_operator",
-                "activation_lease_sequence",
-                "next_decision_window_utc",
+                "candidate_id",
+                "control_id",
+                "fresh_evidence_boundary_utc",
             )
         ),
         "V13 API exposes signed-context and lease timing metadata",
@@ -223,15 +209,10 @@ def main() -> None:
         and "data-v13-context-target" in renderer
         and "data-v13-context-source" in renderer
         and "data-v13-lease-expires" in renderer
-        and "data-v13-next-window" in renderer,
-        "V13 renderer publishes signed-context and lease timing metadata",
-    )
-    require(
-        "data-v13-context-status" in renderer
-        and "data-v13-context-target" in renderer
-        and "data-v13-context-source" in renderer
-        and "data-v13-lease-expires" in renderer
-        and "data-v13-next-window" in renderer,
+        and "data-v13-next-window" in renderer
+        and "data-v13-candidate" in renderer
+        and "data-v13-control-id" in renderer
+        and "data-v13-boundary" in renderer,
         "V13 renderer publishes signed-context and lease timing metadata",
     )
     require(
