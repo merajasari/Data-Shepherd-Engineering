@@ -14,6 +14,7 @@
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString([], {dateStyle:'medium', timeStyle:'short'});
   };
+  const dateText = value => value ? String(value).slice(0, 10) : 'Not published';
 
   function render(root, data) {
     text(root, '[data-v13-display]', words(data.display_status));
@@ -36,6 +37,16 @@
     text(root, '[data-v13-transition-gates]', `${numberText(data.transition_gates_passed)} / ${numberText(data.transition_gates_total)}`);
     text(root, '[data-v13-apply]', data.transition_application_present ? 'PRESENT' : 'ABSENT');
     text(root, '[data-v13-planned-state]', words(data.planned_activation_state));
+    text(root, '[data-v13-lease-valid]', data.activation_lease_valid ? 'ACTIVE PAPER ONLY' : 'EXPIRED OR BLOCKED');
+    text(root, '[data-v13-lease-expires]', datetimeText(data.activation_lease_expires_at_utc));
+    text(root, '[data-v13-lease-operator]', data.activation_lease_operator || 'Not published');
+    text(root, '[data-v13-lease-sequence]', data.activation_lease_sequence ?? 'ROOT');
+    text(root, '[data-v13-context-status]', words(data.context_status));
+    text(root, '[data-v13-context-target]', dateText(data.context_target_session));
+    text(root, '[data-v13-context-source]', dateText(data.context_source_decision_session));
+    text(root, '[data-v13-context-ranking-sha]', data.context_ranking_sha256 || 'Not published');
+    text(root, '[data-v13-context-control-sha]', data.context_control_context_sha256 || 'Not published');
+    text(root, '[data-v13-next-window]', datetimeText(data.next_decision_window_utc));
 
     const completed = Number(data.completed_sessions || 0);
     const minimum = Number(data.minimum_completed_sessions || 60);
