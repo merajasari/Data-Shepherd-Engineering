@@ -27,6 +27,7 @@ from ml.v13.regime_overlay_activation_transition import (
     plan_transition,
 )
 from ml.v13.regime_overlay_activation import validate_activation_lease
+from ml.v13.regime_overlay_lease_renewal_apply import validate_renewal_chain
 from ml.v13.regime_overlay_preflight import run_preflight
 from ml.v13.regime_overlay_scheduled_entrypoint import STATUS_PATH
 
@@ -129,6 +130,27 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     approval = get_manual_approval_status(preflight=preflight)
     transition = plan_transition(preflight=preflight, approval=approval)
     lease = validate_activation_lease()
+    renewal_error: str | None = None
+    try:
+        renewal = validate_renewal_chain()
+    except Exception as exc:  # the dashboard must fail closed on chain corruption
+        renewal = {"valid": False, "active": False}
+        renewal_error = f"V13_RENEWAL_CHAIN_INVALID:{type(exc).__name__}"
+    if renewal.get("valid") is True:
+        lease = {
+            **lease,
+            "valid": renewal.get("active") is True,
+            "status": renewal.get("status"),
+            "activation": (
+                "ENABLED_FRESH_EVIDENCE_PAPER_ONLY"
+                if renewal.get("active") is True
+                else "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT"
+            ),
+            "operator": renewal.get("operator") or lease.get("operator"),
+            "expires_at_utc": renewal.get("latest_lease_expires_at_utc") or lease.get("expires_at_utc"),
+            "lease_sha256": renewal.get("latest_lease_sha256") or lease.get("lease_sha256"),
+            "renewal_count": renewal.get("renewal_count", 0),
+        }
 
     journal_error: str | None = None
     try:
@@ -162,6 +184,8 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         evidence_status = "EVALUATION_SAMPLE_MATURE"
 
     failures = list(monitor.get("failures") or [])
+    if renewal_error:
+        failures.append(renewal_error)
     if journal_error:
         failures.append(f"JOURNAL_INVALID:{journal_error}")
     if not contract_verified:
@@ -229,6 +253,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "activation_lease_valid": lease.get("valid") is True,
         "activation_lease_operator": lease.get("operator"),
         "activation_lease_expires_at_utc": lease.get("expires_at_utc"),
+        "activation_lease_sequence": lease.get("renewal_count", 0),
         "transition_status": (
             "APPLIED_PAPER_ONLY"
             if lease.get("valid") is True
