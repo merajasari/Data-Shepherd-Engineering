@@ -1,7 +1,8 @@
 (() => {
   const money = value => value == null ? '—' : '$' + Number(value).toLocaleString(undefined,{maximumFractionDigits:0});
   const pct = value => value == null ? '—' : (Number(value) >= 0 ? '+' : '') + (Number(value) * 100).toFixed(2) + '%';
-  const root = document.querySelector('#v10-confirmation-card') ||
+  const root = document.querySelector('#v10-cycle3-accelerated-monitor') ||
+    document.querySelector('#v10-confirmation-card') ||
     document.querySelector('#v8-launch-readiness-card') ||
     document.querySelector('#v8-holdout-monitor') ||
     document.querySelector('footer');
@@ -14,16 +15,19 @@
   section.innerHTML = `
     <style>
       #v10-cycle3-holdout-monitor .c3-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
-      #v10-cycle3-holdout-monitor .c3-badge{border:1px solid rgba(54,216,255,.38);border-radius:999px;padding:8px 12px;color:#36d8ff;font-size:12px;font-weight:800;white-space:nowrap}
+      #v10-cycle3-holdout-monitor .c3-badge{border:1px solid rgba(54,216,255,.38);border-radius:999px;padding:8px 12px;color:#36d8ff;font-size:12px;font-weight:800;text-align:center;overflow-wrap:anywhere;max-width:100%}
       #v10-cycle3-holdout-monitor .c3-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:16px}
       #v10-cycle3-holdout-monitor .c3-metric{padding:12px;border:1px solid rgba(145,166,194,.16);border-radius:10px;background:rgba(7,16,31,.38)}
       #v10-cycle3-holdout-monitor .c3-metric span{display:block;color:#91a6c2;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
       #v10-cycle3-holdout-monitor .c3-metric strong{display:block;margin-top:6px;font-size:16px}
       #v10-cycle3-holdout-monitor .c3-note{margin-top:14px;color:#91a6c2;font-size:12px;line-height:1.55}
+      #v10-cycle3-holdout-monitor .c3-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;color:#91a6c2;font-size:11px}
+      #v10-cycle3-holdout-monitor .c3-legend span{display:flex;align-items:center;gap:6px}
+      #v10-cycle3-holdout-monitor .c3-line{width:18px;height:3px;border-radius:3px}
       #v10-cycle3-holdout-monitor svg{display:block;width:100%;height:210px;margin-top:14px}
       @media(max-width:900px){#v10-cycle3-holdout-monitor .c3-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.c3-head{flex-direction:column}}
     </style>
-    <div class="c3-head"><div><div class="label">FROZEN FUTURE EVIDENCE — SEPARATE FROM RECONSTRUCTION</div><h2>V10 Cycle 3 Fresh Forward Holdout</h2><p class="muted">The selected Cycle 3 candidate is frozen now; genuine observations begin January 4, 2027.</p></div><div class="c3-badge" data-c3-state>LOADING</div></div>
+    <div class="c3-head"><div><div class="label">INDEPENDENT JANUARY CONFIRMATION · UNCHANGED</div><h2>V10 Cycle 3 Independent Fresh Holdout</h2><p class="muted">Genuine confirmation observations begin January 4, 2027. Accelerated September–December evidence never enters this journal or chart.</p></div><div class="c3-badge" data-c3-state>LOADING</div></div>
     <div class="c3-grid">
       <div class="c3-metric"><span>Evidence</span><strong data-c3-evidence>—</strong></div>
       <div class="c3-metric"><span>Decisions</span><strong data-c3-decisions>—</strong></div>
@@ -34,6 +38,7 @@
       <div class="c3-metric"><span>Operations</span><strong data-c3-operations>—</strong></div>
       <div class="c3-metric"><span>Last Health Check</span><strong data-c3-health-time>—</strong></div>
     </div>
+    <div class="c3-legend"><span><i class="c3-line" style="background:#36d8ff"></i>Cycle 3 January confirmation</span><span><i class="c3-line" style="background:#f5c451"></i>SPY benchmark</span></div>
     <div data-c3-chart></div>
     <div class="c3-note" data-c3-note>Loading frozen holdout status…</div>
   `;
@@ -66,7 +71,7 @@
       const healthTime=data.operational_checked_at_utc ? new Date(data.operational_checked_at_utc).toLocaleString() : '—';
       set('[data-c3-health-time]', healthTime);
       const failures=(data.operational_failures||[]).length;
-      set('[data-c3-note]', `${data.method_note} Operations: ${data.operational_status||'UNKNOWN'}${failures ? ` · ${failures} active alert(s)` : ''} · scheduler every 5 minutes. Frozen SHA: ${data.frozen_sha256}. Brokerage orders: OFF.`);
+      set('[data-c3-note]', `${data.method_note} Accelerated September–December events are excluded. Operations: ${data.operational_status||'UNKNOWN'}${failures ? ` · ${failures} active alert(s)` : ''} · scheduler every 5 minutes. Frozen SHA: ${data.frozen_sha256}. Brokerage orders: OFF.`);
       renderChart(data.curve);
     })
     .catch(error => {

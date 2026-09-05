@@ -59,6 +59,12 @@ def main() -> None:
         b'/static/js/v13_regime_overlay_status.js' in research.data,
         "Model Research loads its read-only V13 status renderer",
     )
+    require(
+        b'/static/js/v10_confirmation_dashboard.js' in research.data
+        and b'/static/js/v10_cycle3_accelerated_dashboard.js' in research.data
+        and b'/static/js/v10_cycle3_holdout_monitor.js' in research.data,
+        "Model Research loads all three classified V10 sections",
+    )
     v8_api = client.get("/api/v8/holdout")
     require(v8_api.status_code == 200, "V8 synchronized dashboard API responds")
     require(
@@ -71,6 +77,29 @@ def main() -> None:
             for event in (v8_api.get_json().get("event_history") or [])
         ),
         "V8 lifecycle events expose their official symbol baskets for hover details",
+    )
+    v10_accelerated_api = client.get("/api/v10/cycle3/accelerated")
+    require(
+        v10_accelerated_api.status_code == 200,
+        "V10 accelerated read-only dashboard API responds",
+    )
+    v10_accelerated = v10_accelerated_api.get_json()
+    require(
+        v10_accelerated.get("classification")
+        == "AUTHORIZED_PROSPECTIVE_PAPER_FORWARD"
+        and v10_accelerated.get("first_decision_session_utc")
+        == "2026-09-08T00:00:00+00:00"
+        and v10_accelerated.get("independent_confirmation_start_utc")
+        == "2027-01-04T00:00:00+00:00",
+        "V10 accelerated and January evidence boundaries stay separate",
+    )
+    require(
+        v10_accelerated.get("runner_invoked") is False
+        and v10_accelerated.get("historical_reconstruction_read") is False
+        and v10_accelerated.get("january_holdout_outcomes_read") is False
+        and v10_accelerated.get("v8_modified") is False
+        and v10_accelerated.get("brokerage_orders") is False,
+        "V10 dashboard request cannot invoke models, alter V8, or place orders",
     )
     v13_api = client.get("/api/v13/regime-overlay")
     require(v13_api.status_code == 200, "V13 read-only dashboard API responds")
@@ -119,6 +148,13 @@ def main() -> None:
     research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
     v11_status = (project_root / "webapp/static/js/v11_phase2_status.js").read_text()
     v13_status = (project_root / "webapp/static/js/v13_regime_overlay_status.js").read_text()
+    v10_accelerated_status = (
+        project_root
+        / "webapp/static/js/v10_cycle3_accelerated_dashboard.js"
+    ).read_text()
+    v10_january_status = (
+        project_root / "webapp/static/js/v10_cycle3_holdout_monitor.js"
+    ).read_text()
     final_polish = (project_root / "webapp/static/js/v8_dashboard_final_polish.js").read_text()
     require(
         "{#" not in dashboard_template,
@@ -145,6 +181,29 @@ def main() -> None:
         and "v10-cycle3-holdout-monitor" in research_tabs
         and "v11-phase2-status', 'v11'" in research_tabs,
         "Shared and model-owned dashboard panels route to their proper tabs",
+    )
+    require(
+        research_tabs.index("'v10-cycle3-accelerated-monitor'")
+        < research_tabs.index("'v10-cycle3-holdout-monitor'")
+        < research_tabs.index("'v10-confirmation-card'")
+        and "ACCELERATED PAPER-FORWARD" in research_tabs,
+        "V10 tab orders accelerated, January, then legacy evidence",
+    )
+    require(
+        "fetch('/api/v10/cycle3/accelerated'" in v10_accelerated_status
+        and "0 / 8 complete blocks" in v10_accelerated_status
+        and "0 / 12 complete blocks" in v10_accelerated_status
+        and "Complete-block normalized comparison" in v10_accelerated_status
+        and "Paired edge by complete block" in v10_accelerated_status
+        and "Preregistered promotion gates" in v10_accelerated_status,
+        "V10 accelerated tab renders promotion progress, charts, and gates",
+    )
+    require(
+        "Accelerated September–December evidence never enters"
+        in v10_january_status
+        and "INDEPENDENT JANUARY CONFIRMATION · UNCHANGED"
+        in v10_january_status,
+        "January confirmation explicitly excludes accelerated evidence",
     )
     require(
         "(?:DISTANCE-ONLY|COMPLETED-EOD) RANK SIGNAL" in research_tabs
@@ -271,6 +330,11 @@ def main() -> None:
     require(
         b'/static/js/v13_regime_overlay_status.js' not in live.data,
         "V13 research renderer remains off the live page",
+    )
+    require(
+        b'/static/js/v10_cycle3_accelerated_dashboard.js' not in live.data
+        and b'/static/js/v10_cycle3_holdout_monitor.js' not in live.data,
+        "V10 research evidence renderers remain off the Live Stock Viewer",
     )
 
     print("Status: PASSED")
