@@ -259,8 +259,14 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
             if lease.get("valid") is True
             else transition.get("status")
         ),
-        "transition_eligible": transition.get("eligible") is True,
-        "transition_gates_passed": transition.get("gates_passed"),
+        "transition_eligible": (
+            True if lease.get("valid") is True else transition.get("eligible") is True
+        ),
+        "transition_gates_passed": (
+            transition.get("gates_total")
+            if lease.get("valid") is True
+            else transition.get("gates_passed")
+        ),
         "transition_gates_total": transition.get("gates_total"),
         "planned_activation_state": transition.get("planned_post_state"),
         "transition_application_present": True,
