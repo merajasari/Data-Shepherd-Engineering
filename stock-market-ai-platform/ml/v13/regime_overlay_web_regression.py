@@ -148,6 +148,23 @@ def main() -> None:
         "V13 API exposes signed-context and lease timing metadata",
     )
     require(
+        all(
+            key in payload
+            for key in (
+                "context_status",
+                "context_target_session",
+                "context_source_decision_session",
+                "context_ranking_sha256",
+                "context_control_context_sha256",
+                "activation_lease_expires_at_utc",
+                "activation_lease_operator",
+                "activation_lease_sequence",
+                "next_decision_window_utc",
+            )
+        ),
+        "V13 API exposes signed-context and lease timing metadata",
+    )
+    require(
         "v13-regime-overlay-status" in tabs
         and "COMPLETED FRESH PAIRED SESSIONS" in tabs
         and "COMPLETED REGIME-ELIGIBLE SESSIONS" in tabs,
@@ -165,6 +182,13 @@ def main() -> None:
         and "APPLY IMPLEMENTATION" in tabs
         and "read-only panel cannot create approval, write a lease, apply activation" in tabs,
         "V13 tab exposes governance without an activation surface",
+    )
+    require(
+        "Signed context inbox" in tabs
+        and "Effective paper lease" in tabs
+        and "SIGNED CONTEXT IDENTITIES" in tabs
+        and "Next decision window" in tabs,
+        "V13 tab exposes current context publication and lease timing",
     )
     require(
         "Signed context inbox" in tabs
@@ -193,6 +217,14 @@ def main() -> None:
         and "data-v13-transition" in renderer
         and "data-v13-lease" in renderer,
         "V13 renderer publishes approval, transition and lease state",
+    )
+    require(
+        "data-v13-context-status" in renderer
+        and "data-v13-context-target" in renderer
+        and "data-v13-context-source" in renderer
+        and "data-v13-lease-expires" in renderer
+        and "data-v13-next-window" in renderer,
+        "V13 renderer publishes signed-context and lease timing metadata",
     )
     require(
         "data-v13-context-status" in renderer
