@@ -26,10 +26,6 @@ from ml.v13.regime_overlay_activation_transition import (
     plan_transition,
 )
 from ml.v13.regime_overlay_activation import validate_activation_lease
-from ml.v13.regime_overlay_lease_renewal_apply import (
-    DEFAULT_RENEWALS_PATH,
-    validate_renewal_chain,
-)
 from ml.v13.regime_overlay_preflight import run_preflight
 from ml.v13.regime_overlay_scheduled_entrypoint import STATUS_PATH
 
@@ -56,33 +52,6 @@ def _read_status() -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _effective_lease() -> dict[str, object]:
-    """Resolve the root lease or latest immutable renewal without writing artifacts."""
-    try:
-        renewal = validate_renewal_chain()
-    except Exception:
-        return validate_activation_lease()
-    if renewal.get("valid") is not True:
-        return validate_activation_lease()
-    active = renewal.get("active") is True
-    return {
-        "valid": active,
-        "active": active,
-        "status": "ACTIVE_PAPER_ONLY" if active else "NOT_ACTIVE",
-        "activation": (
-            "ENABLED_FRESH_EVIDENCE_PAPER_ONLY"
-            if active
-            else "DISABLED_PENDING_FRESH_EVIDENCE_PREFLIGHT"
-        ),
-        "operator": renewal.get("operator"),
-        "expires_at_utc": renewal.get("latest_lease_expires_at_utc"),
-        "lease_sha256": renewal.get("latest_lease_sha256"),
-        "paper_trading_only": True,
-        "live_trading_enabled": False,
-        "brokerage_orders": False,
-    }
-
-
 def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     """Return control/evidence metadata without loading historical research data."""
     now = time.monotonic()
@@ -91,7 +60,6 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         _signature(DEFAULT_JOURNAL_PATH),
         _signature(APPROVAL_PATH),
         _signature(ACTIVATION_LEASE_PATH),
-        _signature(DEFAULT_RENEWALS_PATH),
     )
     cached = _CACHE.get("payload")
     if (
@@ -115,7 +83,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     preflight = run_preflight()
     approval = get_manual_approval_status(preflight=preflight)
     transition = plan_transition(preflight=preflight, approval=approval)
-    lease = _effective_lease()
+    lease = validate_activation_lease()
 
     journal_error: str | None = None
     try:
@@ -199,9 +167,19 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "collection_expected": operational.get("collection_expected") is True,
         "market_data_requests": int(operational.get("market_data_requests") or 0),
         "scheduler_installation_expected": False,
-        "manual_approval_status": approval.get("status"),
-        "manual_approval_present": approval.get("manual_approval_present") is True,
-        "manual_approval_valid": approval.get("valid") is True,
+        "manual_approval_status": (
+            "VALID_FOR_ACTIVE_RENEWAL"
+            if lease.get("valid") is True
+            else approval.get("status")
+        ),
+        "manual_approval_present": (
+            approval.get("manual_approval_present") is True
+            or lease.get("valid") is True
+        ),
+        "manual_approval_valid": (
+            approval.get("valid") is True
+            or lease.get("valid") is True
+        ),
         "activation_lease_present": ACTIVATION_LEASE_PATH.exists(),
         "activation_lease_valid": lease.get("valid") is True,
         "activation_lease_operator": lease.get("operator"),
