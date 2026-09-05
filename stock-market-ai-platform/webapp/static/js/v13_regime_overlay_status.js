@@ -15,6 +15,7 @@
     return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString([], {dateStyle:'medium', timeStyle:'short'});
   };
   const dateText = value => value ? String(value).slice(0, 10) : 'Not published';
+  const sequenceText = value => Number.isFinite(Number(value)) ? String(Math.trunc(Number(value))).padStart(6, '0') : (value || 'ROOT');
 
   function render(root, data) {
     text(root, '[data-v13-display]', words(data.display_status));
@@ -40,7 +41,10 @@
     text(root, '[data-v13-lease-valid]', data.activation_lease_valid ? 'ACTIVE PAPER ONLY' : 'EXPIRED OR BLOCKED');
     text(root, '[data-v13-lease-expires]', datetimeText(data.activation_lease_expires_at_utc));
     text(root, '[data-v13-lease-operator]', data.activation_lease_operator || 'Not published');
-    text(root, '[data-v13-lease-sequence]', data.activation_lease_sequence ?? 'ROOT');
+    text(root, '[data-v13-lease-sequence]', sequenceText(data.activation_lease_sequence));
+    text(root, '[data-v13-candidate]', data.candidate_id || 'Not published');
+    text(root, '[data-v13-control-id]', data.control_id || 'Not published');
+    text(root, '[data-v13-boundary]', dateText(data.fresh_evidence_boundary_utc));
     text(root, '[data-v13-context-status]', words(data.context_status));
     text(root, '[data-v13-context-target]', dateText(data.context_target_session));
     text(root, '[data-v13-context-source]', dateText(data.context_source_decision_session));
