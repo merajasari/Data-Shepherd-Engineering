@@ -19,7 +19,11 @@ from zoneinfo import ZoneInfo
 import requests
 from dotenv import load_dotenv
 
-from ml.v11.intraday_contract import IntradayValidation, validate_completed_bars
+from ml.v11.intraday_contract import (
+    BAR_INTERVAL,
+    IntradayValidation,
+    validate_completed_bars,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 INGESTION_ROOT = ROOT / "data-ingestion"
@@ -44,6 +48,7 @@ class CollectionResult:
     completed_bar_utc: str | None
     output_path: str
     reasons: tuple[str, ...]
+    trimmed_incomplete_bars: int = 0
     brokerage_orders: bool = False
     v8_modified: bool = False
     v10_modified: bool = False
@@ -100,6 +105,34 @@ def normalize_rows(symbol: str, payload: Sequence[Mapping[str, object]]) -> list
         )
     rows.sort(key=lambda row: str(row["timestamp_utc"]))
     return rows
+
+
+def _completed_bar_prefix(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    now_utc: datetime,
+) -> tuple[list[dict[str, object]], int]:
+    """Remove only trailing bars that are validly timestamped but still forming."""
+    completed = [dict(row) for row in rows]
+    if now_utc.tzinfo is None:
+        return completed, 0
+    cutoff = now_utc.astimezone(timezone.utc)
+    trimmed = 0
+    while completed:
+        raw_timestamp = completed[-1].get("timestamp_utc")
+        try:
+            timestamp = datetime.fromisoformat(
+                str(raw_timestamp).replace("Z", "+00:00")
+            )
+        except (TypeError, ValueError):
+            break
+        if timestamp.tzinfo is None:
+            break
+        if timestamp.astimezone(timezone.utc) + BAR_INTERVAL <= cutoff:
+            break
+        completed.pop()
+        trimmed += 1
+    return completed, trimmed
 
 
 def _atomic_json_write(path: Path, payload: dict[str, object]) -> None:
@@ -169,12 +202,18 @@ def collect_complete_snapshot(
     staged: dict[str, list[dict[str, object]]] = {}
     fetched_latest_timestamps: set[str] = set()
     fetched_bar_counts: set[int] = set()
+    trimmed_incomplete_bars = 0
     for symbol in universe:
         try:
-            rows = client.get_five_minute_bars(symbol, session_date)
+            fetched_rows = client.get_five_minute_bars(symbol, session_date)
         except Exception:
             reasons.append(f"FETCH_FAILED:{symbol}")
             continue
+        rows, trimmed = _completed_bar_prefix(
+            fetched_rows,
+            now_utc=now_utc,
+        )
+        trimmed_incomplete_bars += trimmed
         if rows:
             fetched_latest_timestamps.add(str(rows[-1]["timestamp_utc"]))
             fetched_bar_counts.add(len(rows))
@@ -225,6 +264,7 @@ def collect_complete_snapshot(
             completed_bar_utc=next(iter(latest_timestamps)) if len(latest_timestamps) == 1 else None,
             output_path=str(output_path.relative_to(ROOT) if output_path.is_relative_to(ROOT) else output_path),
             reasons=unique_reasons,
+            trimmed_incomplete_bars=trimmed_incomplete_bars,
         )
 
     completed_bar = next(iter(latest_timestamps))
@@ -245,6 +285,7 @@ def collect_complete_snapshot(
         "symbols": list(universe),
         "series_sha256": _digest(staged),
         "series": staged,
+        "trimmed_incomplete_bars": trimmed_incomplete_bars,
         "paper_trading_only": True,
         "brokerage_orders": False,
         "v8_modified": False,
@@ -258,6 +299,7 @@ def collect_complete_snapshot(
         completed_bar_utc=completed_bar,
         output_path=str(output_path.relative_to(ROOT) if output_path.is_relative_to(ROOT) else output_path),
         reasons=(),
+        trimmed_incomplete_bars=trimmed_incomplete_bars,
     )
 
 
@@ -275,6 +317,10 @@ def main() -> None:
     print(f"Published: {result.published}")
     print(f"Symbols ready: {result.symbol_count}/101")
     print(f"Completed bar: {result.completed_bar_utc or 'NONE'}")
+    print(
+        "Trailing still-forming bars excluded: "
+        f"{result.trimmed_incomplete_bars}"
+    )
     if result.reasons:
         print("Reasons:")
         for reason in result.reasons[:20]:
