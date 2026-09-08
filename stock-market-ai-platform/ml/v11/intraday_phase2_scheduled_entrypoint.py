@@ -62,6 +62,11 @@ def _attempt_diagnostics(
         else []
     )
     symbol_count = getattr(outcome, "symbol_count", None)
+    trimmed_incomplete_bars = getattr(
+        outcome,
+        "trimmed_incomplete_bars",
+        None,
+    )
     return {
         "attempted_at_utc": now.isoformat(),
         "session_date": session_date,
@@ -70,6 +75,11 @@ def _attempt_diagnostics(
         "published": getattr(outcome, "published", None),
         "symbol_count": symbol_count if isinstance(symbol_count, int) else None,
         "completed_bar_utc": getattr(outcome, "completed_bar_utc", None),
+        "trimmed_incomplete_bars": (
+            trimmed_incomplete_bars
+            if isinstance(trimmed_incomplete_bars, int)
+            else None
+        ),
         "reasons": reasons,
     }
 
@@ -253,6 +263,11 @@ def main() -> None:
             "Last completed bar: "
             f"{attempt.get('completed_bar_utc') or 'NONE'}"
         )
+        if attempt.get("trimmed_incomplete_bars") is not None:
+            print(
+                "Trailing still-forming bars excluded: "
+                f"{attempt['trimmed_incomplete_bars']}"
+            )
         reasons = [str(reason) for reason in attempt.get("reasons") or []]
         if reasons:
             print("Last collection rejection reasons:")
