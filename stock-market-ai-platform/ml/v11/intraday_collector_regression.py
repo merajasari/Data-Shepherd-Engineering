@@ -37,6 +37,24 @@ def bars(symbol: str, *, count: int = 6, shift_last: bool = False) -> list[dict[
     return rows
 
 
+class FormingBarClient:
+    def get_five_minute_bars(self, symbol: str, session_date: str) -> list[dict[str, object]]:
+        rows = bars(symbol, count=13)
+        session_start = datetime(2026, 9, 8, 13, 30, tzinfo=timezone.utc)
+        for index, row in enumerate(rows):
+            row["timestamp_utc"] = (
+                session_start + timedelta(minutes=5 * index)
+            ).isoformat()
+        return rows
+
+
+class MalformedTrailingBarClient(FormingBarClient):
+    def get_five_minute_bars(self, symbol: str, session_date: str) -> list[dict[str, object]]:
+        rows = super().get_five_minute_bars(symbol, session_date)
+        rows[-1]["timestamp_utc"] = "not-a-timestamp"
+        return rows
+
+
 class FinalSessionClient:
     def get_five_minute_bars(self, symbol: str, session_date: str) -> list[dict[str, object]]:
         return bars(symbol, count=78)
@@ -77,6 +95,55 @@ def main() -> None:
         require(payload["brokerage_orders"] is False, "Published snapshot has no brokerage authority")
 
         before = output.read_bytes()
+
+        catch_up_now = datetime(2026, 9, 8, 14, 34, 15, tzinfo=timezone.utc)
+        forming = collect_complete_snapshot(
+            now_utc=catch_up_now,
+            session_date="2026-09-08",
+            client=FormingBarClient(),
+            output_path=output,
+            symbols=universe(),
+        )
+        require(
+            forming.published,
+            "Catch-up ignores the trailing still-forming five-minute bar",
+        )
+        forming_payload = json.loads(output.read_text())
+        require(
+            forming.completed_bar_utc.endswith("14:25:00+00:00"),
+            "Catch-up publishes through the latest completed 10:25 Eastern bar",
+        )
+        require(
+            forming.trimmed_incomplete_bars == 101
+            and forming_payload["trimmed_incomplete_bars"] == 101,
+            "Exactly one trailing forming bar per symbol is excluded",
+        )
+        require(
+            {len(rows) for rows in forming_payload["series"].values()} == {12},
+            "Published catch-up snapshot contains completed bars only",
+        )
+
+        before = output.read_bytes()
+        malformed = collect_complete_snapshot(
+            now_utc=catch_up_now,
+            session_date="2026-09-08",
+            client=MalformedTrailingBarClient(),
+            output_path=output,
+            symbols=universe(),
+        )
+        require(
+            not malformed.published,
+            "Malformed trailing timestamps remain fail-closed",
+        )
+        require(
+            any(reason.startswith("TIMESTAMP_INVALID:") for reason in malformed.reasons),
+            "Malformed timestamp rejection remains explicit",
+        )
+        require(
+            output.read_bytes() == before,
+            "Malformed data cannot replace the last complete snapshot",
+        )
+
         missing = collect_complete_snapshot(
             now_utc=now,
             session_date="2026-08-27",
