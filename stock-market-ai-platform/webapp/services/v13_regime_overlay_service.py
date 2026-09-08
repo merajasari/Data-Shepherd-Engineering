@@ -36,6 +36,7 @@ CACHE_TTL_SECONDS = 10.0
 _CACHE: dict[str, object] = {"at": 0.0, "signature": None, "payload": None}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTEXT_INBOX_ROOT = PROJECT_ROOT / "data" / "research" / "v13" / "fresh_regime_overlay" / "inbox"
+AUTOMATION_ROOT = PROJECT_ROOT / "data" / "research" / "v13" / "fresh_regime_overlay" / "automation"
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -78,6 +79,76 @@ def _read_signed_context_metadata() -> dict[str, object]:
     }
 
 
+def _read_automation_metadata() -> dict[str, object]:
+    """Read the latest one-session control without changing its audit artifacts."""
+    try:
+        sessions = sorted(path for path in AUTOMATION_ROOT.iterdir() if path.is_dir())
+    except OSError:
+        sessions = []
+    if not sessions:
+        return {
+            "status": "NOT_CONFIGURED",
+            "target_session": None,
+            "attempted_at_utc": None,
+            "attempt_consumed": False,
+            "retry_permitted": False,
+            "backfill_permitted": False,
+            "evidence_appended": False,
+            "failure_reason": None,
+            "market_data_requests": None,
+            "request_count_status": "NOT_APPLICABLE",
+        }
+    session = sessions[-1]
+    authorization = _read_json(session / "authorization.json")
+    attempt = _read_json(session / "collection_attempt.json")
+    status = _read_json(session / "status.json")
+    terminal = status.get("status") in {
+        "COLLECTION_FAILED_NO_EVIDENCE",
+        "FRESH_PAPER_DECISION_RECORDED",
+    }
+    if attempt and not terminal:
+        return {
+            "status": "COLLECTION_ATTEMPTED_OUTCOME_UNRECORDED",
+            "target_session": attempt.get("target_session") or session.name,
+            "attempted_at_utc": attempt.get("attempted_at_utc"),
+            "attempt_consumed": True,
+            "retry_permitted": False,
+            "backfill_permitted": False,
+            "evidence_appended": False,
+            "failure_reason": "TERMINAL_STATUS_MISSING_SEE_IMMUTABLE_ERROR_LOG",
+            "market_data_requests": None,
+            "request_count_status": "UNAVAILABLE_AFTER_UNHANDLED_PROVIDER_FAILURE",
+        }
+    return {
+        "status": status.get("status") or ("AUTHORIZED" if authorization else "NOT_AUTHORIZED"),
+        "target_session": status.get("target_session") or authorization.get("target_session") or session.name,
+        "attempted_at_utc": status.get("attempted_at_utc") or attempt.get("attempted_at_utc"),
+        "attempt_consumed": status.get("attempt_consumed") is True or bool(attempt),
+        "retry_permitted": status.get("retry_permitted") is True and not attempt,
+        "backfill_permitted": False,
+        "evidence_appended": status.get("evidence_appended") is True,
+        "failure_reason": status.get("failure_reason"),
+        "market_data_requests": status.get("market_data_requests"),
+        "request_count_status": status.get("request_count_status") or "NOT_RECORDED",
+    }
+
+
+def _automation_signature() -> tuple[object, ...]:
+    try:
+        sessions = sorted(path for path in AUTOMATION_ROOT.iterdir() if path.is_dir())
+    except OSError:
+        return (_signature(AUTOMATION_ROOT),)
+    if not sessions:
+        return (_signature(AUTOMATION_ROOT),)
+    latest = sessions[-1]
+    return (
+        _signature(AUTOMATION_ROOT),
+        _signature(latest / "authorization.json"),
+        _signature(latest / "collection_attempt.json"),
+        _signature(latest / "status.json"),
+    )
+
+
 def _signature(path: Path) -> tuple[int, int] | None:
     try:
         stat = path.stat()
@@ -105,6 +176,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         _signature(APPROVAL_PATH),
         _signature(ACTIVATION_LEASE_PATH),
         _signature(CONTEXT_INBOX_ROOT),
+        _automation_signature(),
     )
     cached = _CACHE.get("payload")
     if (
@@ -125,6 +197,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     control = dict(contract.get("control") or {})
     operational = _read_status()
     context = _read_signed_context_metadata()
+    automation = _read_automation_metadata()
     monitor = run_monitor()
     preflight = run_preflight()
     approval = get_manual_approval_status(preflight=preflight)
@@ -186,6 +259,13 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
     failures = list(monitor.get("failures") or [])
     if renewal_error:
         failures.append(renewal_error)
+    if automation["status"] in {
+        "COLLECTION_FAILED_NO_EVIDENCE",
+        "COLLECTION_ATTEMPTED_OUTCOME_UNRECORDED",
+    }:
+        failures.append(
+            f"AUTOMATION_{automation[\"status\"]}:{automation.get(\"failure_reason\") or \"UNKNOWN\"}"
+        )
     if journal_error:
         failures.append(f"JOURNAL_INVALID:{journal_error}")
     if not contract_verified:
@@ -319,6 +399,17 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
             if context["target_session"]
             else None
         ),
+        "automation_status": automation["status"],
+        "automation_target_session": automation["target_session"],
+        "automation_attempted_at_utc": automation["attempted_at_utc"],
+        "automation_attempt_consumed": automation["attempt_consumed"],
+        "automation_retry_permitted": automation["retry_permitted"],
+        "automation_backfill_permitted": automation["backfill_permitted"],
+        "automation_evidence_appended": automation["evidence_appended"],
+        "automation_failure_reason": automation["failure_reason"],
+        "automation_market_data_requests": automation["market_data_requests"],
+        "automation_request_count_status": automation["request_count_status"],
+        "missing_quote_policy": "FAIL_SESSION_NO_EVIDENCE_NO_RETRY",
     }
     _CACHE.update({"at": now, "signature": signature, "payload": dict(payload)})
     return payload

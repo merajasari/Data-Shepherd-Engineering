@@ -11,6 +11,7 @@ from ml.v13.regime_overlay_session_automation import (
     AUTOMATION_ACKNOWLEDGEMENT,
     _require_contract,
     authorize_session,
+    get_session_status,
     run_collection,
     run_preflight,
 )
@@ -112,6 +113,59 @@ def main() -> None:
         )
         require(ready["status"] == "READY_FOR_AUTOMATIC_COLLECTION", "6:55 preflight passes")
         require(ready["market_data_requests"] == 0, "Preflight requests no market data")
+
+        failed_attempt = root / "failed-attempt.json"
+        failed_status = root / "failed-status.json"
+
+        def failed_collector(**_: object) -> object:
+            raise ValueError("V13_BID_INVALID:CRM")
+
+        try:
+            run_collection(
+                now_utc=datetime(2026, 9, 8, 14, 0, 4, tzinfo=timezone.utc),
+                authorization_path=authorization,
+                attempt_path=failed_attempt,
+                inbox_root=inbox,
+                status_path=failed_status,
+                lease_validator=active,
+                collector=failed_collector,
+                require_api_key=False,
+            )
+        except ValueError as exc:
+            require(str(exc) == "V13_BID_INVALID:CRM", "Original provider failure is preserved")
+        else:
+            raise AssertionError("Original provider failure is preserved")
+        failed = get_session_status(
+            authorization_path=authorization,
+            attempt_path=failed_attempt,
+            status_path=failed_status,
+        )
+        require(
+            failed["status"] == "COLLECTION_FAILED_NO_EVIDENCE"
+            and failed["failure_reason"] == "V13_BID_INVALID:CRM",
+            "Provider failure becomes a sanitized terminal status",
+        )
+        require(
+            failed["attempt_consumed"] is True
+            and failed["retry_permitted"] is False
+            and failed["backfill_permitted"] is False
+            and failed["evidence_appended"] is False,
+            "Failed collection cannot be retried or counted as evidence",
+        )
+
+        stale_status = root / "stale-status.json"
+        stale_status.write_text(json.dumps(ready), encoding="utf-8")
+        inferred = get_session_status(
+            authorization_path=authorization,
+            attempt_path=failed_attempt,
+            status_path=stale_status,
+        )
+        require(
+            inferred["status"] == "COLLECTION_ATTEMPTED_OUTCOME_UNRECORDED"
+            and inferred["attempt_consumed"] is True
+            and inferred["retry_permitted"] is False,
+            "Existing attempt outranks stale preflight and authorization",
+        )
 
         blocked_attempt = root / "blocked-attempt.json"
         try:

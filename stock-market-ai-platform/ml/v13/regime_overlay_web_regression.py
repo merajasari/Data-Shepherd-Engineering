@@ -146,9 +146,25 @@ def main() -> None:
                 "candidate_id",
                 "control_id",
                 "fresh_evidence_boundary_utc",
+                "automation_status",
+                "automation_target_session",
+                "automation_attempted_at_utc",
+                "automation_attempt_consumed",
+                "automation_retry_permitted",
+                "automation_backfill_permitted",
+                "automation_evidence_appended",
+                "automation_failure_reason",
+                "automation_market_data_requests",
+                "automation_request_count_status",
+                "missing_quote_policy",
             )
         ),
         "V13 API exposes signed-context and lease timing metadata",
+    )
+    require(
+        payload["missing_quote_policy"] == "FAIL_SESSION_NO_EVIDENCE_NO_RETRY"
+        and payload["automation_backfill_permitted"] is False,
+        "V13 API exposes fail-closed automatic collection state",
     )
     require(
         "v13-regime-overlay-status" in tabs

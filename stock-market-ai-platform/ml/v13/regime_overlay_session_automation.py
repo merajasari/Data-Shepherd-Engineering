@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 from typing import Callable, Mapping
 from zoneinfo import ZoneInfo
 
@@ -41,6 +42,10 @@ AUTHORIZATION_PATH = AUTOMATION_ROOT / "authorization.json"
 ATTEMPT_PATH = AUTOMATION_ROOT / "collection_attempt.json"
 STATUS_PATH = AUTOMATION_ROOT / "status.json"
 INBOX_ROOT = ROOT / "data/research/v13/fresh_regime_overlay/inbox"
+TERMINAL_STATUSES = {
+    "COLLECTION_FAILED_NO_EVIDENCE",
+    "FRESH_PAPER_DECISION_RECORDED",
+}
 
 
 def _require_contract() -> str:
@@ -112,6 +117,68 @@ def _write_status(path: Path, payload: Mapping[str, object]) -> None:
     finally:
         os.close(fd)
     os.replace(temporary, path)
+
+
+def _read_mapping(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_failure_reason(exc: Exception) -> str:
+    """Return a bounded V13 error code without leaking credentials or URLs."""
+    message = str(exc).strip()
+    if re.fullmatch(r"V13_[A-Z0-9_]+(?::[A-Z0-9.\-]+)?", message):
+        return message
+    return f"V13_AUTOMATION_COLLECTION_EXCEPTION:{type(exc).__name__}"
+
+
+def get_session_status(
+    *,
+    authorization_path: Path = AUTHORIZATION_PATH,
+    attempt_path: Path = ATTEMPT_PATH,
+    status_path: Path = STATUS_PATH,
+) -> dict[str, object]:
+    """Report the most advanced immutable state; an attempt outranks authorization."""
+    digest = _require_contract()
+    status = _read_mapping(status_path)
+    attempt = _read_mapping(attempt_path)
+    authorized = authorization_path.exists()
+    if attempt:
+        if status.get("status") in TERMINAL_STATUSES:
+            return status
+        return {
+            "status": "COLLECTION_ATTEMPTED_OUTCOME_UNRECORDED",
+            "target_session": TARGET_SESSION,
+            "attempted_at_utc": attempt.get("attempted_at_utc"),
+            "attempt_consumed": True,
+            "retry_permitted": False,
+            "backfill_permitted": False,
+            "evidence_appended": False,
+            "failure_reason": "TERMINAL_STATUS_MISSING_SEE_IMMUTABLE_ERROR_LOG",
+            "market_data_requests": None,
+            "request_count_status": "UNAVAILABLE_AFTER_UNHANDLED_PROVIDER_FAILURE",
+            "contract_sha256": digest,
+            "paper_trading_only": True,
+            "live_trading_enabled": False,
+            "brokerage_orders": False,
+        }
+    if status:
+        return status
+    return {
+        "status": "AUTHORIZED" if authorized else "NOT_AUTHORIZED",
+        "target_session": TARGET_SESSION,
+        "attempt_consumed": False,
+        "retry_permitted": authorized,
+        "backfill_permitted": False,
+        "evidence_appended": False,
+        "contract_sha256": digest,
+        "paper_trading_only": True,
+        "live_trading_enabled": False,
+        "brokerage_orders": False,
+    }
 
 
 def authorize_session(
@@ -297,21 +364,54 @@ def run_collection(
         "brokerage_orders": False,
     }
     _write_exclusive(attempt_path, attempt)
-    result = collector(
-        apply=True,
-        now_utc=now,
-        operator=str(authorization["operator"]),
-        acknowledgement=REQUIRED_ACKNOWLEDGEMENT,
-        market_session_open=bool(authorization["market_session_open_asserted"]),
-        ranking_snapshot=ranking,
-        control_context=control,
-    )
+    try:
+        result = collector(
+            apply=True,
+            now_utc=now,
+            operator=str(authorization["operator"]),
+            acknowledgement=REQUIRED_ACKNOWLEDGEMENT,
+            market_session_open=bool(authorization["market_session_open_asserted"]),
+            ranking_snapshot=ranking,
+            control_context=control,
+        )
+    except Exception as exc:
+        observed_requests = getattr(exc, "market_data_requests", None)
+        if type(observed_requests) is not int or observed_requests < 0:
+            observed_requests = None
+        failure: dict[str, object] = {
+            "status": "COLLECTION_FAILED_NO_EVIDENCE",
+            "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+            "attempted_at_utc": now.isoformat(),
+            "target_session": TARGET_SESSION,
+            "source_session": SOURCE_SESSION,
+            "collector_invoked": True,
+            "attempt_consumed": True,
+            "retry_permitted": False,
+            "backfill_permitted": False,
+            "failure_reason": _safe_failure_reason(exc),
+            "market_data_requests": observed_requests,
+            "request_count_status": (
+                "RECORDED" if observed_requests is not None
+                else "UNAVAILABLE_AFTER_PROVIDER_FAILURE"
+            ),
+            "evidence_appended": False,
+            "activation_lease_sha256": lease.get("latest_lease_sha256"),
+            "missing_quote_policy": "FAIL_SESSION_NO_EVIDENCE_NO_RETRY",
+            "paper_trading_only": True,
+            "live_trading_enabled": False,
+            "brokerage_orders": False,
+        }
+        _write_status(status_path, failure)
+        raise
     output: dict[str, object] = {
         "status": getattr(result, "status"),
         "checked_at_utc": now.isoformat(),
         "target_session": TARGET_SESSION,
         "source_session": SOURCE_SESSION,
         "collector_invoked": getattr(result, "collector_invoked"),
+        "attempt_consumed": True,
+        "retry_permitted": False,
+        "backfill_permitted": False,
         "market_data_requests": getattr(result, "market_data_requests"),
         "evidence_appended": getattr(result, "event_appended"),
         "activation_lease_sha256": getattr(result, "activation_lease_sha256"),
@@ -340,11 +440,7 @@ def main() -> None:
     elif args.mode == "collect":
         result = run_collection()
     else:
-        result = {
-            "status": "AUTHORIZED" if AUTHORIZATION_PATH.exists() else "NOT_AUTHORIZED",
-            "target_session": TARGET_SESSION,
-            "contract_sha256": digest,
-        }
+        result = get_session_status()
     print("V13 ONE-SESSION AUTOMATIC PAPER-EVIDENCE CONTROL")
     print("=" * 80)
     for key, value in result.items():
