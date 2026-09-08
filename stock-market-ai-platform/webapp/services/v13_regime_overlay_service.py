@@ -264,7 +264,10 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "COLLECTION_ATTEMPTED_OUTCOME_UNRECORDED",
     }:
         failures.append(
-            f"AUTOMATION_{automation[\"status\"]}:{automation.get(\"failure_reason\") or \"UNKNOWN\"}"
+            "AUTOMATION_"
+            + str(automation["status"])
+            + ":"
+            + str(automation.get("failure_reason") or "UNKNOWN")
         )
     if journal_error:
         failures.append(f"JOURNAL_INVALID:{journal_error}")
