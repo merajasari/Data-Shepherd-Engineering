@@ -8,7 +8,11 @@ from pathlib import Path
 
 from ml.v11.intraday_phase2_journal import Phase2EvidenceJournal
 from ml.v11.intraday_phase2_observation import run_observation
-from ml.v11.intraday_ranking import _canonical_sha, get_v5_data_symbols
+from ml.v11.intraday_ranking import (
+    _canonical_sha,
+    build_development_rankings,
+    get_v5_data_symbols,
+)
 
 
 def require(condition: bool, label: str) -> None:
@@ -67,6 +71,21 @@ def synthetic_fixture() -> tuple[dict[str, object], dict[str, float]]:
     return snapshot, closes
 
 
+def decision_only_snapshot(
+    snapshot: dict[str, object],
+) -> dict[str, object]:
+    decision = copy.deepcopy(snapshot)
+    decision["series"] = {
+        symbol: rows[:6]
+        for symbol, rows in decision["series"].items()
+    }
+    decision["completed_bar_utc"] = decision["series"]["SPY"][-1][
+        "timestamp_utc"
+    ]
+    decision["series_sha256"] = _canonical_sha(decision["series"])
+    return decision
+
+
 def main() -> None:
     snapshot, closes = synthetic_fixture()
     with tempfile.TemporaryDirectory(prefix="v11_phase2_observation_") as directory:
@@ -86,6 +105,15 @@ def main() -> None:
         require(result.net_excess_return is not None, "SPY-relative result is calculated")
         require(result.brokerage_orders is False, "Observation has no brokerage authority")
 
+        expected_decision = build_development_rankings(
+            decision_only_snapshot(snapshot),
+            closes,
+        )
+        require(
+            result.selected_symbols == tuple(expected_decision["top_10"]),
+            "Selection uses only the six preregistered decision bars",
+        )
+
         rows = Phase2EvidenceJournal(journal_path).read()
         require(
             [row["event_type"] for row in rows]
@@ -96,6 +124,77 @@ def main() -> None:
         require(all(row["brokerage_orders"] is False for row in rows), "Every event keeps orders off")
         require(all(row["v8_modified"] is False for row in rows), "V8 remains unchanged")
         require(all(row["v10_modified"] is False for row in rows), "V10 remains unchanged")
+        require(
+            len({row["ranking_sha256"] for row in rows}) == 1
+            and len({row["decision_series_sha256"] for row in rows}) == 1,
+            "Every lifecycle event retains one decision-time ranking identity",
+        )
+
+        progressive_path = Path(directory) / "progressive.jsonl"
+        partial = run_observation(
+            snapshot=decision_only_snapshot(snapshot),
+            previous_closes=closes,
+            journal_path=progressive_path,
+            rehearsal=True,
+        )
+        require(
+            partial.status == "WAITING_FOR_ENTRY"
+            and partial.events_appended == 1,
+            "Decision-only checkpoint records exactly one prospective decision",
+        )
+        completed = run_observation(
+            snapshot=snapshot,
+            previous_closes=closes,
+            journal_path=progressive_path,
+            rehearsal=True,
+        )
+        progressive_rows = Phase2EvidenceJournal(progressive_path).read()
+        require(
+            completed.status == "SESSION_OBSERVATION_COMPLETE"
+            and completed.events_appended == 3,
+            "Later snapshot completes the original decision lifecycle",
+        )
+        require(
+            len({
+                tuple(row["selected_symbols"])
+                for row in progressive_rows
+            }) == 1
+            and len({
+                row["ranking_sha256"]
+                for row in progressive_rows
+            }) == 1,
+            "Decision, entry and exit cannot drift to a later-bar basket",
+        )
+
+        future_changed = copy.deepcopy(snapshot)
+        candidate_symbols = [
+            symbol
+            for symbol in future_changed["series"]
+            if symbol != "SPY"
+        ]
+        for symbol in candidate_symbols[:15]:
+            for bar_index in range(6, 12):
+                row = future_changed["series"][symbol][bar_index]
+                multiplier = 1.0 + 0.08 * (bar_index - 5)
+                row["open"] *= multiplier
+                row["high"] *= multiplier
+                row["low"] *= multiplier
+                row["close"] *= multiplier
+                row["volume"] *= 5
+        future_changed["series_sha256"] = _canonical_sha(
+            future_changed["series"]
+        )
+        future_path = Path(directory) / "future_changed.jsonl"
+        future_result = run_observation(
+            snapshot=future_changed,
+            previous_closes=closes,
+            journal_path=future_path,
+            rehearsal=True,
+        )
+        require(
+            future_result.selected_symbols == result.selected_symbols,
+            "Post-decision price and volume changes cannot alter selection",
+        )
 
         restart = run_observation(
             snapshot=snapshot,
