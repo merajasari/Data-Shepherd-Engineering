@@ -2,8 +2,8 @@
 
 The runner converts a complete V11 research snapshot into a deterministic
 decision, paper entry, paper exit, and net SPY-relative session observation.
-Production evidence writes remain impossible while the Phase 2 contract is
-disabled. No brokerage interface is imported or called.
+Evidence writes require the preregistered paper-only activation. Brokerage
+execution remains disabled, and no brokerage interface is imported or called.
 """
 from __future__ import annotations
 
@@ -83,6 +83,28 @@ def _validate_snapshot(
     return session_date, series
 
 
+def _decision_snapshot(
+    snapshot: Mapping[str, object],
+    series: Mapping[str, list[Mapping[str, object]]],
+    *,
+    decision_index: int,
+) -> dict[str, object]:
+    required_bars = decision_index + 1
+    if any(len(rows) < required_bars for rows in series.values()):
+        raise ValueError("DECISION_BARS_INCOMPLETE")
+    decision_series = {
+        symbol: [dict(row) for row in rows[:required_bars]]
+        for symbol, rows in series.items()
+    }
+    derived = dict(snapshot)
+    derived["series"] = decision_series
+    derived["series_sha256"] = _canonical_sha(decision_series)
+    derived["completed_bar_utc"] = decision_series["SPY"][-1][
+        "timestamp_utc"
+    ]
+    return derived
+
+
 def _event(
     *,
     event_type: str,
@@ -90,6 +112,7 @@ def _event(
     timestamp_utc: str,
     contract_sha: str,
     ranking_sha: str,
+    decision_series_sha: str,
     selected: list[str],
     rehearsal: bool,
     catch_up: bool,
@@ -102,6 +125,7 @@ def _event(
         "timestamp_utc": timestamp_utc,
         "contract_sha256": contract_sha,
         "ranking_sha256": ranking_sha,
+        "decision_series_sha256": decision_series_sha,
         "selected_symbols": selected,
         "rehearsal": rehearsal,
         "catch_up_reconstruction": catch_up,
@@ -143,18 +167,27 @@ def run_observation(
         raise RuntimeError("PHASE2_CONTRACT_WEIGHTS_DRIFT")
 
     session_date, series = _validate_snapshot(snapshot, contract)
-    ranking = build_development_rankings(snapshot, previous_closes)
+    decision_index = int(contract["decision_bar_index"])
+    decision_snapshot = _decision_snapshot(
+        snapshot,
+        series,
+        decision_index=decision_index,
+    )
+    ranking = build_development_rankings(
+        decision_snapshot,
+        previous_closes,
+    )
     selected = list(ranking["top_10"])
     if len(selected) != int(contract["top_n"]) or len(set(selected)) != 10:
         raise ValueError("PHASE2_SELECTION_INVALID")
 
-    decision_index = int(contract["decision_bar_index"])
     holding_bars = int(contract["configuration"]["holding_bars"])
     entry_index = decision_index + 1
     exit_index = decision_index + holding_bars
     minimum_count = min(len(rows) for rows in series.values())
     contract_sha = contract_sha256(contract)
     ranking_sha = str(ranking["ranking_sha256"])
+    decision_series_sha = str(decision_snapshot["series_sha256"])
     events: list[dict[str, object]] = []
 
     decision_bar = series["SPY"][decision_index]
@@ -170,12 +203,14 @@ def run_observation(
             timestamp_utc=decision_time.isoformat(),
             contract_sha=contract_sha,
             ranking_sha=ranking_sha,
+            decision_series_sha=decision_series_sha,
             selected=selected,
             rehearsal=rehearsal,
             catch_up=catch_up,
             collected_at_utc=collection_time,
             extra={
                 "source_snapshot_sha256": snapshot["series_sha256"],
+                "decision_snapshot_sha256": decision_series_sha,
                 "configuration_id": contract["configuration"]["config_id"],
                 "decision_bar_index": decision_index,
             },
@@ -198,6 +233,7 @@ def run_observation(
                 timestamp_utc=entry_time.isoformat(),
                 contract_sha=contract_sha,
                 ranking_sha=ranking_sha,
+                decision_series_sha=decision_series_sha,
                 selected=selected,
                 rehearsal=rehearsal,
                 catch_up=catch_up,
@@ -243,6 +279,7 @@ def run_observation(
                 timestamp_utc=exit_time.isoformat(),
                 contract_sha=contract_sha,
                 ranking_sha=ranking_sha,
+                decision_series_sha=decision_series_sha,
                 selected=selected,
                 rehearsal=rehearsal,
                 catch_up=catch_up,
@@ -261,6 +298,7 @@ def run_observation(
                 timestamp_utc=exit_time.isoformat(),
                 contract_sha=contract_sha,
                 ranking_sha=ranking_sha,
+                decision_series_sha=decision_series_sha,
                 selected=selected,
                 rehearsal=rehearsal,
                 catch_up=catch_up,
