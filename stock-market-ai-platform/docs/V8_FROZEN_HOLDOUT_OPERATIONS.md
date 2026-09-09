@@ -48,6 +48,26 @@ fails closed if anything differs.
 The LaunchAgent runs every five minutes. The scheduler must call the monitored
 entry point, never the holdout runner directly.
 
+## Dashboard equity behavior
+
+The headline V8 portfolio equity has two deliberately separate accounting
+bases:
+
+- **Current mark-to-market:** while a forward cohort is open, the dashboard
+  values its ten positions from the lightweight Tiingo IEX live quote cache,
+  with the rolling 5-minute cache as the closed-market fallback. The value is
+  refreshed in the browser every 15 seconds and includes the cohort's modeled
+  trading cost.
+- **Completed-cohort evidence:** official V8 return, SPY return, excess return,
+  drawdown, hit rate, and the completed forward curve continue to use `EXIT`
+  events only.
+
+The current mark is read-only and is explicitly labeled as such. It never
+creates, edits, or replaces a journal event. If any open basket lacks complete
+price coverage, the API fails closed to completed-cohort equity (or the frozen
+$100,000 baseline before the first exit) and reports the missing symbols rather
+than publishing a partial portfolio value.
+
 ## Expected launch timeline
 
 ### Before September 1

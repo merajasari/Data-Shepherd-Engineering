@@ -24,6 +24,13 @@ READINESS_PATH = Path("data/model/v8/readiness/status.json")
 MONITOR_ALERT_PATH = Path("data/model/v8/monitor/alert_state.json")
 V8_RANKED_PATH = Path("data/model/v8/phase4/fixed_complementarity_ranked_panel.parquet")
 V8_CURRENT_RANKINGS_PATH = Path("data/live/v8_latest_rankings.json")
+LIVE_QUOTES_PATH = Path("data/live/latest_quotes.json")
+ROLLING_QUOTES_PATHS = (
+    Path("data/live/iex_24h_5m_v5.json"),
+    Path("data/live/iex_24h_5m.json"),
+    Path("data/live/iex_24h_5m_legacy.json"),
+)
+STARTING_EQUITY = 100000.0
 
 # A dashboard page currently has multiple independently loaded V8 widgets.  A
 # short response cache collapses those requests into one filesystem pass per
@@ -49,6 +56,8 @@ def _dashboard_signature():
         _file_signature(JOURNAL_PATH),
         _file_signature(MONITOR_ALERT_PATH),
         _file_signature(V8_CURRENT_RANKINGS_PATH),
+        _file_signature(LIVE_QUOTES_PATH),
+        *(_file_signature(path) for path in ROLLING_QUOTES_PATHS),
     )
 
 
@@ -103,6 +112,283 @@ def _event_history(events):
     return sorted(rows, key=lambda row: row.get("timestamp_utc") or "")
 
 
+def _as_positive_float(value):
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed > 0 else None
+
+
+def _as_utc_timestamp(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _latest_market_marks(required_symbols=None):
+    """Read the newest lightweight cached price for each stock and SPY.
+
+    This intentionally avoids historical Parquet and network calls. The live
+    IEX cache supplies regular-session marks; the rolling cache preserves the
+    last observed mark when the stream is quiet or the market is closed.
+    """
+    marks = {}
+    required = {
+        str(symbol).upper().strip()
+        for symbol in (required_symbols or [])
+        if str(symbol).strip()
+    }
+
+    def consider(symbol, price, timestamp, source):
+        symbol = str(symbol or "").upper().strip()
+        if required and symbol not in required:
+            return
+        price = _as_positive_float(price)
+        timestamp = _as_utc_timestamp(timestamp)
+        if not symbol or price is None or timestamp is None:
+            return
+        prior = marks.get(symbol)
+        if prior is None or timestamp > prior["timestamp"]:
+            marks[symbol] = {
+                "price": price,
+                "timestamp": timestamp,
+                "timestamp_utc": timestamp.isoformat(),
+                "source": source,
+            }
+
+    live = _read_json(LIVE_QUOTES_PATH)
+    live_updated = live.get("updated_at")
+    for symbol, quote in (live.get("quotes") or {}).items():
+        if not isinstance(quote, dict):
+            continue
+        consider(
+            symbol,
+            quote.get("reference_price"),
+            quote.get("timestamp") or quote.get("received_at") or live_updated,
+            "TIINGO_IEX_LIVE_CACHE",
+        )
+
+    if required and required.issubset(marks):
+        return marks
+
+    for path in ROLLING_QUOTES_PATHS:
+        payload = _read_json(path)
+        payload_updated = payload.get("updated_at")
+        for symbol, rows in (payload.get("series") or {}).items():
+            if not isinstance(rows, list):
+                continue
+            for row in reversed(rows):
+                if not isinstance(row, dict):
+                    continue
+                price = row.get("price")
+                timestamp = row.get("t") or row.get("timestamp") or payload_updated
+                if _as_positive_float(price) is not None and _as_utc_timestamp(timestamp) is not None:
+                    consider(symbol, price, timestamp, "TIINGO_IEX_ROLLING_CACHE")
+                    break
+        if required and required.issubset(marks):
+            break
+
+    return marks
+
+
+def _cohort_offset(event):
+    try:
+        return int(event.get("cohort_offset", -1))
+    except (TypeError, ValueError):
+        return -1
+
+
+def _entry_identity(event):
+    return (event.get("decision_timestamp_utc"), _cohort_offset(event))
+
+
+def _required_open_mark_symbols(entries, exits):
+    exited = {_entry_identity(event) for event in exits}
+    required = set()
+    for entry in entries:
+        if _entry_identity(entry) in exited:
+            continue
+        required.update(str(symbol).upper() for symbol in (entry.get("symbols") or []))
+        required.add("SPY")
+    return required
+
+
+def _mark_to_market(entries, exits, marks):
+    """Value currently open frozen-V8 cohorts without creating evidence.
+
+    EXIT events remain the sole source for completed-cohort evidence. Cached
+    prices are used only for a clearly labeled, read-only current valuation.
+    """
+    exited = {_entry_identity(event) for event in exits}
+    open_by_cohort = {}
+    for entry in sorted(entries, key=lambda row: row.get("entry_timestamp_utc") or ""):
+        if _entry_identity(entry) not in exited:
+            open_by_cohort[_cohort_offset(entry)] = entry
+
+    wealth = {
+        cohort: {"strategy": 1.0, "spy": 1.0, "started": False}
+        for cohort in range(5)
+    }
+    for event in sorted(exits, key=lambda row: row.get("exit_timestamp_utc") or ""):
+        cohort = _cohort_offset(event)
+        if cohort not in wealth:
+            continue
+        strategy_return = event.get("net_portfolio_return")
+        spy_return = event.get("spy_return")
+        if strategy_return is None or spy_return is None:
+            continue
+        wealth[cohort]["strategy"] *= 1.0 + float(strategy_return)
+        wealth[cohort]["spy"] *= 1.0 + float(spy_return)
+        wealth[cohort]["started"] = True
+
+    cohort_marks = []
+    missing_symbols = set()
+    strategy_complete = True
+    spy_complete = True
+    timestamps = []
+    sources = set()
+
+    for cohort, entry in sorted(open_by_cohort.items()):
+        if cohort not in wealth:
+            continue
+        wealth[cohort]["started"] = True
+        entry_time = _as_utc_timestamp(entry.get("entry_timestamp_utc"))
+        symbols = [str(symbol).upper() for symbol in (entry.get("symbols") or [])]
+        entry_prices = entry.get("entry_prices") or {}
+        stock_returns = []
+        used_marks = []
+        cohort_missing = []
+
+        for symbol in symbols:
+            entry_price = _as_positive_float(entry_prices.get(symbol))
+            mark = marks.get(symbol)
+            if (
+                entry_price is None
+                or mark is None
+                or (entry_time is not None and mark["timestamp"] < entry_time)
+            ):
+                cohort_missing.append(symbol)
+                missing_symbols.add(symbol)
+                continue
+            stock_returns.append(mark["price"] / entry_price - 1.0)
+            used_marks.append(mark)
+
+        strategy_return = None
+        if symbols and len(stock_returns) == len(symbols):
+            gross_return = statistics.mean(stock_returns)
+            cost_rate = float(entry.get("modeled_cost_rate") or 0.0)
+            strategy_return = (1.0 + gross_return) * (1.0 - cost_rate) - 1.0
+            wealth[cohort]["strategy"] *= 1.0 + strategy_return
+        else:
+            strategy_complete = False
+
+        spy_return = None
+        spy_entry = _as_positive_float(entry.get("spy_entry_open"))
+        spy_mark = marks.get("SPY")
+        if (
+            spy_entry is not None
+            and spy_mark is not None
+            and (entry_time is None or spy_mark["timestamp"] >= entry_time)
+        ):
+            spy_return = spy_mark["price"] / spy_entry - 1.0
+            wealth[cohort]["spy"] *= 1.0 + spy_return
+            used_marks.append(spy_mark)
+        else:
+            spy_complete = False
+            missing_symbols.add("SPY")
+
+        timestamps.extend(mark["timestamp"] for mark in used_marks)
+        sources.update(mark["source"] for mark in used_marks)
+        cohort_marks.append({
+            "cohort_offset": cohort,
+            "decision_timestamp_utc": entry.get("decision_timestamp_utc"),
+            "entry_timestamp_utc": entry.get("entry_timestamp_utc"),
+            "symbol_count": len(symbols),
+            "priced_symbol_count": len(stock_returns),
+            "missing_symbols": cohort_missing,
+            "net_mark_to_market_return": strategy_return,
+            "spy_mark_to_market_return": spy_return,
+        })
+
+    started = [row for row in wealth.values() if row["started"]]
+    realized_curve = _curve(exits)
+    realized_equity = (
+        float(realized_curve[-1]["strategy_normalized"])
+        if realized_curve
+        else STARTING_EQUITY
+    )
+    realized_spy_equity = (
+        float(realized_curve[-1]["spy_normalized"])
+        if realized_curve
+        else STARTING_EQUITY
+    )
+
+    open_count = len(open_by_cohort)
+    live_strategy_available = bool(open_count and started and strategy_complete)
+    live_spy_available = bool(open_count and started and spy_complete)
+    strategy_equity = (
+        STARTING_EQUITY * statistics.mean(row["strategy"] for row in started)
+        if live_strategy_available
+        else realized_equity
+    )
+    spy_equity = (
+        STARTING_EQUITY * statistics.mean(row["spy"] for row in started)
+        if live_spy_available
+        else realized_spy_equity
+    )
+    current_return = strategy_equity / STARTING_EQUITY - 1.0
+    current_spy_return = spy_equity / STARTING_EQUITY - 1.0
+
+    if live_strategy_available:
+        basis = "LIVE_MARK_TO_MARKET"
+    elif exits:
+        basis = "COMPLETED_COHORTS_ONLY"
+    elif open_count:
+        basis = "BASELINE_PRICE_COVERAGE_PENDING"
+    else:
+        basis = "BASELINE_NO_OPEN_COHORTS"
+
+    return {
+        "starting_equity": STARTING_EQUITY,
+        "current_equity": strategy_equity,
+        "current_return": current_return,
+        "current_spy_equity": spy_equity,
+        "current_spy_return": current_spy_return,
+        "current_excess_return": (
+            current_return - current_spy_return
+            if live_strategy_available and live_spy_available
+            else None
+        ),
+        "realized_completed_equity": realized_equity,
+        "realized_completed_return": realized_equity / STARTING_EQUITY - 1.0,
+        "equity_basis": basis,
+        "mark_to_market_available": live_strategy_available,
+        "spy_mark_to_market_available": live_spy_available,
+        "open_cohorts": open_count,
+        "priced_open_cohorts": sum(
+            row["symbol_count"] > 0 and row["priced_symbol_count"] == row["symbol_count"]
+            for row in cohort_marks
+        ),
+        "missing_mark_symbols": sorted(missing_symbols),
+        "valuation_timestamp_utc": max(timestamps).isoformat() if timestamps else None,
+        "valuation_oldest_timestamp_utc": min(timestamps).isoformat() if timestamps else None,
+        "valuation_sources": sorted(sources),
+        "cohort_marks": cohort_marks,
+        "valuation_note": (
+            "Read-only mark-to-market of open V8 forward cohorts using cached "
+            "Tiingo IEX reference prices. It is not completed-cohort evidence "
+            "and never writes to the append-only holdout journal."
+        ),
+    }
+
+
 def _latest_v8_rankings():
     """Serve the current 100-row JSON ranking without loading historical Parquet."""
     signature = _file_signature(V8_CURRENT_RANKINGS_PATH)
@@ -137,19 +423,18 @@ def _curve(exits):
     if not exits:
         return []
     by_cohort = {i: {"strategy": 1.0, "spy": 1.0} for i in range(5)}
+    started_cohorts = set()
     points = []
     for event in sorted(exits, key=lambda x: x.get("exit_timestamp_utc", "")):
         cohort = int(event["cohort_offset"])
         by_cohort[cohort]["strategy"] *= 1.0 + float(event["net_portfolio_return"])
         by_cohort[cohort]["spy"] *= 1.0 + float(event["spy_return"])
-        active = [
-            value for value in by_cohort.values()
-            if value["strategy"] != 1.0 or value["spy"] != 1.0
-        ]
+        started_cohorts.add(cohort)
+        active = [by_cohort[index] for index in sorted(started_cohorts)]
         points.append({
             "timestamp_utc": event["exit_timestamp_utc"],
-            "strategy_normalized": 100000.0 * sum(v["strategy"] for v in active) / len(active),
-            "spy_normalized": 100000.0 * sum(v["spy"] for v in active) / len(active),
+            "strategy_normalized": STARTING_EQUITY * sum(v["strategy"] for v in active) / len(active),
+            "spy_normalized": STARTING_EQUITY * sum(v["spy"] for v in active) / len(active),
         })
     return points
 
@@ -173,11 +458,11 @@ def _performance_metrics(exits, curve):
     ]
 
     completed = len(net_returns)
-    strategy_total = curve[-1]["strategy_normalized"] / 100000.0 - 1.0 if curve else None
-    spy_total = curve[-1]["spy_normalized"] / 100000.0 - 1.0 if curve else None
+    strategy_total = curve[-1]["strategy_normalized"] / STARTING_EQUITY - 1.0 if curve else None
+    spy_total = curve[-1]["spy_normalized"] / STARTING_EQUITY - 1.0 if curve else None
     max_drawdown = None
     if curve:
-        peak = 100000.0
+        peak = STARTING_EQUITY
         drawdowns = []
         for point in curve:
             wealth = float(point["strategy_normalized"])
@@ -316,6 +601,12 @@ def get_v8_holdout_dashboard():
     latest_rankings = _latest_v8_rankings()
     curve = _curve(exits)
     performance = _performance_metrics(exits, curve)
+    required_marks = _required_open_mark_symbols(entries, exits)
+    current_valuation = _mark_to_market(
+        entries,
+        exits,
+        _latest_market_marks(required_marks) if required_marks else {},
+    )
     checks = readiness.get("checks") or {}
     rehearsal_details = checks.get("ranking_top10_details") or []
     rehearsal_symbols = checks.get("ranking_top10") or []
@@ -367,6 +658,7 @@ def get_v8_holdout_dashboard():
         **performance,
         "latest_exit": exits[-1] if exits else None,
         "curve": curve,
+        **current_valuation,
         "event_history": _event_history(events),
         "launch_operations": _launch_operations(status, readiness, events, now),
         "latest_research_top10_timestamp_utc": checks.get("ranking_timestamp_utc") or latest_rankings["timestamp_utc"],

@@ -73,53 +73,69 @@
   // Replace the legacy V4 portfolio summary with genuine frozen-V8 holdout metrics.
   const equityCard = document.querySelector('.v4-dashboard .v4-equity-card');
   const metricGrid = document.querySelector('.v4-dashboard .v4-small-metrics');
-  if (equityCard && metricGrid) {
-    equityCard.innerHTML = `<div class="label">V8 PORTFOLIO EQUITY</div><div class="big" id="v8-summary-equity">$100,000.00</div><div id="v8-summary-gain" class="v4-gain">WAITING FOR FORWARD EVIDENCE</div><div class="muted" id="v8-summary-starting" style="margin-top:6px">$100,000 frozen starting capital · baseline only</div>`;
+  const modelResearchView = new URLSearchParams(window.location.search).get('view') !== 'live';
+  if (equityCard && metricGrid && modelResearchView) {
+    equityCard.innerHTML = `<div class="label">V8 CURRENT PORTFOLIO EQUITY</div><div class="big" id="v8-summary-equity">Loading…</div><div id="v8-summary-gain" class="v4-gain">READING OPEN V8 POSITIONS</div><div class="muted" id="v8-summary-starting" style="margin-top:6px">$100,000 frozen starting capital</div>`;
     metricGrid.innerHTML = `
       <div class="metric"><span>V8 TOTAL RETURN SINCE HOLDOUT START</span><strong id="v8-summary-return">—</strong></div>
       <div class="metric"><span>V8 COMPLETED-COHORT RETURN</span><strong id="v8-summary-forward">—</strong></div>
-      <div class="metric"><span>SPY HOLDOUT RETURN</span><strong id="v8-summary-spy">—</strong></div>
-      <div class="metric"><span>V8 EXCESS RETURN VS SPY</span><strong id="v8-summary-excess">—</strong></div>
-      <div class="metric"><span>V8 MAX DRAWDOWN</span><strong id="v8-summary-drawdown">—</strong></div>
-      <div class="metric"><span>V8 OBSERVATIONS</span><strong id="v8-summary-observations">0</strong></div>`;
+      <div class="metric"><span>SPY CURRENT MARK RETURN</span><strong id="v8-summary-spy">—</strong></div>
+      <div class="metric"><span>V8 CURRENT EXCESS VS SPY</span><strong id="v8-summary-excess">—</strong></div>
+      <div class="metric"><span>V8 COMPLETED MAX DRAWDOWN</span><strong id="v8-summary-drawdown">—</strong></div>
+      <div class="metric"><span>COMPLETED / OPEN COHORTS</span><strong id="v8-summary-observations">0 / 0</strong></div>`;
 
     const money = v => '$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-    const pct4 = v => `${v>=0?'+':''}${(v*100).toFixed(4)}%`;
-    const maxDrawdown = values => {
-      let peak=-Infinity, worst=0;
-      for(const x of values){ if(!Number.isFinite(x)) continue; peak=Math.max(peak,x); if(peak>0) worst=Math.min(worst,(x/peak)-1); }
-      return worst;
+    const signedMoney = v => `${Number(v)>=0?'+':'-'}$${Math.abs(Number(v)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const finite = v => v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
+    const pct4 = v => finite(v)?`${Number(v)>=0?'+':''}${(Number(v)*100).toFixed(4)}%`:'—';
+    const markTime = value => {
+      const d=new Date(value); if(Number.isNaN(d.getTime()))return null;
+      return d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit',timeZone:'America/Los_Angeles',timeZoneName:'short'});
     };
     const setSummary = (id,value) => { const n=document.getElementById(id); if(n) n.textContent=value; };
+    const tone = (id,value) => { const n=document.getElementById(id);if(!n)return;n.classList.remove('positive','negative');if(finite(value))n.classList.add(Number(value)<0?'negative':'positive'); };
+    const getSnapshot = force => window.DataShepherdV8Snapshot
+      ? window.DataShepherdV8Snapshot.get({force})
+      : fetch('/api/v8/holdout',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();});
 
-    fetch('/api/v8/holdout',{cache:'no-store'})
-      .then(r=>{if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json();})
-      .then(d=>{
-        const curve=Array.isArray(d.curve)?d.curve:[];
-        const obs=Number(d.completed_cohorts||0);
-        setSummary('v8-summary-observations',String(obs));
-        if(!curve.length){
-          setSummary('v8-summary-gain',String(d.state||'WAITING_FOR_HOLDOUT').replaceAll('_',' '));
-          return;
-        }
-        const latest=curve[curve.length-1];
-        const equity=Number(latest.strategy_normalized);
-        const spyEquity=Number(latest.spy_normalized);
-        if(!Number.isFinite(equity)||!Number.isFinite(spyEquity)) return;
-        const ret=equity/100000-1, spy=spyEquity/100000-1, excess=ret-spy;
-        const dd=maxDrawdown(curve.map(x=>Number(x.strategy_normalized)));
+    const refreshV8Equity = async (force=false) => {
+      try {
+        const d=await getSnapshot(force);
+        const completed=Number(d.completed_cohorts||0),open=Number(d.open_cohorts||0);
+        const equity=finite(d.current_equity)?Number(d.current_equity):100000;
+        const ret=finite(d.current_return)?Number(d.current_return):equity/100000-1;
+        const spy=finite(d.current_spy_return)?Number(d.current_spy_return):null;
+        const excess=finite(d.current_excess_return)?Number(d.current_excess_return):null;
+        const change=equity-100000;
+        const basis=String(d.equity_basis||'BASELINE_NO_OPEN_COHORTS');
+        const isMark=basis==='LIVE_MARK_TO_MARKET';
+        const hasCompleted=completed>0;
+        const priced=Number(d.priced_open_cohorts||0);
+        const when=markTime(d.valuation_oldest_timestamp_utc||d.valuation_timestamp_utc);
+        const displayedReturn=isMark||hasCompleted?ret:null;
+        const displayedSpy=isMark||hasCompleted?spy:null;
+
         setSummary('v8-summary-equity',money(equity));
-        setSummary('v8-summary-gain',`${equity>=100000?'+':''}${money(equity-100000).replace('$','')} (${pct4(ret)})`);
-        setSummary('v8-summary-starting','vs frozen V8 starting equity $100,000.00');
-        setSummary('v8-summary-return',pct4(ret));
-        setSummary('v8-summary-forward',pct4(ret));
-        setSummary('v8-summary-spy',pct4(spy));
+        setSummary('v8-summary-gain',isMark?`CURRENT MARK · ${signedMoney(change)} (${pct4(ret)})`:basis.replaceAll('_',' '));
+        tone('v8-summary-gain',isMark||hasCompleted?change:null);
+        setSummary('v8-summary-starting',isMark
+          ? `$100,000 start · ${priced}/${open} open cohorts priced${when?` · marks as of ${when}`:''}`
+          : `$100,000 start · ${completed} completed · ${open} open${d.missing_mark_symbols?.length?` · waiting for ${d.missing_mark_symbols.join(', ')} marks`:''}`);
+        setSummary('v8-summary-return',pct4(displayedReturn));
+        setSummary('v8-summary-forward',pct4(d.strategy_total_return));
+        setSummary('v8-summary-spy',pct4(displayedSpy));
         setSummary('v8-summary-excess',pct4(excess));
-        setSummary('v8-summary-drawdown',pct4(dd));
-      })
-      .catch(err=>{
+        setSummary('v8-summary-drawdown',pct4(d.max_drawdown));
+        setSummary('v8-summary-observations',`${completed} / ${open}`);
+        [['v8-summary-return',displayedReturn],['v8-summary-forward',d.strategy_total_return],['v8-summary-spy',displayedSpy],['v8-summary-excess',excess],['v8-summary-drawdown',d.max_drawdown]].forEach(([id,value])=>tone(id,value));
+      } catch(err) {
+        setSummary('v8-summary-equity','$100,000.00');
         setSummary('v8-summary-gain','V8 HOLDOUT DATA UNAVAILABLE');
         console.error('[V8 PORTFOLIO SUMMARY]',err);
-      });
+      }
+    };
+
+    refreshV8Equity(true);
+    setInterval(()=>refreshV8Equity(true),15000);
   }
 })();
