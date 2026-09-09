@@ -200,6 +200,7 @@
   const money = value => Number(value).toLocaleString(undefined,{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2});
   const pct4 = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value)>=0?'+':''}${(Number(value)*100).toFixed(4)}%`;
   const dateTime = value => {
+    if(value==null||value==='')return '—';
     const parsed=new Date(value);
     return Number.isNaN(parsed.getTime())?'—':parsed.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Los_Angeles',timeZoneName:'short'});
   };
@@ -265,8 +266,18 @@
     }
     const endLabels=labelRows.map(row=>`<text x="${Math.min(liveWidth-p.r+8,x(last.time)+9)}" y="${row.labelY}" fill="${row.color}" font-size="11" font-weight="900">${row.label} ${money(last[row.key])}</text>`).join('');
     liveHits=rows.map(row=>({...row,x:x(row.time),top:Math.min(y(row.v10),y(row.v8),y(row.spy))}));
-    host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live accelerated V10 paper equity compared with the frozen V8 control and SPY">${grid}<line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${lines}${dots}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${dateOnly(minX)}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${dateTime(maxX)}</text></svg>`;
-    set('[data-a10-live-range]',`${dateOnly(minX)} → ${dateTime(maxX)} · ${Math.max(0,rows.length-2)} completed-exit points + current mark`);
+    const hasLiveMark=data.equity_basis==='LIVE_MARK_TO_MARKET';
+    const completedExits=Array.isArray(data.operational_curve)?data.operational_curve.length:0;
+    const axisEnd=rows.length>1?dateTime(rows.at(-1).time):'Awaiting first entry';
+    host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live accelerated V10 paper equity compared with the frozen V8 control and SPY">${grid}<line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${lines}${dots}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${dateOnly(minX)}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${axisEnd}</text></svg>`;
+    const rangeStatus=hasLiveMark
+      ? `${completedExits} completed-exit points + current mark`
+      : completedExits
+        ? `${completedExits} completed-exit points · no open cohort`
+        : Number(data.open_cohorts)>0
+          ? `awaiting complete price coverage for ${Number(data.open_cohorts)} open cohort${Number(data.open_cohorts)===1?'':'s'}`
+          : 'awaiting first journaled entry';
+    set('[data-a10-live-range]',`${dateOnly(minX)} → ${axisEnd} · ${rangeStatus}`);
   }
 
   const liveStage=section.querySelector('.a10-live-stage');
@@ -426,7 +437,15 @@
       set('[data-a10-january-modified]',data.january_confirmation_modified === true ? 'YES' : 'NO');
       const alerts=section.querySelector('[data-a10-alerts]');
       const failures=Array.isArray(data.operational_failures)?data.operational_failures:[];
-      if (alerts) { alerts.hidden=!failures.length; alerts.textContent=failures.length?`Active integrity alerts: ${failures.join(' · ')}`:''; }
+      if (alerts) {
+        alerts.hidden=!failures.length;
+        alerts.textContent=failures.map(failure=>{
+          const missed=String(failure).match(/^missed_decisions_not_backfilled:(.+)$/);
+          return missed
+            ? `Evidence gap preserved: the ${missed[1].split(',').join(', ')} decision was missed and cannot be backfilled under the frozen prospective contract. Current collection can continue, but the operational-integrity promotion gate remains blocked.`
+            : `Active integrity alert: ${statusText(failure)}`;
+        }).join(' ');
+      }
   }
 
   function renderError(error) {
