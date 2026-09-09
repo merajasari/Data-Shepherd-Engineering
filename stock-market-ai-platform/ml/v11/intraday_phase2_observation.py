@@ -173,49 +173,85 @@ def run_observation(
         series,
         decision_index=decision_index,
     )
-    ranking = build_development_rankings(
-        decision_snapshot,
-        previous_closes,
-    )
-    selected = list(ranking["top_10"])
+    contract_sha = contract_sha256(contract)
+    journal = Phase2EvidenceJournal(journal_path)
+    session_rows = [
+        row
+        for row in journal.read()
+        if row["session_date"] == session_date
+    ]
+    decisions = [
+        row for row in session_rows if row["event_type"] == "DECISION"
+    ]
+    if len(decisions) > 1:
+        raise RuntimeError("PHASE2_MULTIPLE_DECISIONS")
+    existing_decision = decisions[0] if decisions else None
+    if existing_decision is None:
+        if session_rows:
+            raise RuntimeError("PHASE2_DECISION_MISSING_BEFORE_LIFECYCLE")
+        ranking = build_development_rankings(
+            decision_snapshot,
+            previous_closes,
+        )
+        selected = list(ranking["top_10"])
+        ranking_sha = str(ranking["ranking_sha256"])
+        decision_series_sha = str(decision_snapshot["series_sha256"])
+    else:
+        selected = list(existing_decision.get("selected_symbols") or [])
+        ranking_sha = str(existing_decision.get("ranking_sha256") or "")
+        decision_series_sha = str(
+            existing_decision.get("decision_series_sha256") or ""
+        )
+        for row in session_rows:
+            if row["event_type"] == "DECISION":
+                continue
+            if (
+                list(row.get("selected_symbols") or []) != selected
+                or row.get("ranking_sha256") != ranking_sha
+                or row.get("decision_series_sha256")
+                != decision_series_sha
+            ):
+                raise RuntimeError(
+                    "PHASE2_EXISTING_SESSION_PROVENANCE_DRIFT"
+                )
     if len(selected) != int(contract["top_n"]) or len(set(selected)) != 10:
         raise ValueError("PHASE2_SELECTION_INVALID")
+    if len(ranking_sha) != 64 or len(decision_series_sha) != 64:
+        raise ValueError("PHASE2_DECISION_IDENTITY_INVALID")
 
     holding_bars = int(contract["configuration"]["holding_bars"])
     entry_index = decision_index + 1
     exit_index = decision_index + holding_bars
     minimum_count = min(len(rows) for rows in series.values())
-    contract_sha = contract_sha256(contract)
-    ranking_sha = str(ranking["ranking_sha256"])
-    decision_series_sha = str(decision_snapshot["series_sha256"])
     events: list[dict[str, object]] = []
 
-    decision_bar = series["SPY"][decision_index]
-    decision_time = (
-        _utc(decision_bar["timestamp_utc"])
-        .replace(second=0, microsecond=0)
-        + timedelta(minutes=5)
-    )
-    events.append(
-        _event(
-            event_type="DECISION",
-            session_date=session_date,
-            timestamp_utc=decision_time.isoformat(),
-            contract_sha=contract_sha,
-            ranking_sha=ranking_sha,
-            decision_series_sha=decision_series_sha,
-            selected=selected,
-            rehearsal=rehearsal,
-            catch_up=catch_up,
-            collected_at_utc=collection_time,
-            extra={
-                "source_snapshot_sha256": snapshot["series_sha256"],
-                "decision_snapshot_sha256": decision_series_sha,
-                "configuration_id": contract["configuration"]["config_id"],
-                "decision_bar_index": decision_index,
-            },
+    if existing_decision is None:
+        decision_bar = series["SPY"][decision_index]
+        decision_time = (
+            _utc(decision_bar["timestamp_utc"])
+            .replace(second=0, microsecond=0)
+            + timedelta(minutes=5)
         )
-    )
+        events.append(
+            _event(
+                event_type="DECISION",
+                session_date=session_date,
+                timestamp_utc=decision_time.isoformat(),
+                contract_sha=contract_sha,
+                ranking_sha=ranking_sha,
+                decision_series_sha=decision_series_sha,
+                selected=selected,
+                rehearsal=rehearsal,
+                catch_up=catch_up,
+                collected_at_utc=collection_time,
+                extra={
+                    "source_snapshot_sha256": snapshot["series_sha256"],
+                    "decision_snapshot_sha256": decision_series_sha,
+                    "configuration_id": contract["configuration"]["config_id"],
+                    "decision_bar_index": decision_index,
+                },
+            )
+        )
 
     strategy_net_return: float | None = None
     spy_return: float | None = None
@@ -315,7 +351,6 @@ def run_observation(
             )
         )
 
-    journal = Phase2EvidenceJournal(journal_path)
     appended = sum(1 for event in events if journal.append(event))
     session_rows = [
         row for row in journal.read()
