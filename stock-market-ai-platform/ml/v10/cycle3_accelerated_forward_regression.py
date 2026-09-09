@@ -27,6 +27,9 @@ from ml.v10.cycle3_accelerated_forward_runner import (
     run_once,
 )
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+INSTALLER_PATH = PROJECT_ROOT / "scripts/mac/install_v10_cycle3_accelerated.sh"
+
 
 def _sessions(end: str) -> pd.DatetimeIndex:
     values = pd.bdate_range("2026-08-03", end, tz="UTC")
@@ -100,6 +103,13 @@ def _assert_contract() -> None:
     tampered = json.loads(json.dumps(contract))
     tampered["source_candidate"]["candidate_modified"] = True
     assert "CANDIDATE_MUST_REMAIN_UNMODIFIED" in validate_contract(tampered)
+
+
+def _assert_scheduler_uses_spark_backend() -> None:
+    source = INSTALLER_PATH.read_text(encoding="utf-8")
+    assert "<key>FEATURE_BACKEND</key><string>spark</string>" in source
+    assert "FEATURE_BACKEND=pandas" not in source
+    assert "<key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>" in source
 
 
 def _assert_prospective_and_duplicate_safe() -> None:
@@ -244,6 +254,7 @@ def _assert_january_isolation() -> None:
 
 def main() -> None:
     _assert_contract()
+    _assert_scheduler_uses_spark_backend()
     _assert_prospective_and_duplicate_safe()
     _assert_no_backfill()
     _assert_promotion_checkpoints()
@@ -251,6 +262,7 @@ def main() -> None:
     print("V10 CYCLE 3 ACCELERATED PAPER-FORWARD REGRESSION")
     print("=" * 88)
     print("Contract identity and frozen candidate: PASS")
+    print("Scheduler Spark feature backend: PASS")
     print("Prospective decision timing and duplicate safety: PASS")
     print("Missed-decision backfill prohibition: PASS")
     print("8-block and 12-block review checkpoints: PASS")

@@ -26,6 +26,9 @@ cat > "$PLIST" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>$LABEL</string>
+<key>EnvironmentVariables</key><dict>
+<key>FEATURE_BACKEND</key><string>spark</string>
+</dict>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
 <string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.v10.cycle3_accelerated_scheduled_entrypoint; else echo '[SKIP] accelerated V10 scheduler already running'; fi</string>
@@ -44,6 +47,7 @@ launchctl bootstrap "gui/$UID_VALUE" "$PLIST"
 
 echo "Installed $LABEL"
 echo "Schedule: every 5 minutes"
+echo "Feature backend: spark"
 echo "First eligible decision session: 2026-09-08"
 echo "No missed decision may be backfilled"
 echo "Original January 4 confirmation: unchanged"
