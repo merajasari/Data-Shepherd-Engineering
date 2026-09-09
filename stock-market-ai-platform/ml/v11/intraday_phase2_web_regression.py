@@ -20,8 +20,11 @@ def main() -> None:
     payload = get_v11_phase2_dashboard()
     require(
         payload["classification"]
-        == "PREREGISTERED_FRESH_PAPER_CONFIRMATION",
-        "V11 classification is explicit",
+        in {
+            "PREREGISTERED_FRESH_PAPER_CONFIRMATION",
+            "ARCHIVED_RESEARCH_REFERENCE",
+        },
+        "V11 active or archived classification is explicit",
     )
     require(
         payload["status_scope"]
@@ -30,7 +33,12 @@ def main() -> None:
     )
     require(
         payload["display_status"]
-        in {"AWAITING_FRESH_SESSION", "FRESH_EVIDENCE_ACTIVE", "ALERT"},
+        in {
+            "AWAITING_FRESH_SESSION",
+            "FRESH_EVIDENCE_ACTIVE",
+            "ARCHIVED_RESEARCH_REFERENCE",
+            "ALERT",
+        },
         "Evidence-aware display status is exposed",
     )
     require(
@@ -38,8 +46,9 @@ def main() -> None:
         "V11 contract identity is verified",
     )
     require(
-        payload["maximum_tiingo_requests_per_session"] == 404,
-        "Bounded request ceiling is exposed",
+        payload["maximum_tiingo_requests_per_session"]
+        in {0, 404},
+        "Active request ceiling or archived zero-request state is exposed",
     )
     require(
         payload["request_time_historical_data_load"] is False,
@@ -99,8 +108,13 @@ def main() -> None:
         "Dashboard CSS cannot accidentally open a Jinja comment",
     )
     require(
-        "FIVE-MINUTE FRESH CONFIRMATION" in template,
-        "Intraday paper-confirmation identity is visible",
+        "PRESERVED RESEARCH LINEAGE" in template,
+        "V11 preserved research-lineage identity is visible",
+    )
+    require(
+        "ARCHIVED_RESEARCH_REFERENCE" in script
+        and "0 (ARCHIVED)" in script,
+        "V11 renderer supports the archived zero-request state",
     )
     require(
         "BROKERAGE ORDERS" in template and "OFF" in template,
@@ -162,3 +176,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

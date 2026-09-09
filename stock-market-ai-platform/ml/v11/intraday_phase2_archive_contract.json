@@ -1,0 +1,31 @@
+{
+  "contract_id": "V11_INTRADAY_PHASE2_ARCHIVE_DISPOSITION_V1",
+  "disposition": "ARCHIVED_RESEARCH_REFERENCE",
+  "source_contract_sha256": "f539fabe9532752adb2a3b6b98aa244671b5ec8d8ae86b5eaacf8076f812a6c8",
+  "scheduled_collection_enabled": false,
+  "scheduled_alerts_enabled": false,
+  "maximum_market_data_requests": 0,
+  "preserve_code": true,
+  "preserve_contracts": true,
+  "preserve_evidence": true,
+  "preserve_operational_status": true,
+  "delete_or_rewrite_historical_artifacts": false,
+  "allowed_v13_dependencies": {
+    "regime_overlay_backfill.py": [
+      "ml.v11.intraday_backfill"
+    ],
+    "regime_overlay_input_snapshot.py": [
+      "ml.v11.intraday_contract"
+    ],
+    "regime_overlay_reconstruction.py": [
+      "ml.v11.intraday_contract",
+      "ml.v11.intraday_walk_forward"
+    ]
+  },
+  "paper_trading_only": true,
+  "live_trading_enabled": false,
+  "brokerage_orders": false,
+  "v8_modified": false,
+  "v10_modified": false,
+  "v13_modified": false
+}
