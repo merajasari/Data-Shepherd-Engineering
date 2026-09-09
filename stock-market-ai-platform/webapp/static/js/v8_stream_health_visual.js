@@ -85,7 +85,10 @@
       <div class="metric"><span>V8 COMPLETED MAX DRAWDOWN</span><strong id="v8-summary-drawdown">—</strong></div>
       <div class="metric"><span>COMPLETED / OPEN COHORTS</span><strong id="v8-summary-observations">0 / 0</strong></div>`;
 
+    const priorLiveChart=document.getElementById('v8-live-chart');
+    if(priorLiveChart)priorLiveChart.remove();
     const liveChart=document.createElement('section');
+    liveChart.id='v8-live-chart';
     liveChart.className='v8-live-chart';
     liveChart.innerHTML=`
       <div class="v8-live-chart-head"><div><div class="label">V8 VS SPY · LIVE FORWARD EQUITY</div><h3>Interactive Holdout Performance</h3><div class="v8-live-chart-sub">Both lines use the same $100,000 starting value. Hover anywhere on the graph for exact values.</div></div><div class="v8-live-chart-badge" data-v8-chart-badge>LOADING LIVE MARKS</div></div>
@@ -124,8 +127,13 @@
       const line=key=>points.map((p,i)=>`${i?'L':'M'} ${x(p.time).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
       const grid=Array.from({length:5},(_,i)=>{const value=maxY-(maxY-minY)*i/4,py=y(value);return `<line x1="${margin.left}" y1="${py}" x2="${chartWidth-margin.right}" y2="${py}" stroke="rgba(129,162,205,.14)"/><text x="${margin.left-10}" y="${py+4}" text-anchor="end" fill="#91a6c2" font-size="11">$${Math.round(value).toLocaleString()}</text>`;}).join('');
       const dots=points.map((p,i)=>`<circle cx="${x(p.time)}" cy="${y(p.v8)}" r="${i===points.length-1?5:3}" fill="#36d8ff"/><circle cx="${x(p.time)}" cy="${y(p.spy)}" r="${i===points.length-1?5:3}" fill="#a988ff"/>`).join('');
+      const last=points.at(-1);
+      let v8LabelY=Math.max(margin.top+12,Math.min(height-margin.bottom-8,y(last.v8)-8));
+      let spyLabelY=Math.max(margin.top+12,Math.min(height-margin.bottom-8,y(last.spy)+16));
+      if(Math.abs(v8LabelY-spyLabelY)<16)spyLabelY=Math.min(height-margin.bottom-8,v8LabelY+18);
+      const endpointLabels=`<text x="${Math.min(chartWidth-margin.right+8,x(last.time)+10)}" y="${v8LabelY}" fill="#36d8ff" font-size="12" font-weight="900">V8 ${chartMoney(last.v8)}</text><text x="${Math.min(chartWidth-margin.right+8,x(last.time)+10)}" y="${spyLabelY}" fill="#a988ff" font-size="12" font-weight="900">SPY ${chartMoney(last.spy)}</text>`;
       chartHits=points.map(p=>({...p,x:x(p.time),top:Math.min(y(p.v8),y(p.spy))}));
-      chartPlot.innerHTML=`<svg viewBox="0 0 ${chartWidth} ${height}" aria-hidden="true">${grid}<line x1="${margin.left}" y1="${y(100000)}" x2="${chartWidth-margin.right}" y2="${y(100000)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/><path d="${line('spy')}" fill="none" stroke="#a988ff" stroke-width="3"/><path d="${line('v8')}" fill="none" stroke="#36d8ff" stroke-width="4"/>${dots}<line data-hover-line x1="0" y1="${margin.top}" x2="0" y2="${height-margin.bottom}" stroke="rgba(242,246,255,.5)" stroke-dasharray="3 4" opacity="0"/><text x="${margin.left}" y="${height-10}" fill="#91a6c2" font-size="11">${chartDate(minX)}</text><text x="${chartWidth-margin.right}" y="${height-10}" text-anchor="end" fill="#91a6c2" font-size="11">${chartDate(maxX)}</text></svg>`;
+      chartPlot.innerHTML=`<svg viewBox="0 0 ${chartWidth} ${height}" aria-hidden="true">${grid}<line x1="${margin.left}" y1="${y(100000)}" x2="${chartWidth-margin.right}" y2="${y(100000)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/><path d="${line('spy')}" fill="none" stroke="#a988ff" stroke-width="3"/><path d="${line('v8')}" fill="none" stroke="#36d8ff" stroke-width="4"/>${dots}${endpointLabels}<line data-hover-line x1="0" y1="${margin.top}" x2="0" y2="${height-margin.bottom}" stroke="rgba(242,246,255,.5)" stroke-dasharray="3 4" opacity="0"/><text x="${margin.left}" y="${height-10}" fill="#91a6c2" font-size="11">${chartDate(minX)}</text><text x="${chartWidth-margin.right}" y="${height-10}" text-anchor="end" fill="#91a6c2" font-size="11">${chartDate(maxX)}</text></svg>`;
       const last=points.at(-1),start=Number(d.starting_equity)||100000,v8Return=last.v8/start-1,spyReturn=last.spy/start-1,excess=v8Return-spyReturn;
       const v8Node=liveChart.querySelector('[data-v8-chart-value]'),spyNode=liveChart.querySelector('[data-spy-chart-value]'),excessNode=liveChart.querySelector('[data-excess-chart-value]');
       v8Node.textContent=`${chartMoney(last.v8)} (${chartPct(v8Return)})`;spyNode.textContent=`${chartMoney(last.spy)} (${chartPct(spyReturn)})`;excessNode.textContent=chartPct(excess);
