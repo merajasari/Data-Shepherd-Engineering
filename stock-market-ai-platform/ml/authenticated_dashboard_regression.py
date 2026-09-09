@@ -241,6 +241,9 @@ def main() -> None:
         and "CURRENT MARK" in v10_accelerated_status
         and "Refreshes every 15 seconds" in v10_accelerated_status
         and "data-a10-hover-line" in v10_accelerated_status
+        and "awaiting first journaled entry" in v10_accelerated_status
+        and "Evidence gap preserved" in v10_accelerated_status
+        and "if(value==null||value==='')return '—'" in v10_accelerated_status
         and "Preregistered promotion gates" in v10_accelerated_status,
         "V10 accelerated tab renders live equity, comparison charts, and gates",
     )
