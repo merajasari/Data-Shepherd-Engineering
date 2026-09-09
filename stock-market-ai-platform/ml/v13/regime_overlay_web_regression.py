@@ -1,8 +1,11 @@
 """Regression checks for the read-only V13 Model Research status panel."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
+import webapp.services.v13_regime_overlay_service as v13_service
 from webapp.services.v13_regime_overlay_service import (
     get_v13_regime_overlay_dashboard,
 )
@@ -25,6 +28,9 @@ def main() -> None:
     renderer = (ROOT / "webapp/static/js/v13_regime_overlay_status.js").read_text(
         encoding="utf-8"
     )
+    service_source = (
+        ROOT / "webapp/services/v13_regime_overlay_service.py"
+    ).read_text(encoding="utf-8")
     app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
 
     require(
@@ -148,6 +154,7 @@ def main() -> None:
                 "fresh_evidence_boundary_utc",
                 "automation_status",
                 "automation_target_session",
+                "automation_source_session",
                 "automation_attempted_at_utc",
                 "automation_attempt_consumed",
                 "automation_retry_permitted",
@@ -156,6 +163,10 @@ def main() -> None:
                 "automation_failure_reason",
                 "automation_market_data_requests",
                 "automation_request_count_status",
+                "automation_quote_recovery_policy",
+                "automation_quote_recovery_attempted",
+                "automation_quote_batch_requests",
+                "automation_maximum_market_data_requests",
                 "missing_quote_policy",
             )
         ),
@@ -166,6 +177,63 @@ def main() -> None:
         and payload["automation_backfill_permitted"] is False,
         "V13 API exposes fail-closed automatic collection state",
     )
+    require(
+        "quote_recovery_automation" in service_source
+        and "AUTOMATION_ROOTS" in service_source,
+        "V13 API selects the latest legacy or quote-recovery session",
+    )
+    with TemporaryDirectory(prefix="v13_web_automation_") as raw:
+        root = Path(raw)
+        legacy = root / "automation"
+        recovery = root / "quote_recovery_automation"
+        (legacy / "2026-09-08").mkdir(parents=True)
+        latest = recovery / "2026-09-09"
+        latest.mkdir(parents=True)
+        (latest / "collection_attempt.json").write_text(
+            json.dumps(
+                {
+                    "target_session": "2026-09-09",
+                    "source_session": "2026-09-08",
+                    "attempted_at_utc": "2026-09-09T14:00:05+00:00",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (latest / "status.json").write_text(
+            json.dumps(
+                {
+                    "status": "COLLECTION_FAILED_NO_EVIDENCE",
+                    "target_session": "2026-09-09",
+                    "source_session": "2026-09-08",
+                    "attempt_consumed": True,
+                    "retry_permitted": False,
+                    "backfill_permitted": False,
+                    "evidence_appended": False,
+                    "failure_reason": "V13_BID_INVALID:META",
+                    "market_data_requests": 103,
+                    "request_count_status": "RECORDED",
+                    "quote_recovery_policy": (
+                        "ONE_FULL_BATCH_RETRY_THEN_FAIL_CLOSED"
+                    ),
+                }
+            ),
+            encoding="utf-8",
+        )
+        original_roots = v13_service.AUTOMATION_ROOTS
+        try:
+            v13_service.AUTOMATION_ROOTS = (legacy, recovery)
+            latest_automation = v13_service._read_automation_metadata()
+        finally:
+            v13_service.AUTOMATION_ROOTS = original_roots
+        require(
+            latest_automation["status"] == "COLLECTION_FAILED_NO_EVIDENCE"
+            and latest_automation["target_session"] == "2026-09-09"
+            and latest_automation["source_session"] == "2026-09-08"
+            and latest_automation["quote_recovery_attempted"] is True
+            and latest_automation["quote_batch_requests"] == 2
+            and latest_automation["maximum_market_data_requests"] == 104,
+            "V13 API reports the newest exhausted quote-recovery attempt",
+        )
     require(
         "v13-regime-overlay-status" in tabs
         and "COMPLETED FRESH PAIRED SESSIONS" in tabs
@@ -191,6 +259,13 @@ def main() -> None:
         and "SIGNED CONTEXT IDENTITIES" in tabs
         and "Next decision window" in tabs,
         "V13 tab exposes current context publication and lease timing",
+    )
+    require(
+        "LATEST AUTOMATIC COLLECTION · IMMUTABLE SESSION RESULT" in tabs
+        and "data-v13-automation-status" in tabs
+        and "data-v13-automation-recovery" in tabs
+        and "data-v13-automation-failure" in tabs,
+        "V13 tab exposes the latest immutable automatic collection result",
     )
     require(
         "fetch('/api/v13/regime-overlay'" in renderer
@@ -223,6 +298,15 @@ def main() -> None:
         and "data-v13-control-id" in renderer
         and "data-v13-boundary" in renderer,
         "V13 renderer publishes signed-context and lease timing metadata",
+    )
+    require(
+        "data-v13-automation-status" in renderer
+        and "data-v13-automation-source" in renderer
+        and "data-v13-automation-consumed" in renderer
+        and "data-v13-automation-requests" in renderer
+        and "data-v13-automation-recovery" in renderer
+        and "data-v13-automation-failure" in renderer,
+        "V13 renderer publishes automatic attempt and recovery diagnostics",
     )
     require(
         '@app.get("/api/v13/regime-overlay")' in app_source
