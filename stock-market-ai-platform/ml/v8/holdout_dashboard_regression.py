@@ -216,8 +216,19 @@ def main():
         failures.append("60 completed cohorts must enter accumulating-evidence state")
 
     # Guard the web request path against the memory regression that caused
-    # Gunicorn workers to be killed. This helper must remain lightweight.
-    lightweight_rankings = service._latest_v8_rankings()
+    # Gunicorn workers to be killed. Isolate this check from any real local
+    # ranking snapshot so the regression remains production-data read-only.
+    original_rankings_path = service.V8_CURRENT_RANKINGS_PATH
+    original_rankings_cache = dict(service._rankings_cache)
+    try:
+        with TemporaryDirectory() as tmp:
+            service.V8_CURRENT_RANKINGS_PATH = Path(tmp) / "missing-rankings.json"
+            service._rankings_cache.update({"signature": None, "payload": None})
+            lightweight_rankings = service._latest_v8_rankings()
+    finally:
+        service.V8_CURRENT_RANKINGS_PATH = original_rankings_path
+        service._rankings_cache.clear()
+        service._rankings_cache.update(original_rankings_cache)
     if lightweight_rankings != {"timestamp_utc": None, "rows": []}:
         failures.append("web ranking helper reintroduced request-time historical data")
 
