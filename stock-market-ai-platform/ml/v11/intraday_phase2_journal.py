@@ -90,6 +90,9 @@ class Phase2EvidenceJournal:
         previous_hash = GENESIS_HASH
         event_ids: set[str] = set()
         session_events: set[tuple[str, str]] = set()
+        session_identities: dict[
+            str, tuple[tuple[str, ...], str, str]
+        ] = {}
         for line_number, line in enumerate(
             self.path.read_text(encoding="utf-8").splitlines(), start=1
         ):
@@ -133,6 +136,45 @@ class Phase2EvidenceJournal:
                 raise EvidenceJournalCorrupt(
                     f"record digest mismatch line {line_number}"
                 )
+
+            session_date = str(row["session_date"])
+            event_type = str(row["event_type"])
+            selected = row.get("selected_symbols")
+            ranking_sha = str(row.get("ranking_sha256") or "")
+            decision_series_sha = str(
+                row.get("decision_series_sha256") or ""
+            )
+            if (
+                not isinstance(selected, list)
+                or len(selected) != 10
+                or len(set(selected)) != 10
+                or not all(isinstance(symbol, str) for symbol in selected)
+                or len(ranking_sha) != 64
+                or len(decision_series_sha) != 64
+            ):
+                raise EvidenceJournalCorrupt(
+                    f"decision identity invalid line {line_number}"
+                )
+            identity = (
+                tuple(selected),
+                ranking_sha,
+                decision_series_sha,
+            )
+            if event_type == "DECISION":
+                session_identities[session_date] = identity
+            else:
+                expected_identity = session_identities.get(session_date)
+                if expected_identity is None:
+                    raise EvidenceJournalCorrupt(
+                        "lifecycle event precedes decision "
+                        f"line {line_number}"
+                    )
+                if identity != expected_identity:
+                    raise EvidenceJournalCorrupt(
+                        "lifecycle identity drift "
+                        f"session {session_date} event {event_type}"
+                    )
+
             event_id = str(row["event_id"])
             session_key = (str(row["session_date"]), str(row["event_type"]))
             if event_id in event_ids:
@@ -232,6 +274,7 @@ def build_rehearsal_event(
         "timestamp_utc": timestamp_utc,
         "contract_sha256": contract_sha256(contract),
         "ranking_sha256": "1" * 64,
+        "decision_series_sha256": "2" * 64,
         "selected_symbols": [
             "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL",
             "META", "AVGO", "TSLA", "JPM", "XOM",
