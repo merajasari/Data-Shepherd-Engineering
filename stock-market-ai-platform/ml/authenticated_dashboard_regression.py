@@ -44,8 +44,9 @@ def main() -> None:
         "Authenticated Model Research dashboard renders",
     )
     require(
-        b'id="v11-phase2-status"' in research.data,
-        "V11 Phase 2 panel survives authenticated rendering",
+        b'id="v11-phase2-status"' not in research.data
+        and b'/static/js/v11_phase2_status.js' not in research.data,
+        "Archived V11 panel and renderer are removed from Model Research",
     )
     require(
         b'/static/js/v8_holdout_snapshot.js' in research.data,
@@ -100,6 +101,22 @@ def main() -> None:
         and v10_accelerated.get("v8_modified") is False
         and v10_accelerated.get("brokerage_orders") is False,
         "V10 dashboard request cannot invoke models, alter V8, or place orders",
+    )
+    require(
+        all(
+            key in v10_accelerated
+            for key in (
+                "starting_equity",
+                "current_equity",
+                "current_v8_equity",
+                "current_spy_equity",
+                "equity_basis",
+                "open_cohorts",
+                "priced_open_cohorts",
+                "operational_curve",
+            )
+        ),
+        "V10 accelerated API exposes read-only live comparison equity",
     )
     v13_api = client.get("/api/v13/regime-overlay")
     require(v13_api.status_code == 200, "V13 read-only dashboard API responds")
@@ -168,7 +185,6 @@ def main() -> None:
     operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
     comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
     research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
-    v11_status = (project_root / "webapp/static/js/v11_phase2_status.js").read_text()
     v13_status = (project_root / "webapp/static/js/v13_regime_overlay_status.js").read_text()
     v10_accelerated_status = (
         project_root
@@ -184,10 +200,15 @@ def main() -> None:
     )
     require(
         all(label in research_tabs for label in (
-            "Overview", "V8 Frozen", "V10 Cycle 3", "V11 Intraday",
-            "V13 Dev",
+            "Overview", "V8 Frozen", "V10 Cycle 3", "V13 Dev",
         )),
-        "Model Research exposes the complete classified model-tab set",
+        "Model Research exposes the active classified model-tab set",
+    )
+    require(
+        "V11 Intraday" not in research_tabs
+        and "model-research-pane-v11" not in research_tabs
+        and "v11-phase2-status" not in dashboard_template,
+        "Archived V11 has no dashboard tab or page content",
     )
     require(
         "label:'V4 Paper'" not in research_tabs
@@ -200,8 +221,7 @@ def main() -> None:
         and "smc-full-width-card" in research_tabs
         and "v4-dashboard'), 'v8'" in research_tabs
         and "v8-holdout-monitor" in research_tabs
-        and "v10-cycle3-holdout-monitor" in research_tabs
-        and "v11-phase2-status', 'v11'" in research_tabs,
+        and "v10-cycle3-holdout-monitor" in research_tabs,
         "Shared and model-owned dashboard panels route to their proper tabs",
     )
     require(
@@ -217,8 +237,12 @@ def main() -> None:
         and "0 / 12 complete blocks" in v10_accelerated_status
         and "Complete-block normalized comparison" in v10_accelerated_status
         and "Paired edge by complete block" in v10_accelerated_status
+        and "V10 CURRENT PAPER EQUITY" in v10_accelerated_status
+        and "CURRENT MARK" in v10_accelerated_status
+        and "Refreshes every 15 seconds" in v10_accelerated_status
+        and "data-a10-hover-line" in v10_accelerated_status
         and "Preregistered promotion gates" in v10_accelerated_status,
-        "V10 accelerated tab renders promotion progress, charts, and gates",
+        "V10 accelerated tab renders live equity, comparison charts, and gates",
     )
     require(
         "Accelerated September–December evidence never enters"
@@ -309,23 +333,6 @@ def main() -> None:
         and "Multi-model research, forward evidence, and operational monitoring"
         in final_polish,
         "Model Research header describes the complete multi-model platform",
-    )
-    require(
-        "V11 · PREREGISTERED RESEARCH · NOT FROZEN" in research_tabs
-        and "no production or brokerage authority" in research_tabs,
-        "V11 is explicitly distinguished from frozen production models",
-    )
-    require(
-        "data.archived === true" in v11_status
-        and "0 (ARCHIVED)" in v11_status
-        and "PRESERVED RESEARCH LINEAGE" in dashboard_template,
-        "V11 tab supports archived read-only research lineage",
-    )
-    require(
-        "renderAttempt(lastAttempt, archived)" in v11_status
-        and "attempt.symbol_count" in v11_status
-        and "attempt.reasons" in v11_status,
-        "V11 tab renders preserved collection coverage and rejection diagnostics",
     )
     require(
         "LATEST COMPLETED-EOD RESEARCH SNAPSHOT" in layout
