@@ -117,7 +117,7 @@
     };
     const drawChart=d=>{
       chartPayload=d;
-      const points=chartPoints(d),height=330,margin={top:22,right:22,bottom:42,left:80};
+      const points=chartPoints(d),height=330,margin={top:22,right:145,bottom:42,left:80};
       chartWidth=Math.max(620,Math.round(chartPlot.clientWidth||900));
       const minX=points[0].time,maxX=Math.max(points.at(-1).time,minX+86400000);
       const all=points.flatMap(p=>[p.v8,p.spy,100000]),raw=Math.max(...all)-Math.min(...all),pad=Math.max(raw*.18,45);
