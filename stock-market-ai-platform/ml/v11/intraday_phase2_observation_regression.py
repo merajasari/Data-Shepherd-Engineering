@@ -171,7 +171,7 @@ def main() -> None:
         )
 
         completed = run_observation(
-            snapshot=re_decision,
+            snapshot=revised_decision,
             previous_closes=closes,
             journal_path=progressive_path,
             rehearsal=True,
