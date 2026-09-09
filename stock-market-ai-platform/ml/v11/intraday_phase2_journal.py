@@ -204,6 +204,20 @@ class Phase2EvidenceJournal:
             raise ValueError("evidence event type is not allowed")
         if event["contract_sha256"] != expected_contract_sha:
             raise ValueError("evidence contract SHA mismatch")
+        selected = event.get("selected_symbols")
+        ranking_sha = str(event.get("ranking_sha256") or "")
+        decision_series_sha = str(
+            event.get("decision_series_sha256") or ""
+        )
+        if (
+            not isinstance(selected, list)
+            or len(selected) != 10
+            or len(set(selected)) != 10
+            or not all(isinstance(symbol, str) for symbol in selected)
+            or len(ranking_sha) != 64
+            or len(decision_series_sha) != 64
+        ):
+            raise ValueError("evidence decision identity invalid")
 
         boundary = datetime.fromisoformat(
             str(contract["fresh_confirmation_start_utc"])
@@ -231,6 +245,30 @@ class Phase2EvidenceJournal:
                 str(event["session_date"]),
                 str(event["event_type"]),
             )
+            if event["event_type"] != "DECISION":
+                decision = next(
+                    (
+                        row
+                        for row in rows
+                        if row["session_date"] == event["session_date"]
+                        and row["event_type"] == "DECISION"
+                    ),
+                    None,
+                )
+                if decision is None:
+                    raise ValueError(
+                        "evidence lifecycle event has no decision"
+                    )
+                if (
+                    list(decision.get("selected_symbols") or [])
+                    != list(selected)
+                    or decision.get("ranking_sha256") != ranking_sha
+                    or decision.get("decision_series_sha256")
+                    != decision_series_sha
+                ):
+                    raise ValueError(
+                        "evidence lifecycle identity drift"
+                    )
             if any(row["event_id"] == expected_event_id for row in rows):
                 return False
             if any(
