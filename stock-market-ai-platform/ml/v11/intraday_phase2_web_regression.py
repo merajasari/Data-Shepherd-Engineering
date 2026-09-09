@@ -112,7 +112,7 @@ def main() -> None:
         "V11 preserved research-lineage identity is visible",
     )
     require(
-        "ARCHIVED_RESEARCH_REFERENCE" in script
+        "data.archived === true" in script
         and "0 (ARCHIVED)" in script,
         "V11 renderer supports the archived zero-request state",
     )
@@ -176,4 +176,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

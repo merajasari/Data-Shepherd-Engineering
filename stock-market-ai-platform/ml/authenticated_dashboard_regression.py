@@ -316,7 +316,7 @@ def main() -> None:
         "V11 is explicitly distinguished from frozen production models",
     )
     require(
-        "ARCHIVED_RESEARCH_REFERENCE" in v11_status
+        "data.archived === true" in v11_status
         and "0 (ARCHIVED)" in v11_status
         and "PRESERVED RESEARCH LINEAGE" in dashboard_template,
         "V11 tab supports archived read-only research lineage",
