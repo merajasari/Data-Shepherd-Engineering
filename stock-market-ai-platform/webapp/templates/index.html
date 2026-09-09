@@ -127,65 +127,6 @@ loadV4();
 const selectorForm=document.getElementById('stock-selector-form'),stockSelect=document.getElementById('stock-select'),stockSearch=document.getElementById('stock-search');const originalOptions=Array.from(stockSelect.options).map(option=>({value:option.value,text:option.textContent,company:option.dataset.company||'',selected:option.selected}));function rebuildStockOptions(query){const q=query.trim().toLowerCase(),currentValue=stockSelect.value,matches=originalOptions.filter(item=>!q||item.value.toLowerCase().includes(q)||item.company.toLowerCase().includes(q));stockSelect.innerHTML='';if(!matches.length){const empty=document.createElement('option');empty.textContent='No matching stocks';empty.disabled=true;empty.selected=true;stockSelect.appendChild(empty);return;}matches.forEach(item=>{const option=document.createElement('option');option.value=item.value;option.textContent=item.text;option.dataset.company=item.company;option.selected=item.value===currentValue||(!currentValue&&item.selected);stockSelect.appendChild(option);});if(!Array.from(stockSelect.options).some(option=>option.selected)){stockSelect.options[0].selected=true;}}stockSearch.addEventListener('input',()=>rebuildStockOptions(stockSearch.value));stockSearch.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();if(stockSelect.options.length&&!stockSelect.options[0].disabled){stockSelect.selectedIndex=0;selectorForm.submit();}}});stockSelect.addEventListener('change',()=>selectorForm.submit());
 </script>
 
-{% if not live_view %}
-<style id="v11-phase2-status-style">
-#v11-phase2-status{border-color:rgba(54,216,255,.34);background:linear-gradient(145deg,rgba(9,29,49,.98),rgba(8,19,34,.98))}
-#v11-phase2-status .v11p-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
-#v11-phase2-status .v11p-badge{padding:10px 14px;border-radius:999px;border:1px solid var(--border);font-size:.78rem;font-weight:950;letter-spacing:.08em;white-space:nowrap}
-#v11-phase2-status .v11p-good{color:var(--green);border-color:rgba(57,227,161,.38);background:rgba(57,227,161,.08)}
-#v11-phase2-status .v11p-wait{color:var(--gold);border-color:rgba(239,197,107,.38);background:rgba(239,197,107,.08)}
-#v11-phase2-status .v11p-alert{color:var(--red);border-color:rgba(255,102,128,.38);background:rgba(255,102,128,.08)}
-#v11-phase2-status .v11p-detail-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-top:18px}
-#v11-phase2-status .v11p-line{padding-top:13px;margin-top:13px;border-top:1px solid rgba(120,155,205,.13)}
-#v11-phase2-status .v11p-sha{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;word-break:break-all}
-#v11-phase2-status .v11p-attempt{margin-top:18px;padding:18px;border:1px solid rgba(239,197,107,.25);border-radius:18px;background:rgba(7,16,31,.42)}
-#v11-phase2-status .v11p-attempt-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
-#v11-phase2-status .v11p-attempt-badge{padding:7px 10px;border:1px solid rgba(145,166,194,.25);border-radius:999px;color:var(--muted);font-size:.68rem;font-weight:950;letter-spacing:.06em}
-#v11-phase2-status .v11p-attempt-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:14px}
-#v11-phase2-status .v11p-attempt-cell{padding:11px 12px;border:1px solid rgba(120,155,205,.14);border-radius:12px;background:rgba(8,20,36,.5);min-width:0}
-#v11-phase2-status .v11p-attempt-cell span{display:block;color:var(--muted);font-size:.61rem;font-weight:900;letter-spacing:.07em}
-#v11-phase2-status .v11p-attempt-cell strong{display:block;margin-top:5px;font-size:.78rem;overflow-wrap:anywhere}
-#v11-phase2-status .v11p-reasons{margin:9px 0 0;padding-left:20px;color:var(--muted);font-size:.75rem;line-height:1.5}
-#v11-phase2-status .v11p-reasons li{margin:5px 0;overflow-wrap:anywhere}
-@media(max-width:800px){ #v11-phase2-status .v11p-head{flex-direction:column} #v11-phase2-status .v11p-detail-grid{grid-template-columns:1fr}}
-@media(max-width:1050px){ #v11-phase2-status .v11p-attempt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){ #v11-phase2-status .v11p-attempt-grid{grid-template-columns:1fr}}
-</style>
-<section id="v11-phase2-status" class="card" style="margin-top:22px">
-  <div class="v11p-head">
-    <div><div class="label">V11 INTRADAY RESEARCH · PRESERVED RESEARCH LINEAGE</div><h2>Phase 2 Research Status</h2><p class="muted">The original balanced-momentum experiment, contracts, diagnostics, and evidence remain reproducible. Operational collection may be retired while locked V11 code required by V13 stays preserved.</p></div>
-    <div class="v11p-badge" data-v11-status>CHECKING EVIDENCE</div>
-  </div>
-  <div class="grid metrics" style="margin-top:18px">
-    <div class="metric"><span>RESEARCH STATE</span><strong data-v11-state>Loading…</strong></div>
-    <div class="metric"><span>EVIDENCE STAGE</span><strong data-v11-evidence>—</strong></div>
-    <div class="metric"><span>COMPLETED SESSIONS</span><strong data-v11-sessions>—</strong></div>
-    <div class="metric"><span>JOURNAL EVENTS</span><strong data-v11-events>—</strong></div>
-    <div class="metric"><span>SCHEDULER</span><strong data-v11-scheduler>—</strong></div>
-    <div class="metric"><span>BROKERAGE ORDERS</span><strong class="positive" data-v11-orders>OFF</strong></div>
-  </div>
-  <div class="v11p-detail-grid">
-    <div class="metric"><span>COLLECTION DISPOSITION</span><div class="v11p-line"><strong data-v11-windows>Loading collection disposition…</strong></div><div class="muted v11p-line">Wake-up catch-up: <span data-v11-catch-up>checking…</span></div><div class="muted v11p-line">Tiingo request ceiling: <strong data-v11-requests>404/500</strong></div></div>
-    <div class="metric"><span>LATEST FRESH SESSION</span><div class="v11p-line"><strong data-v11-latest-session>Awaiting first fresh session</strong></div><div class="v11p-line" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><span>V11 NET</span><strong data-v11-strategy-return>—</strong></div><div><span>SPY</span><strong data-v11-spy-return>—</strong></div><div><span>EXCESS</span><strong data-v11-excess-return>—</strong></div></div></div>
-  </div>
-  <div class="v11p-attempt" aria-live="polite">
-    <div class="v11p-attempt-head"><div><div class="label">LAST COLLECTION ATTEMPT</div><h3 style="margin-bottom:4px">Atomic 101-symbol snapshot diagnostic</h3><div class="muted" data-v11-attempt-summary>No persisted post-patch collection attempt yet.</div></div><div class="v11p-attempt-badge v11p-wait" data-v11-attempt-status>AWAITING ATTEMPT</div></div>
-    <div class="v11p-attempt-grid">
-      <div class="v11p-attempt-cell"><span>ATTEMPTED</span><strong data-v11-attempt-time>—</strong></div>
-      <div class="v11p-attempt-cell"><span>CHECKPOINT</span><strong data-v11-attempt-window>—</strong></div>
-      <div class="v11p-attempt-cell"><span>SYMBOL COVERAGE</span><strong data-v11-attempt-symbols>— / 101</strong></div>
-      <div class="v11p-attempt-cell"><span>COMPLETED BAR</span><strong data-v11-attempt-bar>—</strong></div>
-      <div class="v11p-attempt-cell"><span>SNAPSHOT PUBLISHED</span><strong data-v11-attempt-published>—</strong></div>
-    </div>
-    <div class="v11p-line"><span class="label">REJECTION DETAILS</span><ul class="v11p-reasons" data-v11-attempt-reasons><li>Loading preserved collection history…</li></ul></div>
-  </div>
-  <div class="muted v11p-line">Fresh boundary: <strong data-v11-boundary>—</strong></div>
-  <div class="muted v11p-line v11p-sha">Contract SHA-256: <span data-v11-sha>checking…</span></div>
-  <div class="muted v11p-line" data-v11-detail>Loading V11 research-reference status…</div>
-  <div class="warning" style="margin-top:16px">Read-only research lineage. No activation controls, market-data collection authority, personalized trading advice, live orders, brokerage credentials, or V8/V10/V13 evidence access.</div>
-</section>
-{% endif %}
-
 <section id="v8-holdout-monitor" class="panel" style="margin-top:18px">
   <div class="panel-head"><div><div class="label">GENUINE FORWARD EVIDENCE</div><h2>V8 Frozen Forward Performance</h2><p>Append-only results beginning September 1, 2026. Completely separate from reconstructed model-performance charts.</p></div><div class="v8h-evidence" data-v8h-evidence>LOADING EVIDENCE STATE</div></div>
   <div class="v8h-grid">
@@ -212,4 +153,3 @@ const selectorForm=document.getElementById('stock-selector-form'),stockSelect=do
 {% if not live_view %}<script src="/static/js/v8_holdout_monitor.js"></script>{% endif %}
 </body>
 </html>
-
