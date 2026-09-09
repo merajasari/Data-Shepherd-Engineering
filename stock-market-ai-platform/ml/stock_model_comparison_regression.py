@@ -42,7 +42,7 @@ def load_json(path):
 def validate_artifact():
     require(ARTIFACT_PATH.exists(), f"missing {ARTIFACT_PATH}")
     payload = load_json(ARTIFACT_PATH)
-    require(payload.get("schema_version") == 4, "comparison schema must be version 4")
+    require(payload.get("schema_version") == 5, "comparison schema must be version 5")
     require(
         payload.get("excluded_models") == ["V6", "V7", "V11", "V12"],
         "V6/V7/V11/V12 exclusion changed",
@@ -98,7 +98,18 @@ def validate_artifact():
         not math.isclose(float(v10["ending_equity"]), OLD_V10_EQUITY, rel_tol=0, abs_tol=0.02),
         "rejected original V10 curve reappeared",
     )
-    require(v13.get("simulation_starting_capital") == 5_000.0, "V13 did not simulate the locked $5,000 account")
+    require(
+        v13.get("simulation_starting_capital") == 100_000.0,
+        "V13 did not genuinely simulate the $100,000 retrospective portfolio",
+    )
+    require(
+        v13.get("forward_paper_starting_capital") == 5_000.0,
+        "V13 forward paper experiment is no longer locked to $5,000",
+    )
+    require(
+        "no $5,000 path rebasing is used" in v13.get("methodology", ""),
+        "V13 methodology does not exclude $5,000 return-path rebasing",
+    )
     require(v13.get("ten_calendar_years_available") is False, "V13 hides the August-2017 intraday limitation")
     require(EXPECTED_V13_SHA in v13.get("methodology", ""), "V13 methodology lacks locked contract identity")
     require("not fresh evidence" in v13.get("status", ""), "V13 is not labeled separate from fresh evidence")
@@ -117,6 +128,14 @@ def validate_artifact():
     require(lineage.get("v13_ten_calendar_years_available") is False, "V13 source-history limitation missing")
     require(lineage.get("v13_source_chunk_days") == 120, "V13 source chunk lineage is unsafe")
     require(lineage.get("v13_source_coverage_validated") is True, "V13 source coverage lineage is missing")
+    require(
+        lineage.get("v13_retrospective_starting_capital") == 100_000.0,
+        "V13 retrospective lineage does not preserve the $100,000 basis",
+    )
+    require(
+        lineage.get("v13_forward_paper_starting_capital") == 5_000.0,
+        "V13 forward-paper lineage does not preserve the $5,000 boundary",
+    )
     require(lineage.get("v13_fresh_evidence_included") is False, "V13 fresh evidence entered comparison")
     require(
         not any(str(key).lower().startswith("v11") for key in lineage),
@@ -184,6 +203,8 @@ def validate_dashboard_source():
         "LATEST ANY-SERIES OBS.",
         "last obs.",
         "endpoints may differ by model",
+        "V13 historical reconstruction uses an actual $100,000 integer-share portfolio",
+        "V13 forward paper evidence remains separately locked to $5,000",
     ]
     for marker in required:
         require(marker in source, f"dashboard regression marker missing: {marker}")
@@ -196,6 +217,8 @@ def validate_dashboard_source():
         "series.V11",
         "'V11','SPY'",
         "$989,545.87",
+        "V13 is actually simulated under its locked $5,000 integer-share rules",
+        "only its return path is rebased for comparison",
     ]
     for marker in forbidden:
         require(marker not in source, f"stale dashboard marker returned: {marker}")

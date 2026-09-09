@@ -6,6 +6,8 @@ from pathlib import Path
 
 from ml.v13.regime_overlay_contract import load_contract
 from ml.v13.regime_overlay_reconstruction import (
+    FORWARD_PAPER_STARTING_CAPITAL_USD,
+    RETROSPECTIVE_STARTING_CAPITAL_USD,
     RetrospectivePeriod,
     _canonical_sha,
     integer_allocation,
@@ -173,6 +175,32 @@ def main() -> None:
     require(result["fresh_evidence_included"] is False, "Fresh evidence is excluded")
     require(result["candidate_frozen"] is False, "Reconstruction cannot freeze V13")
     require(result["brokerage_orders"] is False, "Reconstruction has no brokerage authority")
+    require(
+        result["starting_capital_usd"] == RETROSPECTIVE_STARTING_CAPITAL_USD,
+        "Retrospective portfolio genuinely starts at $100,000",
+    )
+    require(
+        result["cohort_starting_capital_usd"] == 20_000.0,
+        "Retrospective portfolio is split into five $20,000 sleeves",
+    )
+    require(
+        result["forward_paper_starting_capital_usd"]
+        == FORWARD_PAPER_STARTING_CAPITAL_USD,
+        "Forward paper experiment remains separately locked to $5,000",
+    )
+    require(
+        result["history"][0]["portfolio_equity"]
+        == RETROSPECTIVE_STARTING_CAPITAL_USD,
+        "Chart history begins at an actual $100,000 portfolio",
+    )
+    require(
+        all("portfolio_equity" in row for row in result["history"]),
+        "Every chart point records aggregate portfolio equity",
+    )
+    require(
+        "No capital rebasing is applied" in result["display_normalization"],
+        "Retrospective chart discloses that no $5,000 path rebasing occurs",
+    )
     require(len(result["history"]) > 1, "Chart-ready equity history is produced")
     require(bool(result["reconstruction_sha256"]), "Reconstruction has a SHA-256 identity")
 

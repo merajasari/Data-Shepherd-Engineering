@@ -58,6 +58,8 @@ V12_DISPOSITION_SHA256 = (
 )
 HOLD_SESSIONS = 5
 COHORT_OFFSETS = tuple(range(HOLD_SESSIONS))
+RETROSPECTIVE_STARTING_CAPITAL_USD = 100_000.0
+FORWARD_PAPER_STARTING_CAPITAL_USD = 5_000.0
 MODELED_ROUND_TRIP_COST_BPS = 10.0
 HISTORICAL_SPREAD_POLICY = (
     "NOT_OBSERVABLE_FROM_FIVE_MINUTE_BARS; MODELED_10_BPS_ROUND_TRIP; "
@@ -481,14 +483,23 @@ def reconstruct_periods(
     if not periods:
         raise ValueError("NO_V13_RETROSPECTIVE_PERIODS")
 
-    starting_capital = float(contract["small_account_execution"]["starting_capital_usd"])
-    equity_by_offset = {offset: starting_capital for offset in COHORT_OFFSETS}
+    forward_starting_capital = float(
+        contract["small_account_execution"]["starting_capital_usd"]
+    )
+    if forward_starting_capital != FORWARD_PAPER_STARTING_CAPITAL_USD:
+        raise RuntimeError("V13_FORWARD_PAPER_STARTING_CAPITAL_CHANGED")
+    starting_capital = RETROSPECTIVE_STARTING_CAPITAL_USD
+    cohort_starting_capital = starting_capital / len(COHORT_OFFSETS)
+    equity_by_offset = {
+        offset: cohort_starting_capital for offset in COHORT_OFFSETS
+    }
     first_entry = min(period.entry_session for period in periods)
     history_by_timestamp: dict[str, dict[str, object]] = {
         first_entry: {
             "timestamp": f"{first_entry}T00:00:00+00:00",
-            "mean_equity": starting_capital,
-            "source": "V13 retrospective starting capital",
+            "portfolio_equity": starting_capital,
+            "mean_equity": cohort_starting_capital,
+            "source": "V13 retrospective $100,000 portfolio starting capital",
         }
     }
     records: list[dict[str, object]] = []
@@ -505,14 +516,15 @@ def reconstruct_periods(
         records.append(record)
         history_by_timestamp[period.exit_session] = {
             "timestamp": f"{period.exit_session}T00:00:00+00:00",
+            "portfolio_equity": sum(equity_by_offset.values()),
             "mean_equity": statistics.fmean(equity_by_offset.values()),
             "source": (
-                "V13 mean of five staggered $5,000 integer-share cohort paths"
+                "V13 sum of five staggered $20,000 integer-share sleeves"
             ),
         }
 
     history = [history_by_timestamp[key] for key in sorted(history_by_timestamp)]
-    terminal = float(history[-1]["mean_equity"])
+    terminal = float(history[-1]["portfolio_equity"])
     elapsed_days = max(
         1,
         (date.fromisoformat(history[-1]["timestamp"][:10]) - date.fromisoformat(first_entry)).days,
@@ -533,12 +545,14 @@ def reconstruct_periods(
         "actual_first_eligible_session": first_entry,
         "actual_last_eligible_session": history[-1]["timestamp"][:10],
         "starting_capital_usd": starting_capital,
-        "cohort_method": "MEAN_OF_FIVE_STAGGERED_5000_USD_INTEGER_SHARE_COHORTS",
+        "cohort_starting_capital_usd": cohort_starting_capital,
+        "forward_paper_starting_capital_usd": forward_starting_capital,
+        "cohort_method": "SUM_OF_FIVE_STAGGERED_20000_USD_INTEGER_SHARE_SLEEVES",
         "ending_equity_usd": terminal,
         "total_return": terminal / starting_capital - 1.0,
         "annualized_return": annualized,
         "maximum_drawdown": _maximum_drawdown(
-            [float(row["mean_equity"]) for row in history]
+            [float(row["portfolio_equity"]) for row in history]
         ),
         "period_count": len(records),
         "regime_eligible_periods": len(regime_records),
@@ -549,8 +563,10 @@ def reconstruct_periods(
         "source_inputs": dict(source or {}),
         "historical_spread_policy": HISTORICAL_SPREAD_POLICY,
         "display_normalization": (
-            "The $5,000 integer-share return path may be rebased to $100,000 "
-            "for chart comparison; execution remains simulated at $5,000."
+            "No capital rebasing is applied. The retrospective chart path is "
+            "simulated as an actual $100,000 portfolio split across five "
+            "$20,000 integer-share sleeves. The separately governed forward "
+            "paper experiment remains locked to $5,000."
         ),
         "fresh_evidence_included": False,
         "fresh_journal_read": False,
@@ -766,7 +782,7 @@ def main() -> None:
     print(f"Executable periods: {result['period_count']:,}")
     print(f"Regime-eligible periods: {result['regime_eligible_periods']:,}")
     print(
-        f"$5,000 terminal equity: ${result['ending_equity_usd']:,.2f} | "
+        f"$100,000 retrospective terminal equity: ${result['ending_equity_usd']:,.2f} | "
         f"return={result['total_return']:+.2%} | "
         f"annualized={result['annualized_return']:+.2%} | "
         f"drawdown={result['maximum_drawdown']:.2%}"

@@ -2,11 +2,12 @@
 
 The comparison intentionally excludes V6, V7, V11, and V12. It contains V4, V5,
 the exact frozen V8 candidate, the separately frozen V10 Cycle 3 candidate,
-the isolated V13 retrospective development reconstruction, and SPY. Every line
-is independently normalized to
-the same hypothetical $100,000 starting capital at its own first scientifically
-eligible observation. Live paper-account balances are never appended to these
-historical strategy curves.
+the isolated V13 retrospective development reconstruction, and SPY. Every
+historical strategy curve starts from the same hypothetical $100,000 capital
+basis at its own first scientifically eligible observation. V13 is genuinely
+simulated as a $100,000 integer-share portfolio for this retrospective chart;
+its separately governed forward paper experiment remains locked to $5,000.
+Live paper-account balances are never appended to these historical curves.
 
 Research/display only: no paper state, frozen model, holdout journal, or
 brokerage setting is modified.
@@ -43,6 +44,8 @@ V10_HOLDOUT_START_UTC = pd.Timestamp("2027-01-04T00:00:00Z")
 V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
 V8_EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 V13_EXPECTED_SHA = "42d7cb6397beb0016715b1dccf4ec070d14132198dc537a6823b68b9546f7702"
+V13_RETROSPECTIVE_STARTING_CAPITAL = 100_000.0
+V13_FORWARD_PAPER_STARTING_CAPITAL = 5_000.0
 V13_FRESH_BOUNDARY_UTC = pd.Timestamp("2026-09-01T14:00:00Z")
 V13_MAX_SOURCE_CHUNK_DAYS = 120
 V13_RESPONSE_CAP_GUARD = "MAX_120_CALENDAR_DAYS_PER_REQUEST"
@@ -303,20 +306,27 @@ def _load_v13():
     if not raw:
         raise ValueError("V13 retrospective reconstruction contains no history")
     simulation_capital = float(payload.get("starting_capital_usd") or 0.0)
-    if simulation_capital != 5_000.0:
-        raise RuntimeError("V13 reconstruction did not use the locked $5,000 basis")
-    scale = STARTING_CAPITAL / simulation_capital
+    if simulation_capital != V13_RETROSPECTIVE_STARTING_CAPITAL:
+        raise RuntimeError(
+            "V13 reconstruction did not use the actual $100,000 retrospective basis"
+        )
+    forward_paper_capital = float(
+        payload.get("forward_paper_starting_capital_usd") or 0.0
+    )
+    if forward_paper_capital != V13_FORWARD_PAPER_STARTING_CAPITAL:
+        raise RuntimeError("V13 forward paper $5,000 boundary changed")
     rows = [
         {
             "timestamp": str(row["timestamp"]),
-            "equity": float(row["mean_equity"]) * scale,
+            "equity": float(row["portfolio_equity"]),
             "source": (
-                "V13 $5,000 integer-share retrospective development path, "
-                "rebased to the chart's $100,000 display basis"
+                "V13 actual $100,000 integer-share retrospective development "
+                "portfolio; no capital rebasing"
             ),
         }
         for row in raw
-        if row.get("timestamp") is not None and row.get("mean_equity") is not None
+        if row.get("timestamp") is not None
+        and row.get("portfolio_equity") is not None
     ]
     if not rows:
         raise ValueError("V13 retrospective chart rows are empty")
@@ -325,10 +335,12 @@ def _load_v13():
     methodology = (
         f"Locked V13 contract SHA {V13_EXPECTED_SHA}; negative/high-volatility "
         "entry-confirmation overlay applied "
-        "retrospectively to unchanged frozen V10 Cycle 3 ranks. Execution is "
-        "$5,000 integer-share, long-only, no-margin, five staggered cohort paths "
-        "with 10-bps modeled round-trip cost, then rebased to $100,000 for display. "
-        "Tiingo IEX five-minute history begins in August 2017 and the fixed "
+        "retrospectively to unchanged frozen V10 Cycle 3 ranks. The historical "
+        "chart executes an actual $100,000 integer-share, long-only, no-margin "
+        "portfolio split across five $20,000 staggered sleeves with 10-bps "
+        "modeled round-trip cost; no $5,000 path rebasing is used. The forward "
+        "paper experiment remains separately locked to $5,000. Tiingo IEX "
+        "five-minute history begins in August 2017 and the fixed "
         "101-symbol universe can make the actual eligible start later. Historical "
         "bid/ask spreads are unavailable from five-minute bars, so this remains "
         "development-only and cannot be fresh evidence."
@@ -342,6 +354,7 @@ def _load_v13():
     )
     record["reconstruction_sha256"] = identity
     record["simulation_starting_capital"] = simulation_capital
+    record["forward_paper_starting_capital"] = forward_paper_capital
     record["requested_start_date"] = payload.get("requested_start_date")
     record["ten_calendar_years_available"] = payload.get("ten_calendar_years_available")
     record["actual_first_eligible_session"] = payload.get("actual_first_eligible_session")
@@ -384,14 +397,14 @@ def main():
     latest = max(pd.Timestamp(s["end_timestamp"]) for s in series)
 
     payload = {
-        "schema_version": 4,
+        "schema_version": 5,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "title": "Stock model performance comparison",
         "starting_capital": STARTING_CAPITAL,
         "default_range": "3Y",
         "excluded_models": ["V6", "V7", "V11", "V12"],
         "latest_timestamp": latest.isoformat(),
-        "comparison_policy": "Each model is shown as its own historical strategy curve on the same hypothetical $100,000 display basis. V13 is simulated under its locked $5,000 integer-share rules and only its percentage path is rebased for display. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; unavailable intraday history is never fabricated.",
+        "comparison_policy": "Each model is shown as its own historical strategy curve starting from the same hypothetical $100,000 capital. V13 is genuinely simulated as a $100,000 integer-share portfolio split across five $20,000 sleeves; its separately governed forward paper experiment remains locked to $5,000. No V13 capital rebasing is used. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; unavailable intraday history is never fabricated.",
         "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. V13 is a retrospective development-only counterfactual, not frozen and not fresh evidence; its exact five-minute source begins in August 2017 and complete fixed-universe eligibility can begin later. Genuine V8, V10, and V13 forward/fresh evidence remains separate and is never backfilled. V11 and V12 remain excluded from this model-history chart.",
         "lineage": {
             "v8_candidate_id": V8_SCORE_ID,
@@ -412,6 +425,8 @@ def main():
                 "source_coverage_validated"
             ],
             "v13_fresh_evidence_boundary_utc": V13_FRESH_BOUNDARY_UTC.isoformat(),
+            "v13_retrospective_starting_capital": V13_RETROSPECTIVE_STARTING_CAPITAL,
+            "v13_forward_paper_starting_capital": V13_FORWARD_PAPER_STARTING_CAPITAL,
             "v13_fresh_evidence_included": False,
             "forward_evidence_included": False,
             "live_paper_balances_included": False,
