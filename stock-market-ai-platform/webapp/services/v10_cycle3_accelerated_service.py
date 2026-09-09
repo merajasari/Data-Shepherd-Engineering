@@ -33,6 +33,12 @@ from ml.v10.cycle3_accelerated_forward_journal import (
 
 
 STATUS_PATH = DEFAULT_ROOT / "status.json"
+LIVE_QUOTES_PATH = Path("data/live/latest_quotes.json")
+ROLLING_QUOTES_PATHS = (
+    Path("data/live/iex_24h_5m_v5.json"),
+    Path("data/live/iex_24h_5m.json"),
+    Path("data/live/iex_24h_5m_legacy.json"),
+)
 CACHE_TTL_SECONDS = 10.0
 NORMALIZED_STARTING_VALUE = 100_000.0
 HOLDING_SLEEVES = 5
@@ -63,6 +69,308 @@ def _read_status() -> tuple[dict[str, object], str | None]:
     if not isinstance(payload, dict):
         return {}, "STATUS_INVALID:NOT_AN_OBJECT"
     return payload, None
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _positive_number(value: object) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed > 0.0 else None
+
+
+def _utc_timestamp(value: object) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _latest_market_marks(required_symbols: set[str]) -> dict[str, dict[str, object]]:
+    """Read current prices from lightweight local quote caches only."""
+    required = {str(symbol).upper() for symbol in required_symbols}
+    marks: dict[str, dict[str, object]] = {}
+
+    def consider(symbol: object, price: object, timestamp: object, source: str) -> None:
+        ticker = str(symbol or "").upper().strip()
+        parsed_price = _positive_number(price)
+        parsed_time = _utc_timestamp(timestamp)
+        if ticker not in required or parsed_price is None or parsed_time is None:
+            return
+        prior = marks.get(ticker)
+        if prior is None or parsed_time > prior["timestamp"]:
+            marks[ticker] = {
+                "price": parsed_price,
+                "timestamp": parsed_time,
+                "source": source,
+            }
+
+    live = _read_json(LIVE_QUOTES_PATH)
+    live_updated = live.get("updated_at")
+    for symbol, quote in (live.get("quotes") or {}).items():
+        if isinstance(quote, dict):
+            consider(
+                symbol,
+                quote.get("reference_price"),
+                quote.get("timestamp") or quote.get("received_at") or live_updated,
+                "TIINGO_IEX_LIVE_CACHE",
+            )
+
+    for path in ROLLING_QUOTES_PATHS:
+        if required.issubset(marks):
+            break
+        payload = _read_json(path)
+        payload_updated = payload.get("updated_at")
+        for symbol, rows in (payload.get("series") or {}).items():
+            if not isinstance(rows, list):
+                continue
+            for row in reversed(rows):
+                if not isinstance(row, dict):
+                    continue
+                price = row.get("price")
+                timestamp = row.get("t") or row.get("timestamp") or payload_updated
+                if _positive_number(price) is not None and _utc_timestamp(timestamp) is not None:
+                    consider(symbol, price, timestamp, "TIINGO_IEX_ROLLING_CACHE")
+                    break
+    return marks
+
+
+def _cohort(event: dict[str, object]) -> int:
+    try:
+        return int(event.get("cohort_offset", -1))
+    except (TypeError, ValueError):
+        return -1
+
+
+def _identity(event: dict[str, object]) -> tuple[object, int]:
+    return event.get("decision_timestamp_utc"), _cohort(event)
+
+
+def _operational_curve(exits: list[dict[str, object]]) -> list[dict[str, object]]:
+    wealth = {
+        offset: {"v10": 1.0, "v8": 1.0, "spy": 1.0}
+        for offset in range(HOLDING_SLEEVES)
+    }
+    active: set[int] = set()
+    points: list[dict[str, object]] = []
+    for event in sorted(exits, key=lambda row: str(row.get("exit_timestamp_utc") or "")):
+        offset = _cohort(event)
+        if offset not in wealth:
+            continue
+        wealth[offset]["v10"] *= 1.0 + _number(event, "net_portfolio_return")
+        wealth[offset]["v8"] *= 1.0 + _number(event, "v8_control_net_portfolio_return")
+        wealth[offset]["spy"] *= 1.0 + _number(event, "spy_return")
+        active.add(offset)
+        points.append(
+            {
+                "timestamp_utc": event.get("exit_timestamp_utc"),
+                "v10_normalized": NORMALIZED_STARTING_VALUE
+                * fmean(wealth[item]["v10"] for item in active),
+                "v8_normalized": NORMALIZED_STARTING_VALUE
+                * fmean(wealth[item]["v8"] for item in active),
+                "spy_normalized": NORMALIZED_STARTING_VALUE
+                * fmean(wealth[item]["spy"] for item in active),
+            }
+        )
+    return points
+
+
+def _current_valuation(events: list[dict[str, object]]) -> dict[str, object]:
+    """Value open V10 and paired-control sleeves without creating evidence."""
+    entries = [row for row in events if row.get("event_type") == "ENTRY"]
+    exits = [row for row in events if row.get("event_type") == "EXIT"]
+    exited = {_identity(row) for row in exits}
+    open_by_cohort: dict[int, dict[str, object]] = {}
+    for entry in sorted(entries, key=lambda row: str(row.get("entry_timestamp_utc") or "")):
+        if _identity(entry) not in exited:
+            open_by_cohort[_cohort(entry)] = entry
+
+    required = {"SPY"}
+    for entry in open_by_cohort.values():
+        required.update(str(symbol).upper() for symbol in (entry.get("symbols") or []))
+        required.update(
+            str(symbol).upper()
+            for symbol in (entry.get("v8_control_symbols") or [])
+        )
+    marks = _latest_market_marks(required) if open_by_cohort else {}
+    wealth = {
+        offset: {"v10": 1.0, "v8": 1.0, "spy": 1.0, "started": False}
+        for offset in range(HOLDING_SLEEVES)
+    }
+    for event in sorted(exits, key=lambda row: str(row.get("exit_timestamp_utc") or "")):
+        offset = _cohort(event)
+        if offset not in wealth:
+            continue
+        wealth[offset]["v10"] *= 1.0 + _number(event, "net_portfolio_return")
+        wealth[offset]["v8"] *= 1.0 + _number(event, "v8_control_net_portfolio_return")
+        wealth[offset]["spy"] *= 1.0 + _number(event, "spy_return")
+        wealth[offset]["started"] = True
+
+    complete = {"v10": True, "v8": True, "spy": True}
+    missing: set[str] = set()
+    timestamps: list[datetime] = []
+    sources: set[str] = set()
+    cohort_marks: list[dict[str, object]] = []
+
+    def sleeve_return(
+        symbols: list[str], prices: object, entry_time: datetime | None
+    ) -> tuple[float | None, list[str], list[dict[str, object]]]:
+        price_map = prices if isinstance(prices, dict) else {}
+        returns: list[float] = []
+        absent: list[str] = []
+        used: list[dict[str, object]] = []
+        for symbol in symbols:
+            entry_price = _positive_number(price_map.get(symbol))
+            mark = marks.get(symbol)
+            if (
+                entry_price is None
+                or mark is None
+                or (entry_time is not None and mark["timestamp"] < entry_time)
+            ):
+                absent.append(symbol)
+                continue
+            returns.append(float(mark["price"]) / entry_price - 1.0)
+            used.append(mark)
+        return (fmean(returns) if symbols and len(returns) == len(symbols) else None), absent, used
+
+    for offset, entry in sorted(open_by_cohort.items()):
+        if offset not in wealth:
+            continue
+        wealth[offset]["started"] = True
+        entry_time = _utc_timestamp(entry.get("entry_timestamp_utc"))
+        v10_symbols = [str(symbol).upper() for symbol in (entry.get("symbols") or [])]
+        v8_symbols = [
+            str(symbol).upper() for symbol in (entry.get("v8_control_symbols") or [])
+        ]
+        v10_gross, v10_missing, used_v10 = sleeve_return(
+            v10_symbols, entry.get("entry_prices"), entry_time
+        )
+        v8_gross, v8_missing, used_v8 = sleeve_return(
+            v8_symbols, entry.get("v8_control_entry_prices"), entry_time
+        )
+        v10_return = None
+        if v10_gross is None:
+            complete["v10"] = False
+        else:
+            cost = float(entry.get("modeled_cost_rate") or 0.0)
+            v10_return = (1.0 + v10_gross) * (1.0 - cost) - 1.0
+            wealth[offset]["v10"] *= 1.0 + v10_return
+        v8_return = None
+        if v8_gross is None:
+            complete["v8"] = False
+        else:
+            cost = float(entry.get("v8_control_modeled_cost_rate") or 0.0)
+            v8_return = (1.0 + v8_gross) * (1.0 - cost) - 1.0
+            wealth[offset]["v8"] *= 1.0 + v8_return
+
+        spy_return = None
+        spy_entry = _positive_number(entry.get("spy_entry_open"))
+        spy_mark = marks.get("SPY")
+        if (
+            spy_entry is None
+            or spy_mark is None
+            or (entry_time is not None and spy_mark["timestamp"] < entry_time)
+        ):
+            complete["spy"] = False
+            missing.add("SPY")
+            spy_missing = ["SPY"]
+            used_spy: list[dict[str, object]] = []
+        else:
+            spy_return = float(spy_mark["price"]) / spy_entry - 1.0
+            wealth[offset]["spy"] *= 1.0 + spy_return
+            spy_missing = []
+            used_spy = [spy_mark]
+
+        missing.update(v10_missing)
+        missing.update(v8_missing)
+        used = used_v10 + used_v8 + used_spy
+        timestamps.extend(mark["timestamp"] for mark in used)
+        sources.update(str(mark["source"]) for mark in used)
+        cohort_marks.append(
+            {
+                "cohort_offset": offset,
+                "entry_timestamp_utc": entry.get("entry_timestamp_utc"),
+                "v10_return": v10_return,
+                "v8_control_return": v8_return,
+                "spy_return": spy_return,
+                "missing_symbols": sorted(
+                    set(v10_missing + v8_missing + spy_missing)
+                ),
+            }
+        )
+
+    started = [row for row in wealth.values() if row["started"]]
+    realized_curve = _operational_curve(exits)
+    realized = {
+        "v10": float(realized_curve[-1]["v10_normalized"])
+        if realized_curve else NORMALIZED_STARTING_VALUE,
+        "v8": float(realized_curve[-1]["v8_normalized"])
+        if realized_curve else NORMALIZED_STARTING_VALUE,
+        "spy": float(realized_curve[-1]["spy_normalized"])
+        if realized_curve else NORMALIZED_STARTING_VALUE,
+    }
+    open_count = len(open_by_cohort)
+
+    def equity(key: str) -> float:
+        if open_count and started and complete[key]:
+            return NORMALIZED_STARTING_VALUE * fmean(float(row[key]) for row in started)
+        return realized[key]
+
+    values = {key: equity(key) for key in ("v10", "v8", "spy")}
+    returns = {
+        key: value / NORMALIZED_STARTING_VALUE - 1.0
+        for key, value in values.items()
+    }
+    live_available = bool(open_count and started and complete["v10"])
+    basis = (
+        "LIVE_MARK_TO_MARKET" if live_available else
+        "COMPLETED_EXITS_ONLY" if exits else
+        "BASELINE_PRICE_COVERAGE_PENDING" if open_count else
+        "BASELINE_NO_OPEN_COHORTS"
+    )
+    return {
+        "starting_equity": NORMALIZED_STARTING_VALUE,
+        "current_equity": values["v10"],
+        "current_return": returns["v10"],
+        "current_v8_equity": values["v8"],
+        "current_v8_return": returns["v8"],
+        "current_spy_equity": values["spy"],
+        "current_spy_return": returns["spy"],
+        "current_excess_vs_v8": returns["v10"] - returns["v8"]
+        if live_available and complete["v8"] else None,
+        "current_excess_vs_spy": returns["v10"] - returns["spy"]
+        if live_available and complete["spy"] else None,
+        "equity_basis": basis,
+        "mark_to_market_available": live_available,
+        "v8_mark_to_market_available": bool(open_count and complete["v8"]),
+        "spy_mark_to_market_available": bool(open_count and complete["spy"]),
+        "open_cohorts": open_count,
+        "priced_open_cohorts": sum(not row["missing_symbols"] for row in cohort_marks),
+        "missing_mark_symbols": sorted(missing),
+        "valuation_timestamp_utc": max(timestamps).isoformat() if timestamps else None,
+        "valuation_oldest_timestamp_utc": min(timestamps).isoformat() if timestamps else None,
+        "valuation_sources": sorted(sources),
+        "cohort_marks": cohort_marks,
+        "operational_curve": realized_curve,
+        "valuation_note": (
+            "Read-only mark-to-market of open accelerated V10 sleeves, the "
+            "paired frozen-V8 control, and SPY using cached Tiingo IEX prices. "
+            "It never writes to either evidence journal."
+        ),
+    }
 
 
 def _number(event: dict[str, object], field: str) -> float:
@@ -430,6 +738,8 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
         _signature(CONTRACT_PATH),
         _signature(STATUS_PATH),
         _signature(DEFAULT_JOURNAL_PATH),
+        _signature(LIVE_QUOTES_PATH),
+        *(_signature(path) for path in ROLLING_QUOTES_PATHS),
     )
     cached = _CACHE.get("payload")
     if (
@@ -466,6 +776,8 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
     except (TypeError, ValueError) as exc:
         failures.append(f"EVIDENCE_METRICS_INVALID:{exc}")
         summary = _empty_summary()
+
+    current_valuation = _current_valuation(events)
 
     status_promotion = status.get("promotion")
     if status and not _status_matches_journal(status_promotion, summary):
@@ -534,6 +846,7 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
         "entries": sum(event.get("event_type") == "ENTRY" for event in events),
         "journal_events": len(events),
         **summary,
+        **current_valuation,
         **review,
         "operational_status": "HEALTHY" if operational_integrity else "ALERT",
         "operational_integrity": operational_integrity,
