@@ -36,7 +36,18 @@ CACHE_TTL_SECONDS = 10.0
 _CACHE: dict[str, object] = {"at": 0.0, "signature": None, "payload": None}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTEXT_INBOX_ROOT = PROJECT_ROOT / "data" / "research" / "v13" / "fresh_regime_overlay" / "inbox"
-AUTOMATION_ROOT = PROJECT_ROOT / "data" / "research" / "v13" / "fresh_regime_overlay" / "automation"
+LEGACY_AUTOMATION_ROOT = (
+    PROJECT_ROOT / "data" / "research" / "v13" / "fresh_regime_overlay" / "automation"
+)
+QUOTE_RECOVERY_AUTOMATION_ROOT = (
+    PROJECT_ROOT
+    / "data"
+    / "research"
+    / "v13"
+    / "fresh_regime_overlay"
+    / "quote_recovery_automation"
+)
+AUTOMATION_ROOTS = (LEGACY_AUTOMATION_ROOT, QUOTE_RECOVERY_AUTOMATION_ROOT)
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -79,16 +90,29 @@ def _read_signed_context_metadata() -> dict[str, object]:
     }
 
 
+def _automation_sessions() -> list[Path]:
+    """Return dated legacy and quote-recovery sessions in chronological order."""
+    sessions: list[tuple[str, int, Path]] = []
+    for priority, root in enumerate(AUTOMATION_ROOTS):
+        try:
+            sessions.extend(
+                (path.name, priority, path)
+                for path in root.iterdir()
+                if path.is_dir()
+            )
+        except OSError:
+            continue
+    return [row[2] for row in sorted(sessions)]
+
+
 def _read_automation_metadata() -> dict[str, object]:
     """Read the latest one-session control without changing its audit artifacts."""
-    try:
-        sessions = sorted(path for path in AUTOMATION_ROOT.iterdir() if path.is_dir())
-    except OSError:
-        sessions = []
+    sessions = _automation_sessions()
     if not sessions:
         return {
             "status": "NOT_CONFIGURED",
             "target_session": None,
+            "source_session": None,
             "attempted_at_utc": None,
             "attempt_consumed": False,
             "retry_permitted": False,
@@ -97,6 +121,10 @@ def _read_automation_metadata() -> dict[str, object]:
             "failure_reason": None,
             "market_data_requests": None,
             "request_count_status": "NOT_APPLICABLE",
+            "quote_recovery_policy": None,
+            "quote_recovery_attempted": False,
+            "quote_batch_requests": 0,
+            "maximum_market_data_requests": 104,
         }
     session = sessions[-1]
     authorization = _read_json(session / "authorization.json")
@@ -105,11 +133,13 @@ def _read_automation_metadata() -> dict[str, object]:
     terminal = status.get("status") in {
         "COLLECTION_FAILED_NO_EVIDENCE",
         "FRESH_PAPER_DECISION_RECORDED",
+        "DUPLICATE_SAFE_NOOP",
     }
     if attempt and not terminal:
         return {
             "status": "COLLECTION_ATTEMPTED_OUTCOME_UNRECORDED",
             "target_session": attempt.get("target_session") or session.name,
+            "source_session": attempt.get("source_session"),
             "attempted_at_utc": attempt.get("attempted_at_utc"),
             "attempt_consumed": True,
             "retry_permitted": False,
@@ -118,31 +148,74 @@ def _read_automation_metadata() -> dict[str, object]:
             "failure_reason": "TERMINAL_STATUS_MISSING_SEE_IMMUTABLE_ERROR_LOG",
             "market_data_requests": None,
             "request_count_status": "UNAVAILABLE_AFTER_UNHANDLED_PROVIDER_FAILURE",
+            "quote_recovery_policy": None,
+            "quote_recovery_attempted": False,
+            "quote_batch_requests": None,
+            "maximum_market_data_requests": 104,
         }
+    failure_reason = status.get("failure_reason")
+    market_data_requests = status.get("market_data_requests")
+    recovery_policy = status.get("quote_recovery_policy")
+    retryable_quote_failure = isinstance(failure_reason, str) and failure_reason.startswith(
+        (
+            "V13_BID_INVALID:",
+            "V13_ASK_INVALID:",
+            "V13_COMPLETE_101_SYMBOL_QUOTES_REQUIRED",
+        )
+    )
+    recovery_attempted = bool(
+        status.get("quote_recovery_attempted") is True
+        or (
+            recovery_policy == "ONE_FULL_BATCH_RETRY_THEN_FAIL_CLOSED"
+            and market_data_requests == 104
+        )
+        or (
+            status.get("status") == "COLLECTION_FAILED_NO_EVIDENCE"
+            and recovery_policy == "ONE_FULL_BATCH_RETRY_THEN_FAIL_CLOSED"
+            and retryable_quote_failure
+            and market_data_requests == 103
+        )
+    )
     return {
         "status": status.get("status") or ("AUTHORIZED" if authorization else "NOT_AUTHORIZED"),
         "target_session": status.get("target_session") or authorization.get("target_session") or session.name,
+        "source_session": status.get("source_session") or authorization.get("source_session"),
         "attempted_at_utc": status.get("attempted_at_utc") or attempt.get("attempted_at_utc"),
         "attempt_consumed": status.get("attempt_consumed") is True or bool(attempt),
         "retry_permitted": status.get("retry_permitted") is True and not attempt,
         "backfill_permitted": False,
         "evidence_appended": status.get("evidence_appended") is True,
-        "failure_reason": status.get("failure_reason"),
-        "market_data_requests": status.get("market_data_requests"),
+        "failure_reason": failure_reason,
+        "market_data_requests": market_data_requests,
         "request_count_status": status.get("request_count_status") or "NOT_RECORDED",
+        "quote_recovery_policy": recovery_policy,
+        "quote_recovery_attempted": recovery_attempted,
+        "quote_batch_requests": (
+            2
+            if recovery_attempted
+            else (
+                1
+                if retryable_quote_failure
+                or status.get("status")
+                in {"FRESH_PAPER_DECISION_RECORDED", "DUPLICATE_SAFE_NOOP"}
+                else (None if attempt else 0)
+            )
+        ),
+        "maximum_market_data_requests": (
+            status.get("maximum_market_data_requests")
+            if type(status.get("maximum_market_data_requests")) is int
+            else 104
+        ),
     }
 
 
 def _automation_signature() -> tuple[object, ...]:
-    try:
-        sessions = sorted(path for path in AUTOMATION_ROOT.iterdir() if path.is_dir())
-    except OSError:
-        return (_signature(AUTOMATION_ROOT),)
+    sessions = _automation_sessions()
     if not sessions:
-        return (_signature(AUTOMATION_ROOT),)
+        return tuple(_signature(root) for root in AUTOMATION_ROOTS)
     latest = sessions[-1]
     return (
-        _signature(AUTOMATION_ROOT),
+        *(_signature(root) for root in AUTOMATION_ROOTS),
         _signature(latest / "authorization.json"),
         _signature(latest / "collection_attempt.json"),
         _signature(latest / "status.json"),
@@ -404,6 +477,7 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         ),
         "automation_status": automation["status"],
         "automation_target_session": automation["target_session"],
+        "automation_source_session": automation["source_session"],
         "automation_attempted_at_utc": automation["attempted_at_utc"],
         "automation_attempt_consumed": automation["attempt_consumed"],
         "automation_retry_permitted": automation["retry_permitted"],
@@ -412,6 +486,14 @@ def get_v13_regime_overlay_dashboard() -> dict[str, object]:
         "automation_failure_reason": automation["failure_reason"],
         "automation_market_data_requests": automation["market_data_requests"],
         "automation_request_count_status": automation["request_count_status"],
+        "automation_quote_recovery_policy": automation["quote_recovery_policy"],
+        "automation_quote_recovery_attempted": automation[
+            "quote_recovery_attempted"
+        ],
+        "automation_quote_batch_requests": automation["quote_batch_requests"],
+        "automation_maximum_market_data_requests": automation[
+            "maximum_market_data_requests"
+        ],
         "missing_quote_policy": "FAIL_SESSION_NO_EVIDENCE_NO_RETRY",
     }
     _CACHE.update({"at": now, "signature": signature, "payload": dict(payload)})
