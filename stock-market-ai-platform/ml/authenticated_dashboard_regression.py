@@ -143,6 +143,24 @@ def main() -> None:
         ),
         "V13 API exposes internally consistent activation governance",
     )
+    require(
+        all(
+            key in v13_payload
+            for key in (
+                "automation_status",
+                "automation_target_session",
+                "automation_source_session",
+                "automation_attempt_consumed",
+                "automation_failure_reason",
+                "automation_market_data_requests",
+                "automation_quote_recovery_attempted",
+                "automation_quote_batch_requests",
+                "automation_maximum_market_data_requests",
+            )
+        )
+        and v13_payload.get("automation_backfill_permitted") is False,
+        "V13 API exposes the latest immutable automatic collection result",
+    )
 
     project_root = Path(__file__).resolve().parents[1]
     dashboard_template = (project_root / "webapp/templates/index.html").read_text()
@@ -268,6 +286,17 @@ def main() -> None:
         and "data-v13-control-id" in v13_status
         and "data-v13-boundary" in v13_status,
         "V13 tab renders signed-context and lease timing metadata",
+    )
+    require(
+        "LATEST AUTOMATIC COLLECTION · IMMUTABLE SESSION RESULT"
+        in research_tabs
+        and "data-v13-automation-status" in v13_status
+        and "data-v13-automation-source" in v13_status
+        and "data-v13-automation-consumed" in v13_status
+        and "data-v13-automation-requests" in v13_status
+        and "data-v13-automation-recovery" in v13_status
+        and "data-v13-automation-failure" in v13_status,
+        "V13 tab renders automatic attempt and recovery diagnostics",
     )
     require(
         "+${(returnDelta * 100).toFixed(1)} percentage points" in v13_status
