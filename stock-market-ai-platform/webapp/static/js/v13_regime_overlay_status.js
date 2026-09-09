@@ -16,6 +16,7 @@
   };
   const dateText = value => value ? String(value).slice(0, 10) : 'Not published';
   const sequenceText = value => Number.isFinite(Number(value)) ? String(Math.trunc(Number(value))).padStart(6, '0') : (value || 'ROOT');
+  const yesNo = value => value === true ? 'YES' : 'NO';
 
   function render(root, data) {
     text(root, '[data-v13-display]', words(data.display_status));
@@ -51,6 +52,24 @@
     text(root, '[data-v13-context-ranking-sha]', data.context_ranking_sha256 || 'Not published');
     text(root, '[data-v13-context-control-sha]', data.context_control_context_sha256 || 'Not published');
     text(root, '[data-v13-next-window]', datetimeText(data.next_decision_window_utc));
+    text(root, '[data-v13-automation-status]', words(data.automation_status));
+    text(root, '[data-v13-automation-target]', dateText(data.automation_target_session));
+    text(root, '[data-v13-automation-source]', dateText(data.automation_source_session));
+    text(root, '[data-v13-automation-attempted]', datetimeText(data.automation_attempted_at_utc));
+    text(root, '[data-v13-automation-consumed]', yesNo(data.automation_attempt_consumed));
+    text(root, '[data-v13-automation-evidence]', yesNo(data.automation_evidence_appended));
+    text(
+      root,
+      '[data-v13-automation-requests]',
+      `${data.automation_market_data_requests == null ? '—' : numberText(data.automation_market_data_requests)} / ${numberText(data.automation_maximum_market_data_requests)}`
+    );
+    const recovery = data.automation_quote_recovery_attempted
+      ? `ATTEMPTED · ${numberText(data.automation_quote_batch_requests)} FULL BATCHES`
+      : (data.automation_attempt_consumed ? 'NOT REQUIRED' : 'NOT YET ATTEMPTED');
+    text(root, '[data-v13-automation-recovery]', recovery);
+    text(root, '[data-v13-automation-retry]', yesNo(data.automation_retry_permitted));
+    text(root, '[data-v13-automation-backfill]', yesNo(data.automation_backfill_permitted));
+    text(root, '[data-v13-automation-failure]', data.automation_failure_reason ? words(data.automation_failure_reason) : 'NONE');
 
     const completed = Number(data.completed_sessions || 0);
     const minimum = Number(data.minimum_completed_sessions || 60);
