@@ -1,0 +1,27 @@
+{
+  "bar_requests": 101,
+  "brokerage_orders": false,
+  "entry_quote_policy": "VALID_POSITIVE_BID_AND_ASK_REQUIRED_NO_SUBSTITUTION",
+  "file_writes": false,
+  "first_quote_batch_requests": 1,
+  "live_trading_enabled": false,
+  "maximum_quote_batch_requests": 2,
+  "maximum_requests_per_collection": 104,
+  "missing_quote_recovery": "ONE_FIXED_DELAY_FULL_BATCH_RETRY",
+  "paper_trading_only": true,
+  "production_activation": false,
+  "retry_delay_seconds": 5,
+  "retry_eligible_conditions": [
+    "INCOMPLETE_SYMBOL_SET",
+    "MISSING_OR_NONPOSITIVE_BID",
+    "MISSING_OR_NONPOSITIVE_ASK"
+  ],
+  "retry_scope": "EXACT_101_SYMBOL_UNIVERSE",
+  "second_failure_action": "FAIL_CLOSED_NO_SNAPSHOT_NO_EVIDENCE_NO_BACKFILL",
+  "source": "TIINGO_IEX_AND_DAILY",
+  "status": "PREREGISTERED_V13_QUOTE_RECOVERY_CANDIDATE_NOT_ACTIVATED",
+  "v8_modified": false,
+  "v10_modified": false,
+  "v11_modified": false,
+  "v12_modified": false
+}
