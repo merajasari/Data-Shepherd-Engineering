@@ -145,7 +145,7 @@ def main() -> None:
         "V11 panel exposes the persisted collection diagnostic fields",
     )
     require(
-        "renderAttempt(lastAttempt)" in script
+        "renderAttempt(lastAttempt, archived)" in script
         and "attempt.schedule_state" in script
         and "attempt.symbol_count" in script
         and "attempt.completed_bar_utc" in script
