@@ -142,8 +142,36 @@ def main() -> None:
             and partial.events_appended == 1,
             "Decision-only checkpoint records exactly one prospective decision",
         )
+        revised_decision = copy.deepcopy(snapshot)
+        nonselected = [
+            symbol
+            for symbol in revised_decision["series"]
+            if symbol != "SPY"
+            and symbol not in partial.selected_symbols
+        ]
+        for symbol in nonselected[:15]:
+            for bar_index in range(6):
+                row = revised_decision["series"][symbol][bar_index]
+                multiplier = 1.0 + 0.12 * (bar_index + 1)
+                row["open"] *= multiplier
+                row["high"] *= multiplier
+                row["low"] *= multiplier
+                row["close"] *= multiplier
+                row["volume"] *= 10
+        revised_decision["series_sha256"] = _canonical_sha(
+            revised_decision["series"]
+        )
+        revised_ranking = build_development_rankings(
+            decision_only_snapshot(revised_decision),
+            closes,
+        )
+        require(
+            tuple(revised_ranking["top_10"]) != partial.selected_symbols,
+            "Fixture reproduces a revised decision-time ranking",
+        )
+
         completed = run_observation(
-            snapshot=snapshot,
+            snapshot=re_decision,
             previous_closes=closes,
             journal_path=progressive_path,
             rehearsal=True,
@@ -155,15 +183,55 @@ def main() -> None:
             "Later snapshot completes the original decision lifecycle",
         )
         require(
-            len({
+            {
                 tuple(row["selected_symbols"])
                 for row in progressive_rows
-            }) == 1
+            } == {partial.selected_symbols}
             and len({
                 row["ranking_sha256"]
                 for row in progressive_rows
+            }) == 1
+            and len({
+                row["decision_series_sha256"]
+                for row in progressive_rows
             }) == 1,
-            "Decision, entry and exit cannot drift to a later-bar basket",
+            "Revised source bars cannot change the recorded decision",
+        )
+
+        drift_path = Path(directory) / "drift_attempt.jsonl"
+        drift_journal = Phase2EvidenceJournal(drift_path)
+        unsigned_decision = {
+            key: value
+            for key, value in progressive_rows[0].items()
+            if key not in {
+                "event_id",
+                "previous_record_sha256",
+                "record_sha256",
+            }
+        }
+        unsigned_entry = {
+            key: value
+            for key, value in progressive_rows[1].items()
+            if key not in {
+                "event_id",
+                "previous_record_sha256",
+                "record_sha256",
+            }
+        }
+        unsigned_entry["selected_symbols"] = list(
+            reversed(unsigned_entry["selected_symbols"])
+        )
+        drift_journal.append(unsigned_decision)
+        drift_rejected = False
+        try:
+            drift_journal.append(unsigned_entry)
+        except ValueError as exc:
+            drift_rejected = (
+                str(exc) == "evidence lifecycle identity drift"
+            )
+        require(
+            drift_rejected,
+            "Journal rejects lifecycle identity drift before append",
         )
 
         future_changed = copy.deepcopy(snapshot)
