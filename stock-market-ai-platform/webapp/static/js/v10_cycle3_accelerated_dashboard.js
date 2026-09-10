@@ -167,6 +167,16 @@
         <div><span>Brokerage orders</span><strong data-a10-brokerage>OFF</strong></div>
         <div><span>Runner invoked by dashboard</span><strong data-a10-runner>NO</strong></div>
         <div><span>January evidence modified</span><strong data-a10-january-modified>NO</strong></div>
+        <div><span>Current run health</span><strong data-a10-current-health>—</strong></div>
+        <div><span>Study integrity</span><strong data-a10-study-integrity>—</strong></div>
+        <div><span>Feature backend</span><strong data-a10-feature-backend>—</strong></div>
+        <div><span>Latest source session</span><strong data-a10-source-session>—</strong></div>
+        <div><span>Expected source session</span><strong data-a10-expected-source>—</strong></div>
+        <div><span>Source price coverage</span><strong data-a10-source-coverage>—</strong></div>
+        <div><span>Next lifecycle event</span><strong data-a10-next-event>—</strong></div>
+        <div><span>Pending entry / exit</span><strong data-a10-pending>—</strong></div>
+        <div><span>Sep 8 diagnostic</span><strong data-a10-diagnostic>—</strong></div>
+        <div><span>Diagnostic promotion eligibility</span><strong data-a10-diagnostic-promotion>NO</strong></div>
       </div>
     </details>
     <div class="a10-alerts" data-a10-alerts hidden></div>
@@ -402,7 +412,7 @@
       const badge=section.querySelector('[data-a10-state]');
       if (badge) {
         badge.textContent=statusText(data.status);
-        badge.classList.toggle('alert',data.operational_integrity!==true);
+        badge.classList.toggle('alert',data.current_run_health!==true);
       }
       set('[data-a10-first]',dateOnly(data.first_decision_session_utc));
       set('[data-a10-last]',dateOnly(data.last_decision_session_utc));
@@ -426,7 +436,7 @@
       renderEdges(data.block_edges);
       renderGates(data.promotion_gates);
       const checked=data.operational_checked_at_utc?new Date(data.operational_checked_at_utc).toLocaleString():'not yet published';
-      set('[data-a10-method]',`${data.method_note} Evidence: ${statusText(data.evidence_status)}. Operations: ${statusText(data.operational_status)} · checked ${checked} · scheduler every ${Math.round((Number(data.scheduler_interval_seconds)||300)/60)} minutes.`);
+      set('[data-a10-method]',`${data.method_note} Evidence: ${statusText(data.evidence_status)}. Current run: ${statusText(data.current_run_status)}. Study integrity: ${statusText(data.study_integrity_status)} · checked ${checked} · scheduler every ${Math.round((Number(data.scheduler_interval_seconds)||300)/60)} minutes.`);
       set('[data-a10-frozen-sha]',data.frozen_sha256 || '—');
       set('[data-a10-contract-sha]',data.contract_sha256 || '—');
       set('[data-a10-paper]',data.paper_trading_only === true ? 'YES' : 'NO');
@@ -435,16 +445,30 @@
       set('[data-a10-brokerage]',data.brokerage_orders === true ? 'ON' : 'OFF');
       set('[data-a10-runner]',data.runner_invoked === true ? 'YES' : 'NO');
       set('[data-a10-january-modified]',data.january_confirmation_modified === true ? 'YES' : 'NO');
+      set('[data-a10-current-health]',statusText(data.current_run_status));
+      set('[data-a10-study-integrity]',statusText(data.study_integrity_status));
+      set('[data-a10-feature-backend]',statusText(data.feature_backend));
+      set('[data-a10-source-session]',data.latest_source_session || '—');
+      set('[data-a10-expected-source]',data.expected_latest_completed_session || '—');
+      set('[data-a10-source-coverage]',`${data.source_price_symbols_available ?? '—'} / ${data.source_price_symbols_required ?? '—'}`);
+      set('[data-a10-next-event]',statusText(data.next_expected_lifecycle_event));
+      set('[data-a10-pending]',`${data.pending_entry_count ?? 0} / ${data.pending_exit_count ?? 0}`);
+      set('[data-a10-diagnostic]',statusText(data.diagnostic_backfill_status));
+      set('[data-a10-diagnostic-promotion]',data.diagnostic_backfill_promotion_eligible === true ? 'YES' : 'NO');
       const alerts=section.querySelector('[data-a10-alerts]');
-      const failures=Array.isArray(data.operational_failures)?data.operational_failures:[];
+      const currentFailures=Array.isArray(data.current_run_operational_failures)?data.current_run_operational_failures:[];
+      const historicalFailures=Array.isArray(data.historical_integrity_failures)?data.historical_integrity_failures:[];
       if (alerts) {
-        alerts.hidden=!failures.length;
-        alerts.textContent=failures.map(failure=>{
+        const messages=[];
+        currentFailures.forEach(failure=>messages.push(`Current-run alert: ${statusText(failure)}.`));
+        historicalFailures.forEach(failure=>{
           const missed=String(failure).match(/^missed_decisions_not_backfilled:(.+)$/);
-          return missed
-            ? `Evidence gap preserved: the ${missed[1].split(',').join(', ')} decision was missed and cannot be backfilled under the frozen prospective contract. Current collection can continue, but the operational-integrity promotion gate remains blocked.`
-            : `Active integrity alert: ${statusText(failure)}`;
-        }).join(' ');
+          messages.push(missed
+            ? `Preserved study-integrity disclosure: the ${missed[1].split(',').join(', ')} decision was missed and cannot enter the locked prospective record. Current collection continues; any diagnostic reconstruction remains excluded from promotion evidence.`
+            : `Preserved study-integrity disclosure: ${statusText(failure)}.`);
+        });
+        alerts.hidden=!messages.length;
+        alerts.textContent=messages.join(' ');
       }
   }
 

@@ -118,6 +118,28 @@ def main() -> None:
         ),
         "V10 accelerated API exposes read-only live comparison equity",
     )
+    require(
+        all(
+            key in v10_accelerated
+            for key in (
+                "current_run_health",
+                "current_run_status",
+                "study_integrity",
+                "study_integrity_status",
+                "feature_backend",
+                "latest_source_session",
+                "expected_latest_completed_session",
+                "source_price_symbols_available",
+                "source_price_symbols_required",
+                "next_expected_lifecycle_event",
+                "pending_entry_count",
+                "pending_exit_count",
+                "diagnostic_backfill_status",
+                "diagnostic_backfill_promotion_eligible",
+            )
+        ),
+        "V10 accelerated API separates runtime health from study integrity",
+    )
     v13_api = client.get("/api/v13/regime-overlay")
     require(v13_api.status_code == 200, "V13 read-only dashboard API responds")
     v13_payload = v13_api.get_json()
@@ -242,7 +264,15 @@ def main() -> None:
         and "Refreshes every 15 seconds" in v10_accelerated_status
         and "data-a10-hover-line" in v10_accelerated_status
         and "awaiting first journaled entry" in v10_accelerated_status
-        and "Evidence gap preserved" in v10_accelerated_status
+        and "Preserved study-integrity disclosure" in v10_accelerated_status
+        and "Current run health" in v10_accelerated_status
+        and "Study integrity" in v10_accelerated_status
+        and "Feature backend" in v10_accelerated_status
+        and "Next lifecycle event" in v10_accelerated_status
+        and "data-a10-current-health" in v10_accelerated_status
+        and "data-a10-next-event" in v10_accelerated_status
+        and "Sep 8 diagnostic" in v10_accelerated_status
+        and "Diagnostic promotion eligibility" in v10_accelerated_status
         and "if(value==null||value==='')return '—'" in v10_accelerated_status
         and "Preregistered promotion gates" in v10_accelerated_status,
         "V10 accelerated tab renders live equity, comparison charts, and gates",

@@ -33,6 +33,9 @@ from ml.v10.cycle3_accelerated_forward_journal import (
 
 
 STATUS_PATH = DEFAULT_ROOT / "status.json"
+DIAGNOSTIC_BACKFILL_PATH = (
+    DEFAULT_ROOT / "diagnostics/2026-09-08/decision_reconstruction.json"
+)
 LIVE_QUOTES_PATH = Path("data/live/latest_quotes.json")
 ROLLING_QUOTES_PATHS = (
     Path("data/live/iex_24h_5m_v5.json"),
@@ -738,6 +741,7 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
         _signature(CONTRACT_PATH),
         _signature(STATUS_PATH),
         _signature(DEFAULT_JOURNAL_PATH),
+        _signature(DIAGNOSTIC_BACKFILL_PATH),
         _signature(LIVE_QUOTES_PATH),
         *(_signature(path) for path in ROLLING_QUOTES_PATHS),
     )
@@ -749,43 +753,53 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
     ):
         return deepcopy(cached)
 
-    failures: list[str] = []
+    service_failures: list[str] = []
     try:
         load_contract()
         contract_verified = True
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         contract_verified = False
-        failures.append(f"CONTRACT_INVALID:{type(exc).__name__}")
+        service_failures.append(f"CONTRACT_INVALID:{type(exc).__name__}")
 
     status, status_error = _read_status()
+    diagnostic_backfill = _read_json(DIAGNOSTIC_BACKFILL_PATH)
+    diagnostic_backfill_valid = bool(
+        diagnostic_backfill
+        and diagnostic_backfill.get("classification")
+        == "RETROSPECTIVE_DIAGNOSTIC_BACKFILL_NOT_PROSPECTIVE_EVIDENCE"
+        and diagnostic_backfill.get("target_decision_session_utc")
+        == "2026-09-08T00:00:00+00:00"
+        and diagnostic_backfill.get("prospective_evidence") is False
+        and diagnostic_backfill.get("promotion_eligible") is False
+        and diagnostic_backfill.get("v1_journal_appended") is False
+        and diagnostic_backfill.get("brokerage_orders") is False
+    )
+    if DIAGNOSTIC_BACKFILL_PATH.exists() and not diagnostic_backfill_valid:
+        service_failures.append("DIAGNOSTIC_BACKFILL_ARTIFACT_INVALID")
     if status_error:
-        failures.append(status_error)
+        service_failures.append(status_error)
     elif not status:
-        failures.append("STATUS_NOT_PUBLISHED")
+        service_failures.append("STATUS_NOT_PUBLISHED")
 
     journal_error: str | None = None
     try:
         events = AcceleratedEvidenceJournal(DEFAULT_JOURNAL_PATH).read()
     except (AcceleratedEvidenceCorrupt, OSError) as exc:
         journal_error = str(exc)
-        failures.append(f"JOURNAL_INVALID:{journal_error}")
+        service_failures.append(f"JOURNAL_INVALID:{journal_error}")
         events = []
 
     try:
         summary = _summarize_events(events)
     except (TypeError, ValueError) as exc:
-        failures.append(f"EVIDENCE_METRICS_INVALID:{exc}")
+        service_failures.append(f"EVIDENCE_METRICS_INVALID:{exc}")
         summary = _empty_summary()
 
     current_valuation = _current_valuation(events)
 
     status_promotion = status.get("promotion")
     if status and not _status_matches_journal(status_promotion, summary):
-        failures.append("STATUS_JOURNAL_COUNT_MISMATCH")
-    if isinstance(status_promotion, dict):
-        failures.extend(
-            str(item) for item in status_promotion.get("operational_failures", [])
-        )
+        service_failures.append("STATUS_JOURNAL_COUNT_MISMATCH")
 
     if status:
         safety_checks = {
@@ -799,11 +813,49 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
         }
         for field, expected in safety_checks.items():
             if status.get(field) != expected:
-                failures.append(f"STATUS_{field.upper()}_MISMATCH")
-    failures = list(dict.fromkeys(failures))
+                service_failures.append(f"STATUS_{field.upper()}_MISMATCH")
+    service_failures = list(dict.fromkeys(service_failures))
 
-    operational_integrity = bool(status) and not failures
-    review = _review_projection(summary, operational_integrity)
+    status_study_failures = status.get("study_integrity_failures")
+    if not isinstance(status_study_failures, list):
+        status_study_failures = (
+            status_promotion.get("operational_failures", [])
+            if isinstance(status_promotion, dict)
+            else []
+        )
+    status_current_failures = status.get("current_run_operational_failures", [])
+    if not isinstance(status_current_failures, list):
+        status_current_failures = ["STATUS_CURRENT_FAILURES_INVALID"]
+    status_historical_failures = status.get("historical_integrity_failures")
+    if not isinstance(status_historical_failures, list):
+        status_historical_failures = [
+            str(item)
+            for item in status_study_failures
+            if str(item).startswith("missed_decisions_not_backfilled:")
+        ]
+
+    current_run_failures = list(
+        dict.fromkeys(
+            service_failures + [str(item) for item in status_current_failures]
+        )
+    )
+    historical_integrity_failures = list(
+        dict.fromkeys(str(item) for item in status_historical_failures)
+    )
+    study_integrity_failures = list(
+        dict.fromkeys(
+            service_failures + [str(item) for item in status_study_failures]
+        )
+    )
+    current_run_health = bool(status) and not current_run_failures
+    if "current_run_health" in status:
+        current_run_health = (
+            current_run_health and status.get("current_run_health") is True
+        )
+    study_integrity = bool(status) and not study_integrity_failures
+    if "study_integrity" in status:
+        study_integrity = study_integrity and status.get("study_integrity") is True
+    review = _review_projection(summary, study_integrity)
     now = datetime.now(timezone.utc)
     first_day = datetime.fromisoformat(FIRST_DECISION_SESSION_UTC).date()
     last_day = datetime.fromisoformat(LAST_DECISION_SESSION_UTC).date()
@@ -848,10 +900,70 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
         **summary,
         **current_valuation,
         **review,
-        "operational_status": "HEALTHY" if operational_integrity else "ALERT",
-        "operational_integrity": operational_integrity,
-        "operational_failures": failures,
+        "operational_status": (
+            "CURRENT_RUN_ALERT"
+            if not current_run_health
+            else "CURRENT_RUN_HEALTHY_STUDY_INTEGRITY_BLOCKED"
+            if not study_integrity
+            else "HEALTHY"
+        ),
+        "current_run_status": "HEALTHY" if current_run_health else "ALERT",
+        "current_run_health": current_run_health,
+        "current_run_operational_failures": current_run_failures,
+        "historical_integrity_failures": historical_integrity_failures,
+        "study_integrity_status": "PASS" if study_integrity else "BLOCKED",
+        "study_integrity": study_integrity,
+        "study_integrity_failures": study_integrity_failures,
+        "operational_integrity": study_integrity,
+        "operational_failures": study_integrity_failures,
+        "feature_backend": status.get("feature_backend"),
+        "latest_source_session": status.get("latest_source_session"),
+        "expected_latest_completed_session": status.get(
+            "expected_latest_completed_session"
+        ),
+        "source_price_symbols_available": status.get(
+            "source_price_symbols_available"
+        ),
+        "source_price_symbols_required": status.get(
+            "source_price_symbols_required"
+        ),
+        "source_session_lag_count": status.get("source_session_lag_count"),
+        "source_readiness_status": status.get("source_readiness_status"),
+        "latest_lifecycle_event_type": status.get(
+            "latest_lifecycle_event_type"
+        ),
+        "latest_lifecycle_event_at_utc": status.get(
+            "latest_lifecycle_event_at_utc"
+        ),
+        "pending_entry_count": status.get("pending_entry_count", 0),
+        "pending_entry_decision_sessions": status.get(
+            "pending_entry_decision_sessions", []
+        ),
+        "pending_exit_count": status.get("pending_exit_count", 0),
+        "pending_exit_decision_sessions": status.get(
+            "pending_exit_decision_sessions", []
+        ),
+        "next_expected_lifecycle_event": status.get(
+            "next_expected_lifecycle_event"
+        ),
         "operational_checked_at_utc": status.get("checked_at_utc"),
+        "diagnostic_backfill_status": (
+            "RECONSTRUCTED_DIAGNOSTIC_ONLY"
+            if diagnostic_backfill_valid
+            else "NOT_RECONSTRUCTED"
+        ),
+        "diagnostic_backfill_target_session": (
+            str(diagnostic_backfill.get("target_decision_session_utc", ""))[:10]
+            if diagnostic_backfill_valid
+            else None
+        ),
+        "diagnostic_backfill_artifact_sha256": (
+            diagnostic_backfill.get("artifact_sha256")
+            if diagnostic_backfill_valid
+            else None
+        ),
+        "diagnostic_backfill_promotion_eligible": False,
+        "diagnostic_backfill_prospective_evidence": False,
         "status_published": bool(status),
         "journal_error": journal_error,
         "scheduler_interval_seconds": 300,

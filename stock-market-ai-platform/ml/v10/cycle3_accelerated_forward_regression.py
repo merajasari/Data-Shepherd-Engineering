@@ -1,7 +1,7 @@
 """Deterministic regression checks for accelerated V10 paper-forward evidence."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -23,6 +23,9 @@ from ml.v10.cycle3_accelerated_forward_journal import (
     AcceleratedEvidenceJournal,
 )
 from ml.v10.cycle3_accelerated_forward_runner import (
+    _is_market_session,
+    _next_market_session,
+    _session_lock_window,
     promotion_summary,
     run_once,
 )
@@ -110,6 +113,35 @@ def _assert_scheduler_uses_spark_backend() -> None:
     assert "<key>FEATURE_BACKEND</key><string>spark</string>" in source
     assert "FEATURE_BACKEND=pandas" not in source
     assert "<key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>" in source
+    entrypoint = (
+        PROJECT_ROOT / "ml/v10/cycle3_accelerated_scheduled_entrypoint.py"
+    ).read_text(encoding="utf-8")
+    assert 'result.get("current_run_health") is not True' in entrypoint
+    assert 'result["promotion"]["operational_integrity"]' not in entrypoint
+
+
+def _assert_market_calendar_and_dst() -> None:
+    closures = {
+        date(2026, 9, 7),
+        date(2026, 11, 26),
+        date(2026, 12, 25),
+    }
+    assert _is_market_session(date(2026, 9, 5), closures) is False
+    assert _is_market_session(date(2026, 9, 7), closures) is False
+    assert _is_market_session(date(2026, 11, 26), closures) is False
+    assert _is_market_session(date(2026, 12, 25), closures) is False
+    assert _next_market_session(date(2026, 9, 4), closures) == date(2026, 9, 8)
+    assert _next_market_session(date(2026, 11, 25), closures) == date(2026, 11, 27)
+    september_close, september_open = _session_lock_window(
+        pd.Timestamp("2026-09-04", tz="UTC"), closures
+    )
+    november_close, november_open = _session_lock_window(
+        pd.Timestamp("2026-11-25", tz="UTC"), closures
+    )
+    assert september_close.isoformat() == "2026-09-04T20:05:00+00:00"
+    assert september_open.isoformat() == "2026-09-08T13:30:00+00:00"
+    assert november_close.isoformat() == "2026-11-25T21:05:00+00:00"
+    assert november_open.isoformat() == "2026-11-27T14:30:00+00:00"
 
 
 def _assert_prospective_and_duplicate_safe() -> None:
@@ -139,6 +171,16 @@ def _assert_prospective_and_duplicate_safe() -> None:
         assert first["decisions"] == 1
         assert first["entries"] == 0
         assert first["appended_this_run"] == 1
+        assert first["feature_backend"] in {"pandas", "spark"}
+        assert first["latest_source_session"] == "2026-09-08"
+        assert first["expected_latest_completed_session"] == "2026-09-08"
+        assert first["source_price_symbols_available"] == 101
+        assert first["source_price_symbols_required"] == 101
+        assert first["source_readiness_status"] == "READY"
+        assert first["current_run_health"] is True
+        assert first["study_integrity"] is True
+        assert first["pending_entry_count"] == 1
+        assert first["next_expected_lifecycle_event"].startswith("ENTRY:")
 
         duplicate = run_once(
             now_utc=datetime(2026, 9, 8, 20, 15, tzinfo=timezone.utc),
@@ -203,6 +245,33 @@ def _assert_no_backfill() -> None:
         rows = AcceleratedEvidenceJournal(root / "journal.jsonl").read()
         assert rows[0]["decision_timestamp_utc"].startswith("2026-09-10")
         assert result["promotion"]["operational_integrity"] is False
+        assert result["current_run_health"] is True
+        assert result["current_run_operational_failures"] == []
+        assert result["study_integrity"] is False
+        assert result["historical_integrity_failures"] == [
+            "missed_decisions_not_backfilled:2026-09-08,2026-09-09"
+        ]
+
+
+def _assert_current_source_failure_is_not_historical() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        result = run_once(
+            now_utc=datetime(2026, 9, 9, 20, 10, tzinfo=timezone.utc),
+            journal_path=root / "journal.jsonl",
+            status_path=root / "status.json",
+            load_market=lambda: _market("2026-09-08"),
+            rank_for_date=_rank,
+            verify_source=lambda: None,
+        )
+        assert result["current_run_health"] is False
+        assert result["source_readiness_status"] == "SOURCE_LAGGING"
+        assert result["current_run_operational_failures"] == [
+            "missing_market_sessions:2026-09-09"
+        ]
+        assert result["historical_integrity_failures"] == [
+            "missed_decisions_not_backfilled:2026-09-08"
+        ]
 
 
 def _assert_promotion_checkpoints() -> None:
@@ -255,14 +324,19 @@ def _assert_january_isolation() -> None:
 def main() -> None:
     _assert_contract()
     _assert_scheduler_uses_spark_backend()
+    _assert_market_calendar_and_dst()
     _assert_prospective_and_duplicate_safe()
     _assert_no_backfill()
+    _assert_current_source_failure_is_not_historical()
     _assert_promotion_checkpoints()
     _assert_january_isolation()
     print("V10 CYCLE 3 ACCELERATED PAPER-FORWARD REGRESSION")
     print("=" * 88)
     print("Contract identity and frozen candidate: PASS")
     print("Scheduler Spark feature backend: PASS")
+    print("NYSE closures and Eastern DST conversion: PASS")
+    print("Current-run health is separate from preserved study integrity: PASS")
+    print("Source readiness and lifecycle diagnostics: PASS")
     print("Prospective decision timing and duplicate safety: PASS")
     print("Missed-decision backfill prohibition: PASS")
     print("8-block and 12-block review checkpoints: PASS")

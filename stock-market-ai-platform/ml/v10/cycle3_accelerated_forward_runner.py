@@ -136,6 +136,25 @@ def _atomic_write(path: Path, payload: Mapping[str, object]) -> None:
             os.unlink(temporary)
 
 
+def _previous_historical_failures(status_path: Path) -> list[str]:
+    if not status_path.exists():
+        return []
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    values = payload.get("historical_integrity_failures", [])
+    if not isinstance(values, list):
+        return []
+    return list(
+        dict.fromkeys(
+            str(value)
+            for value in values
+            if str(value).startswith("missed_decisions_not_backfilled:")
+        )
+    )
+
+
 def _event_base(
     event_type: str,
     decision_timestamp: pd.Timestamp,
@@ -181,6 +200,69 @@ def _prices(
             return None
         output[symbol] = price
     return output
+
+
+def _source_snapshot(
+    symbols: list[str],
+    frames: Mapping[str, pd.DataFrame],
+    dates: list[pd.Timestamp],
+) -> dict[str, object]:
+    latest = dates[-1] if dates else None
+    covered = 0
+    if latest is not None:
+        for symbol in list(symbols) + ["SPY"]:
+            frame = frames.get(symbol)
+            if frame is None or latest not in frame.index:
+                continue
+            try:
+                value = float(frame.loc[latest, "close"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if np.isfinite(value) and value > 0:
+                covered += 1
+    return {
+        "feature_backend": os.environ.get("FEATURE_BACKEND", "pandas").strip().lower(),
+        "latest_source_session": latest.date().isoformat() if latest is not None else None,
+        "source_price_symbols_available": covered,
+        "source_price_symbols_required": len(symbols) + 1,
+    }
+
+
+def _lifecycle_snapshot(events: list[dict[str, object]]) -> dict[str, object]:
+    decisions = {
+        str(event.get("decision_timestamp_utc"))
+        for event in events
+        if event.get("event_type") == "DECISION"
+    }
+    entries = {
+        str(event.get("decision_timestamp_utc"))
+        for event in events
+        if event.get("event_type") == "ENTRY"
+    }
+    exits = {
+        str(event.get("decision_timestamp_utc"))
+        for event in events
+        if event.get("event_type") == "EXIT"
+    }
+    pending_entries = sorted(decisions - entries)
+    pending_exits = sorted(entries - exits)
+    ordered = sorted(events, key=lambda item: str(item.get("created_at_utc", "")))
+    latest = ordered[-1] if ordered else {}
+    if pending_entries:
+        next_event = "ENTRY:" + pending_entries[0][:10]
+    elif pending_exits:
+        next_event = "EXIT:" + pending_exits[0][:10]
+    else:
+        next_event = "NEXT_ELIGIBLE_DECISION"
+    return {
+        "latest_lifecycle_event_type": latest.get("event_type"),
+        "latest_lifecycle_event_at_utc": latest.get("created_at_utc"),
+        "pending_entry_count": len(pending_entries),
+        "pending_entry_decision_sessions": [value[:10] for value in pending_entries],
+        "pending_exit_count": len(pending_exits),
+        "pending_exit_decision_sessions": [value[:10] for value in pending_exits],
+        "next_expected_lifecycle_event": next_event,
+    }
 
 
 def _previous_entry_symbols(
@@ -402,7 +484,9 @@ def run_once(
     journal = AcceleratedEvidenceJournal(journal_path)
     events = journal.read()
     appended = 0
-    failures: list[str] = []
+    feature_backend = os.environ.get("FEATURE_BACKEND", "pandas").strip().lower()
+    current_run_failures: list[str] = []
+    historical_integrity_failures = _previous_historical_failures(status_path)
 
     if now < start:
         summary = promotion_summary(events)
@@ -417,6 +501,13 @@ def run_once(
             "frozen_sha256": EXPECTED_FROZEN_SHA256,
             "journal_events": len(events),
             "appended_this_run": 0,
+            "feature_backend": feature_backend,
+            "current_run_health": True,
+            "current_run_operational_failures": [],
+            "historical_integrity_failures": [],
+            "study_integrity": True,
+            "study_integrity_failures": [],
+            **_lifecycle_snapshot(events),
             "promotion": summary,
             "paper_trading_only": True,
             "live_trading_enabled": False,
@@ -441,6 +532,13 @@ def run_once(
             "frozen_sha256": EXPECTED_FROZEN_SHA256,
             "journal_events": len(events),
             "appended_this_run": 0,
+            "feature_backend": feature_backend,
+            "current_run_health": True,
+            "current_run_operational_failures": [],
+            "historical_integrity_failures": [],
+            "study_integrity": True,
+            "study_integrity_failures": [],
+            **_lifecycle_snapshot(events),
             "promotion": summary,
             "paper_trading_only": True,
             "live_trading_enabled": False,
@@ -464,8 +562,16 @@ def run_once(
     missing_market_sessions = sorted(
         day.isoformat() for day in expected if day not in observed_dates
     )
+    source = _source_snapshot(symbols, frames, dates)
+    source["expected_latest_completed_session"] = (
+        expected[-1].isoformat() if expected else None
+    )
+    source["source_session_lag_count"] = len(missing_market_sessions)
+    source["source_readiness_status"] = (
+        "READY" if not missing_market_sessions else "SOURCE_LAGGING"
+    )
     if missing_market_sessions:
-        failures.append(
+        current_run_failures.append(
             "missing_market_sessions:" + ",".join(missing_market_sessions)
         )
 
@@ -524,7 +630,9 @@ def run_once(
             existing.add(key)
 
     if missed_decisions:
-        failures.append("missed_decisions_not_backfilled:" + ",".join(missed_decisions))
+        historical_integrity_failures.append(
+            "missed_decisions_not_backfilled:" + ",".join(missed_decisions)
+        )
 
     events = journal.read()
     existing = {_event_key(event) for event in events}
@@ -538,7 +646,7 @@ def run_once(
             continue
         entry_ts = dates[decision_index + 1]
         if entry_ts.to_pydatetime() >= confirmation:
-            failures.append(
+            current_run_failures.append(
                 "cross_confirmation_boundary_entry_blocked:"
                 + decision_ts.date().isoformat()
             )
@@ -549,7 +657,7 @@ def run_once(
         v8_prices = _prices(v8_symbols, frames, entry_ts)
         spy_prices = _prices(["SPY"], frames, entry_ts)
         if v10_prices is None or v8_prices is None or spy_prices is None:
-            failures.append(
+            current_run_failures.append(
                 "missing_entry_prices:" + decision_ts.date().isoformat()
             )
             continue
@@ -604,7 +712,7 @@ def run_once(
         if now < exit_close:
             continue
         if exit_ts.to_pydatetime() >= confirmation:
-            failures.append(
+            current_run_failures.append(
                 "cross_confirmation_boundary_exit_blocked:"
                 + decision_ts.date().isoformat()
             )
@@ -615,7 +723,7 @@ def run_once(
         v8_exit = _prices(v8_symbols, frames, exit_ts)
         spy_exit = _prices(["SPY"], frames, exit_ts)
         if v10_exit is None or v8_exit is None or spy_exit is None:
-            failures.append(
+            current_run_failures.append(
                 "missing_exit_prices:" + decision_ts.date().isoformat()
             )
             continue
@@ -666,7 +774,19 @@ def run_once(
             existing.add(key)
 
     events = journal.read()
-    summary = promotion_summary(events, operational_failures=failures)
+    lifecycle = _lifecycle_snapshot(events)
+    historical_integrity_failures = list(
+        dict.fromkeys(historical_integrity_failures)
+    )
+    study_integrity_failures = list(
+        dict.fromkeys(
+            list(current_run_failures) + list(historical_integrity_failures)
+        )
+    )
+    summary = promotion_summary(
+        events,
+        operational_failures=study_integrity_failures,
+    )
     payload = {
         "status": summary["review_status"],
         "checked_at_utc": now.isoformat(),
@@ -683,8 +803,16 @@ def run_once(
         "entries": sum(event.get("event_type") == "ENTRY" for event in events),
         "exits": sum(event.get("event_type") == "EXIT" for event in events),
         "appended_this_run": appended,
+        "feature_backend": feature_backend,
+        **source,
+        **lifecycle,
         "missing_market_sessions": missing_market_sessions,
         "missed_decisions_not_backfilled": missed_decisions,
+        "current_run_health": not current_run_failures,
+        "current_run_operational_failures": current_run_failures,
+        "historical_integrity_failures": historical_integrity_failures,
+        "study_integrity": not study_integrity_failures,
+        "study_integrity_failures": study_integrity_failures,
         "promotion": summary,
         "automatic_promotion": False,
         "paper_trading_only": True,
@@ -713,9 +841,32 @@ def main() -> None:
         f"{promotion['complete_five_sleeve_blocks']}"
     )
     print(f"Promotion review: {promotion['review_status']}")
-    if promotion["operational_failures"]:
-        print("Operational exceptions:")
-        for failure in promotion["operational_failures"]:
+    print(
+        "Current run health: "
+        + ("HEALTHY" if result.get("current_run_health") else "ALERT")
+    )
+    print(
+        "Study integrity: "
+        + ("PASS" if result.get("study_integrity") else "BLOCKED")
+    )
+    print(f"Feature backend: {result.get('feature_backend', 'unknown')}")
+    print(
+        "Source session: "
+        f"{result.get('latest_source_session') or 'none'}"
+        " / expected "
+        f"{result.get('expected_latest_completed_session') or 'none'}"
+    )
+    print(
+        "Next lifecycle event: "
+        f"{result.get('next_expected_lifecycle_event', 'unknown')}"
+    )
+    if result.get("current_run_operational_failures"):
+        print("Current-run exceptions:")
+        for failure in result["current_run_operational_failures"]:
+            print(f"  - {failure}")
+    if result.get("historical_integrity_failures"):
+        print("Preserved study-integrity disclosures:")
+        for failure in result["historical_integrity_failures"]:
             print(f"  - {failure}")
     print("Automatic promotion: NO | human review required: YES")
     print("Original January confirmation: UNCHANGED")
