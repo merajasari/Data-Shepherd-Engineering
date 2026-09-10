@@ -1,0 +1,51 @@
+{
+  "disposition_id": "V15_INTRADAY_LOGISTIC_V1_REJECTED_DEVELOPMENT_DISPOSITION",
+  "candidate_id": "v15_intraday_logistic_1000et_top10",
+  "contract_id": "V15_INTRADAY_LOGISTIC_WALK_FORWARD_DEVELOPMENT_V1",
+  "contract_sha256": "054953ddda9af67e536da0632d52439a8230e8819e1cbf3f1deb5f33361115af",
+  "evaluation_completed_date_utc": "2026-09-10",
+  "observed_result_sha256": "c01a8c065dc0435d2d458b2ee490e79cb4907f8627b400b264ff0f325148b8ca",
+  "source_manifest_sha256_binding": "BOUND_INSIDE_OBSERVED_RESULT_ARTIFACT",
+  "evidence": {
+    "eligible_sessions": 82,
+    "fold_count": 4,
+    "test_sessions": 40,
+    "v15_net_total_return": -0.0674766958260773,
+    "v11_control_net_total_return": -0.0001014428124076483,
+    "spy_total_return": -0.004163151488881356,
+    "v15_relative_to_v11": -0.06738208844222715,
+    "v15_relative_to_spy": -0.06357823014066655,
+    "v15_v11_win_rate": 0.375,
+    "v15_spy_win_rate": 0.275
+  },
+  "gates": {
+    "positive_net_return": false,
+    "positive_relative_to_v11": false,
+    "positive_relative_to_spy": false,
+    "v11_win_rate_at_least_half": false,
+    "spy_win_rate_at_least_half": false
+  },
+  "decision": "REJECTED_DO_NOT_ADVANCE_TO_PAPER_FORWARD",
+  "reuse_policy": {
+    "v1_outcomes_may_inform_v2_development_design": true,
+    "v1_results_must_not_be_relabeled_as_fresh_v2_evidence": true,
+    "v2_requires_a_separate_contract": true,
+    "v2_requires_a_larger_historical_dataset": true,
+    "future_paper_evidence_requires_a_new_boundary": true
+  },
+  "authority": {
+    "model_frozen": false,
+    "scheduler_installation_allowed": false,
+    "paper_forward_allowed": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  },
+  "disposition_sha256": "3522d7d94c17bfd459630c93c5782808fc1917d3c3691c3062141bdadeea31e7"
+}
