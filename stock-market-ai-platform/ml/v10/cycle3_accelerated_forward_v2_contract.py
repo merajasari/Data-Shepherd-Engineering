@@ -15,7 +15,7 @@ CONTRACT_PATH = Path(__file__).with_name(
     "cycle3_accelerated_forward_v2_contract.json"
 )
 EXPECTED_CONTRACT_SHA256 = (
-    "e34e50ddeb36fef7a87938e1c1032959007df8af64f3081ddb99a828dbbf2ce4"
+    "e398ee40d28ed694f0528976d339442ca3d87a12cceb8eb386b557081887e43b"
 )
 EXPECTED_CANDIDATE_ID = "c3_confirm2_blend50"
 EXPECTED_FROZEN_SHA256 = (
