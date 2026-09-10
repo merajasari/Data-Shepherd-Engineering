@@ -62,7 +62,7 @@ def main() -> None:
     )
     require(
         b'/static/js/v10_confirmation_dashboard.js' in research.data
-        and b'/static/js/v10_cycle3_accelerated_dashboard.js' in research.data
+        and b'/static/js/v10_cycle3_accelerated_v2_dashboard.js' in research.data
         and b'/static/js/v10_cycle3_holdout_monitor.js' in research.data,
         "Model Research loads all three classified V10 sections",
     )
@@ -79,7 +79,7 @@ def main() -> None:
         ),
         "V8 lifecycle events expose their official symbol baskets for hover details",
     )
-    v10_accelerated_api = client.get("/api/v10/cycle3/accelerated")
+    v10_accelerated_api = client.get("/api/v10/cycle3/accelerated-v2")
     require(
         v10_accelerated_api.status_code == 200,
         "V10 accelerated read-only dashboard API responds",
@@ -89,7 +89,7 @@ def main() -> None:
         v10_accelerated.get("classification")
         == "AUTHORIZED_PROSPECTIVE_PAPER_FORWARD"
         and v10_accelerated.get("first_decision_session_utc")
-        == "2026-09-08T00:00:00+00:00"
+        == "2026-09-10T00:00:00+00:00"
         and v10_accelerated.get("independent_confirmation_start_utc")
         == "2027-01-04T00:00:00+00:00",
         "V10 accelerated and January evidence boundaries stay separate",
@@ -210,7 +210,7 @@ def main() -> None:
     v13_status = (project_root / "webapp/static/js/v13_regime_overlay_status.js").read_text()
     v10_accelerated_status = (
         project_root
-        / "webapp/static/js/v10_cycle3_accelerated_dashboard.js"
+        / "webapp/static/js/v10_cycle3_accelerated_v2_dashboard.js"
     ).read_text()
     v10_january_status = (
         project_root / "webapp/static/js/v10_cycle3_holdout_monitor.js"
@@ -254,7 +254,7 @@ def main() -> None:
         "V10 tab orders accelerated, January, then legacy evidence",
     )
     require(
-        "fetch('/api/v10/cycle3/accelerated'" in v10_accelerated_status
+        "fetch('/api/v10/cycle3/accelerated-v2'" in v10_accelerated_status
         and "0 / 8 complete blocks" in v10_accelerated_status
         and "0 / 12 complete blocks" in v10_accelerated_status
         and "Complete-block normalized comparison" in v10_accelerated_status
@@ -264,15 +264,17 @@ def main() -> None:
         and "Refreshes every 15 seconds" in v10_accelerated_status
         and "data-a10-hover-line" in v10_accelerated_status
         and "awaiting first journaled entry" in v10_accelerated_status
-        and "Preserved study-integrity disclosure" in v10_accelerated_status
+        and "V2 clean evidence boundary" in v10_accelerated_status
+        and "Only prospective evidence beginning September 10, 2026 is displayed." in v10_accelerated_status
         and "Current run health" in v10_accelerated_status
         and "Study integrity" in v10_accelerated_status
         and "Feature backend" in v10_accelerated_status
         and "Next lifecycle event" in v10_accelerated_status
         and "data-a10-current-health" in v10_accelerated_status
         and "data-a10-next-event" in v10_accelerated_status
-        and "Sep 8 diagnostic" in v10_accelerated_status
-        and "Diagnostic promotion eligibility" in v10_accelerated_status
+        and "Sep 8 diagnostic" not in v10_accelerated_status
+        and "Diagnostic promotion eligibility" not in v10_accelerated_status
+        and "Preserved study-integrity disclosure" not in v10_accelerated_status
         and "if(value==null||value==='')return '—'" in v10_accelerated_status
         and "Preregistered promotion gates" in v10_accelerated_status,
         "V10 accelerated tab renders live equity, comparison charts, and gates",
@@ -422,7 +424,7 @@ def main() -> None:
         "V13 research renderer remains off the live page",
     )
     require(
-        b'/static/js/v10_cycle3_accelerated_dashboard.js' not in live.data
+        b'/static/js/v10_cycle3_accelerated_v2_dashboard.js' not in live.data
         and b'/static/js/v10_cycle3_holdout_monitor.js' not in live.data,
         "V10 research evidence renderers remain off the Live Stock Viewer",
     )
