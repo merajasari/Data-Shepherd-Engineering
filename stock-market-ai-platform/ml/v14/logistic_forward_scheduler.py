@@ -8,11 +8,11 @@ from ml.v14.logistic_forward import run_once
 
 
 def _default_refresh() -> dict[str, Any]:
-    # Lazy import keeps scheduler orchestration unit-testable without loading
-    # the legacy V8 refresh module until the production entrypoint runs.
-    from ml.v14.logistic_forward_data_refresh import run_v14_data_refresh
+    # The existing shared refresh agent owns Tiingo and V8 publication. V14's
+    # five-minute job only verifies that its 101 feature inputs are in sync.
+    from ml.v14.logistic_forward_data_refresh import check_v14_data_readiness
 
-    return run_v14_data_refresh()
+    return check_v14_data_readiness()
 
 
 def run_scheduler(

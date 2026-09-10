@@ -44,19 +44,25 @@ Install the isolated LaunchAgent from the project root:
 ```
 
 The job runs every five minutes while the user session is active. Each run is
-serialized by a lock directory, refreshes the shared Tiingo Bronze data within
-the rolling hourly request budget, propagates Silver/Gold/features, and only
-then invokes the V14 collector when all required feature files are current.
-Partial refreshes and quota waits are recorded in
+serialized by a lock directory, verifies that the shared 101-symbol feature
+snapshot is synchronized, and only then invokes the V14 collector. Readiness
+failures are recorded in
 `data/model/v14/logistic_forward/refresh_status.json` and do not create a
 decision from an uncertain snapshot.
 
-This job intentionally does not call `ml.run_v5_data_refresh`'s V8 production
-publishing path: it never runs V8 inference, the V8 EOD orchestrator, or the
-model-comparison refresh. If the older `com.datashepherd.v5refresh` LaunchAgent
-is installed, unload that older market-data job before enabling this one so two
-agents do not consume the same Tiingo quota. The existing V8 paper scheduler
-may remain installed; V8/V10 state is not modified by the V14 job.
+The existing `com.datashepherd.v5refresh` LaunchAgent remains the single owner
+of scheduled Tiingo ingestion, Silver/Gold/feature propagation, V8 ranking
+publication, and its rolling request ledger. Keep it installed. The V14 agent
+does not make scheduled Tiingo requests, run V8 inference, invoke the V8 EOD
+orchestrator, or modify V8/V10 state.
+
+For an operator-driven V14-only data-layer refresh, the isolated wrapper is
+available below. Do not schedule this command alongside
+`com.datashepherd.v5refresh`; both use the same Tiingo request ledger.
+
+```bash
+python -m ml.v14.logistic_forward_data_refresh
+```
 
 To inspect the job and logs:
 

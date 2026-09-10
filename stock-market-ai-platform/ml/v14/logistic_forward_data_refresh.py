@@ -25,11 +25,12 @@ if str(ML_ROOT) not in sys.path:
 # These helpers own the account-wide Tiingo quota and the existing ingestion
 # pipeline.  We intentionally do not import or call run_data_refresh().
 from run_v5_data_refresh import (  # noqa: E402
-    DEFAULT_HOURLY_REQUEST_LIMIT,
     QuotaTrackingTiingoClient,
     REQUEST_LEDGER_PATH,
     available_request_budget,
     configured_hourly_request_limit,
+    feature_latest_timestamp_ms,
+    get_v5_data_symbols,
     propagate_price_layers,
     rebuild_data_layers,
     run_incremental_refresh,
@@ -50,6 +51,60 @@ def _write_status(payload: dict[str, Any], path: Path = STATUS_PATH) -> dict[str
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(temporary, path)
     return payload
+
+
+def check_v14_data_readiness(*, status_path: Path = STATUS_PATH) -> dict[str, Any]:
+    """Confirm the shared 101-symbol feature snapshot is synchronized.
+
+    This check performs no network requests and writes no V8/V10 state.  The
+    existing shared market-data LaunchAgent remains the sole scheduled owner
+    of Tiingo ingestion and V8 production publishing.
+    """
+    symbols = list(get_v5_data_symbols())
+    latest_by_symbol = {symbol: feature_latest_timestamp_ms(symbol) for symbol in symbols}
+    missing = sorted(symbol for symbol, value in latest_by_symbol.items() if value is None)
+    base: dict[str, Any] = {
+        "checked_at_utc": _utc_now(),
+        "feature_backend": os.environ.get("FEATURE_BACKEND", "pandas").strip().lower(),
+        "required_symbols": len(symbols),
+        "paper_trading_only": True,
+        "brokerage_orders": False,
+        "v8_v10_modified": False,
+        "scheduled_network_requests": 0,
+    }
+    if missing:
+        return _write_status(
+            {**base, "status": "FEATURES_MISSING", "missing_feature_symbols": missing, "ready_for_collection": False},
+            status_path,
+        )
+    timestamps = {int(value) for value in latest_by_symbol.values() if value is not None}
+    if len(timestamps) != 1:
+        newest = max(timestamps)
+        lagging = sorted(symbol for symbol, value in latest_by_symbol.items() if value != newest)
+        return _write_status(
+            {
+                **base,
+                "status": "FEATURES_NOT_SYNCHRONIZED",
+                "lagging_feature_symbols": lagging,
+                "oldest_feature_timestamp_ms": min(timestamps),
+                "newest_feature_timestamp_ms": newest,
+                "ready_for_collection": False,
+            },
+            status_path,
+        )
+    common_timestamp_ms = timestamps.pop()
+    return _write_status(
+        {
+            **base,
+            "status": "FEATURES_CURRENT",
+            "common_feature_timestamp_ms": common_timestamp_ms,
+            "common_feature_timestamp_utc": datetime.fromtimestamp(
+                common_timestamp_ms / 1000.0, tz=timezone.utc
+            ).isoformat(),
+            "ready_for_collection": True,
+        },
+        status_path,
+    )
 
 
 def run_v14_data_refresh(

@@ -48,8 +48,10 @@ rmdir "$LOCK_DIR" 2>/dev/null || true
 launchctl bootstrap "gui/$UID_VALUE" "$PLIST"
 
 if launchctl print "gui/$UID_VALUE/com.datashepherd.v5refresh" >/dev/null 2>&1; then
-  echo "WARNING: com.datashepherd.v5refresh is still loaded. Disable that older market-data job to avoid duplicate Tiingo refreshes."
+  echo "Shared market-data refresher detected: com.datashepherd.v5refresh"
+else
+  echo "WARNING: com.datashepherd.v5refresh is not loaded. V14 will wait until the shared feature snapshot is current."
 fi
-echo "Installed $LABEL (refresh + V14 collector every $INTERVAL_SECONDS seconds)."
+echo "Installed $LABEL (data readiness + V14 collector every $INTERVAL_SECONDS seconds)."
 echo "Logs: $LOG_DIR/v14_logistic_forward.log and $LOG_DIR/v14_logistic_forward.err.log"
 echo "Paper trading only; brokerage orders are OFF."
