@@ -40,7 +40,7 @@ from ml.v10.config import (
 )
 
 PHASE = 3
-PHASE1_PANEL = Path("data/model/v10/source_panel/complementary_signal_panel.parquet")
+PHASE1_PANEL = Path("data/model/v9/phase1/complementary_signal_panel.parquet")
 FEATURE_ROOT = Path("data/features/stocks")
 OUTPUT_ROOT = Path("data/model/v10/phase3")
 PERIOD_PATH = OUTPUT_ROOT / "economic_period_results.csv"
@@ -101,7 +101,7 @@ def _load_execution_data(symbols):
 
 def _load_panel():
     if not PHASE1_PANEL.exists():
-        raise FileNotFoundError(f"Missing {PHASE1_PANEL}; run python -m ml.v10.source_panel first")
+        raise FileNotFoundError(f"Missing {PHASE1_PANEL}; run V9 Phase 1 first")
     p = pd.read_parquet(PHASE1_PANEL).copy()
     p["timestamp_utc"] = pd.to_datetime(p["timestamp_utc"], utc=True)
     if p["timestamp_utc"].max() >= FUTURE_HOLDOUT_START_UTC:

@@ -35,7 +35,7 @@
 
   async function load(){
     try{
-      const r=await fetch('/api/v8/holdout',{cache:'no-store'}); if(!r.ok)throw new Error(`HTTP ${r.status}`); const d=await r.json();
+      const d=await window.DataShepherdV8Snapshot.get();
       const rows=Array.isArray(d.latest_research_top10)?d.latest_research_top10.slice(0,10):[];
       state.textContent=String(d.state||'FROZEN').replaceAll('_',' ');
       const ts=d.latest_research_top10_timestamp_utc?new Date(d.latest_research_top10_timestamp_utc):null;

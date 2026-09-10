@@ -54,6 +54,7 @@ from feature_pipeline import process_stock as process_feature_stock  # noqa: E40
 
 REQUEST_LEDGER_PATH = PROJECT_ROOT / "data/live/v5_tiingo_request_ledger.json"
 DEFAULT_HOURLY_REQUEST_LIMIT = 45
+MAX_SUPPORTED_HOURLY_REQUEST_LIMIT = 10_000
 REQUEST_WINDOW = timedelta(hours=1)
 COMPARISON_OUTPUT_PATH = PROJECT_ROOT / "webapp/static/generated/stock_model_comparison.json"
 COMPARISON_STATIC_INPUTS = (
@@ -61,12 +62,37 @@ COMPARISON_STATIC_INPUTS = (
     PROJECT_ROOT / "data/model/v5/phase3/portfolio_daily.csv",
     PROJECT_ROOT / "data/model/v8/phase5/economic_period_results.csv",
     PROJECT_ROOT / "data/model/v8/phase7/frozen_candidate_spec.json",
-    PROJECT_ROOT / "data/model/v10/phase3/economic_period_results.csv",
+    PROJECT_ROOT / "data/model/v10/cycle3/economic_period_results.csv",
+    PROJECT_ROOT / "data/model/v10/cycle3/freeze/frozen_candidate_spec.json",
+    PROJECT_ROOT / "data/research/v11/intraday/backfills/latest_complete_manifest.json",
+    PROJECT_ROOT / "ml/v11/intraday_phase2_contract.json",
 )
 
 
 def _utc_now():
     return datetime.now(timezone.utc)
+
+
+def configured_hourly_request_limit():
+    """Return the locally approved Tiingo rolling-hour ceiling.
+
+    Starter remains the fail-closed default. Power capacity must be selected
+    explicitly through TIINGO_HOURLY_REQUEST_LIMIT; the runtime never infers or
+    upgrades account authority from a token.
+    """
+    raw = os.environ.get("TIINGO_HOURLY_REQUEST_LIMIT")
+    if raw is None or not raw.strip():
+        return DEFAULT_HOURLY_REQUEST_LIMIT
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError("TIINGO_HOURLY_REQUEST_LIMIT must be an integer") from exc
+    if not 1 <= value <= MAX_SUPPORTED_HOURLY_REQUEST_LIMIT:
+        raise ValueError(
+            "TIINGO_HOURLY_REQUEST_LIMIT must be between 1 and "
+            f"{MAX_SUPPORTED_HOURLY_REQUEST_LIMIT}"
+        )
+    return value
 
 
 def _parse_utc(value):
@@ -225,7 +251,7 @@ def refresh_stock_model_comparison_if_stale():
     The SPY feature parquet is intentionally included because it supplies the
     comparison calendar and benchmark curve. Rebuilding this artifact does not
     rerun V8 research phases or create holdout evidence; frozen historical model
-    curves remain sourced from their existing development artifacts.
+    curves remain sourced from their existing development artifacts. The V10 inputs are the separately frozen Cycle 3 development results and frozen specification. The V11 inputs are its complete five-minute development manifest and locked Phase 2 contract; fresh evidence remains excluded.
     """
     sources = [*COMPARISON_STATIC_INPUTS, feature_path("SPY")]
     missing = [
@@ -253,7 +279,7 @@ def refresh_stock_model_comparison_if_stale():
         return False
 
     print("Stock model comparison artifact is stale; rebuilding read-only dashboard artifact.")
-    run_command([sys.executable, "-u", "-m", "ml.build_stock_model_comparison"])
+    run_command([sys.executable, "-u", "-m", "ml.stock_model_comparison_regression"])
     return True
 
 
@@ -334,7 +360,7 @@ def parse_args():
     parser.add_argument(
         "--hourly-request-limit",
         type=int,
-        default=DEFAULT_HOURLY_REQUEST_LIMIT,
+        default=configured_hourly_request_limit(),
         help="Maximum Tiingo REST attempts allowed in any rolling 60-minute window.",
     )
     parser.add_argument(

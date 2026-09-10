@@ -1,0 +1,439 @@
+"""Authenticated dashboard smoke regression for post-login rendering."""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import os
+from pathlib import Path
+
+os.environ.setdefault(
+    "FLASK_SECRET_KEY",
+    "authenticated-dashboard-regression",
+)
+
+from webapp.app import app
+
+
+def require(condition: bool, label: str) -> None:
+    if not condition:
+        raise AssertionError(label)
+    print(f"[PASS] {label}")
+
+
+def authenticated_client():
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["authenticated"] = True
+        session["username"] = "dashboard-regression"
+        session["legacy_member"] = True
+        session["last_activity_utc"] = datetime.now(
+            timezone.utc
+        ).isoformat()
+    return client
+
+
+def main() -> None:
+    app.config.update(
+        TESTING=True,
+        SESSION_COOKIE_SECURE=False,
+        PROPAGATE_EXCEPTIONS=True,
+    )
+    client = authenticated_client()
+    research = client.get("/dashboard")
+    require(
+        research.status_code == 200,
+        "Authenticated Model Research dashboard renders",
+    )
+    require(
+        b'id="v11-phase2-status"' not in research.data
+        and b'/static/js/v11_phase2_status.js' not in research.data,
+        "Archived V11 panel and renderer are removed from Model Research",
+    )
+    require(
+        b'/static/js/v8_holdout_snapshot.js' in research.data,
+        "Synchronized V8 snapshot reader is loaded before dashboard panels",
+    )
+    require(
+        b'/static/js/model_research_tabs.js' in research.data,
+        "Model Research loads its page-specific model tabs",
+    )
+    require(
+        b'/static/js/v13_regime_overlay_status.js' in research.data,
+        "Model Research loads its read-only V13 status renderer",
+    )
+    require(
+        b'/static/js/v10_confirmation_dashboard.js' in research.data
+        and b'/static/js/v10_cycle3_accelerated_v2_dashboard.js' in research.data
+        and b'/static/js/v10_cycle3_holdout_monitor.js' in research.data,
+        "Model Research loads all three classified V10 sections",
+    )
+    v8_api = client.get("/api/v8/holdout")
+    require(v8_api.status_code == 200, "V8 synchronized dashboard API responds")
+    require(
+        len(v8_api.get_json().get("latest_research_rankings") or []) == 100,
+        "V8 API exposes the complete lightweight 100-stock ranking snapshot",
+    )
+    require(
+        all(
+            isinstance(event.get("symbols"), list)
+            for event in (v8_api.get_json().get("event_history") or [])
+        ),
+        "V8 lifecycle events expose their official symbol baskets for hover details",
+    )
+    v10_accelerated_api = client.get("/api/v10/cycle3/accelerated-v2")
+    require(
+        v10_accelerated_api.status_code == 200,
+        "V10 accelerated read-only dashboard API responds",
+    )
+    v10_accelerated = v10_accelerated_api.get_json()
+    require(
+        v10_accelerated.get("classification")
+        == "AUTHORIZED_PROSPECTIVE_PAPER_FORWARD"
+        and v10_accelerated.get("first_decision_session_utc")
+        == "2026-09-10T00:00:00+00:00"
+        and v10_accelerated.get("independent_confirmation_start_utc")
+        == "2027-01-04T00:00:00+00:00",
+        "V10 accelerated and January evidence boundaries stay separate",
+    )
+    require(
+        v10_accelerated.get("runner_invoked") is False
+        and v10_accelerated.get("historical_reconstruction_read") is False
+        and v10_accelerated.get("january_holdout_outcomes_read") is False
+        and v10_accelerated.get("v8_modified") is False
+        and v10_accelerated.get("brokerage_orders") is False,
+        "V10 dashboard request cannot invoke models, alter V8, or place orders",
+    )
+    require(
+        all(
+            key in v10_accelerated
+            for key in (
+                "starting_equity",
+                "current_equity",
+                "current_v8_equity",
+                "current_spy_equity",
+                "equity_basis",
+                "open_cohorts",
+                "priced_open_cohorts",
+                "operational_curve",
+            )
+        ),
+        "V10 accelerated API exposes read-only live comparison equity",
+    )
+    require(
+        all(
+            key in v10_accelerated
+            for key in (
+                "current_run_health",
+                "current_run_status",
+                "study_integrity",
+                "study_integrity_status",
+                "feature_backend",
+                "latest_source_session",
+                "expected_latest_completed_session",
+                "source_price_symbols_available",
+                "source_price_symbols_required",
+                "next_expected_lifecycle_event",
+                "pending_entry_count",
+                "pending_exit_count",
+                "diagnostic_backfill_status",
+                "diagnostic_backfill_promotion_eligible",
+            )
+        ),
+        "V10 accelerated API separates runtime health from study integrity",
+    )
+    v13_api = client.get("/api/v13/regime-overlay")
+    require(v13_api.status_code == 200, "V13 read-only dashboard API responds")
+    v13_payload = v13_api.get_json()
+    require(
+        v13_payload.get("classification")
+        == "PREREGISTERED_DEVELOPMENT_CANDIDATE_NOT_FROZEN"
+        and v13_payload.get("candidate_frozen") is False,
+        "V13 API cannot be mistaken for a frozen model",
+    )
+    require(
+        v13_payload.get("minimum_completed_sessions") == 60
+        and v13_payload.get("minimum_regime_eligible_sessions") == 15
+        and v13_payload.get("retrospective_reconstruction_read") is False,
+        "V13 API separates retrospective reconstruction from fresh thresholds",
+    )
+    v13_activated = (
+        v13_payload.get("activation") == "ENABLED_FRESH_EVIDENCE_PAPER_ONLY"
+    )
+    require(
+        v13_payload.get("transition_application_present") is True
+        and (
+            (
+                v13_activated
+                and v13_payload.get("manual_approval_present") is True
+                and v13_payload.get("manual_approval_valid") is True
+                and v13_payload.get("activation_lease_present") is True
+                and v13_payload.get("activation_lease_valid") is True
+                and v13_payload.get("transition_applied") is True
+            )
+            or (
+                not v13_activated
+                and v13_payload.get("manual_approval_valid") is False
+                and v13_payload.get("activation_lease_valid") is False
+                and v13_payload.get("transition_applied") is False
+                and (
+                    v13_payload.get("activation_lease_present") is False
+                    or v13_payload.get("manual_approval_present") is True
+                )
+            )
+        ),
+        "V13 API exposes internally consistent activation governance",
+    )
+    require(
+        all(
+            key in v13_payload
+            for key in (
+                "automation_status",
+                "automation_target_session",
+                "automation_source_session",
+                "automation_attempt_consumed",
+                "automation_failure_reason",
+                "automation_market_data_requests",
+                "automation_quote_recovery_attempted",
+                "automation_quote_batch_requests",
+                "automation_maximum_market_data_requests",
+            )
+        )
+        and v13_payload.get("automation_backfill_permitted") is False,
+        "V13 API exposes the latest immutable automatic collection result",
+    )
+
+    project_root = Path(__file__).resolve().parents[1]
+    dashboard_template = (project_root / "webapp/templates/index.html").read_text()
+    layout = (project_root / "webapp/static/js/dashboard_layout.js").read_text()
+    operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
+    comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
+    research_tabs = (project_root / "webapp/static/js/model_research_tabs.js").read_text()
+    v13_status = (project_root / "webapp/static/js/v13_regime_overlay_status.js").read_text()
+    v10_accelerated_status = (
+        project_root
+        / "webapp/static/js/v10_cycle3_accelerated_v2_dashboard.js"
+    ).read_text()
+    v10_january_status = (
+        project_root / "webapp/static/js/v10_cycle3_holdout_monitor.js"
+    ).read_text()
+    final_polish = (project_root / "webapp/static/js/v8_dashboard_final_polish.js").read_text()
+    require(
+        "{#" not in dashboard_template,
+        "Dashboard CSS contains no accidental Jinja comment opener",
+    )
+    require(
+        all(label in research_tabs for label in (
+            "Overview", "V8 Frozen", "V10 Cycle 3", "V13 Dev",
+        )),
+        "Model Research exposes the active classified model-tab set",
+    )
+    require(
+        "V11 Intraday" not in research_tabs
+        and "model-research-pane-v11" not in research_tabs
+        and "v11-phase2-status" not in dashboard_template,
+        "Archived V11 has no dashboard tab or page content",
+    )
+    require(
+        "label:'V4 Paper'" not in research_tabs
+        and "model-research-pane-v4" not in research_tabs
+        and "v4-dashboard'), 'v8'" in research_tabs,
+        "Standalone V4 tab is removed and its enhanced V8 shell routes to V8",
+    )
+    require(
+        "stock-stream-health-card', 'overview'" in research_tabs
+        and "smc-full-width-card" in research_tabs
+        and "v4-dashboard'), 'v8'" in research_tabs
+        and "v8-holdout-monitor" in research_tabs
+        and "v10-cycle3-holdout-monitor" in research_tabs,
+        "Shared and model-owned dashboard panels route to their proper tabs",
+    )
+    require(
+        research_tabs.index("'v10-cycle3-accelerated-monitor'")
+        < research_tabs.index("'v10-cycle3-holdout-monitor'")
+        < research_tabs.index("'v10-confirmation-card'")
+        and "ACCELERATED PAPER-FORWARD" in research_tabs,
+        "V10 tab orders accelerated, January, then legacy evidence",
+    )
+    require(
+        "fetch('/api/v10/cycle3/accelerated-v2'" in v10_accelerated_status
+        and "0 / 8 complete blocks" in v10_accelerated_status
+        and "0 / 12 complete blocks" in v10_accelerated_status
+        and "Complete-block normalized comparison" in v10_accelerated_status
+        and "Paired edge by complete block" in v10_accelerated_status
+        and "V10 CURRENT PAPER EQUITY" in v10_accelerated_status
+        and "CURRENT MARK" in v10_accelerated_status
+        and "Refreshes every 15 seconds" in v10_accelerated_status
+        and "data-a10-hover-line" in v10_accelerated_status
+        and "awaiting first journaled entry" in v10_accelerated_status
+        and "V2 clean evidence boundary" in v10_accelerated_status
+        and "Only prospective evidence beginning September 10, 2026 is displayed." in v10_accelerated_status
+        and "Current run health" in v10_accelerated_status
+        and "Study integrity" in v10_accelerated_status
+        and "Feature backend" in v10_accelerated_status
+        and "Next lifecycle event" in v10_accelerated_status
+        and "data-a10-current-health" in v10_accelerated_status
+        and "data-a10-next-event" in v10_accelerated_status
+        and "Sep 8 diagnostic" not in v10_accelerated_status
+        and "Diagnostic promotion eligibility" not in v10_accelerated_status
+        and "Preserved study-integrity disclosure" not in v10_accelerated_status
+        and "if(value==null||value==='')return '—'" in v10_accelerated_status
+        and "Preregistered promotion gates" in v10_accelerated_status,
+        "V10 accelerated tab renders live equity, comparison charts, and gates",
+    )
+    require(
+        "Accelerated September–December evidence never enters"
+        in v10_january_status
+        and "INDEPENDENT JANUARY CONFIRMATION · UNCHANGED"
+        in v10_january_status,
+        "January confirmation explicitly excludes accelerated evidence",
+    )
+    require(
+        "(?:DISTANCE-ONLY|COMPLETED-EOD) RANK SIGNAL" in research_tabs
+        and "moveV8ContractGrid" in research_tabs
+        and "FROZEN V8 STRATEGY CONTRACT" in research_tabs
+        and "(?:V8 )?PORTFOLIO CONTRACT" in research_tabs,
+        "Completed-EOD rank signal and both V8 contracts route to V8",
+    )
+    require(
+        'role="tablist"' in research_tabs
+        and "setAttribute('role', 'tabpanel')" in research_tabs
+        and "aria-selected" in research_tabs
+        and "ArrowLeft" in research_tabs,
+        "Model tabs support accessible keyboard navigation",
+    )
+    require(
+        "PREREGISTERED DEVELOPMENT · NOT FROZEN" in research_tabs
+        and "short-lived paper-only lease" in research_tabs
+        and "V5" not in "".join(
+            line for line in research_tabs.splitlines()
+            if "label:" in line
+        ),
+        "V13 and legacy V5 are not mislabeled as active forward models",
+    )
+    require(
+        "v13-regime-overlay-status" in research_tabs
+        and "COMPLETED FRESH PAIRED SESSIONS" in research_tabs
+        and "COMPLETED REGIME-ELIGIBLE SESSIONS" in research_tabs
+        and "Only completed post-boundary paired observations" in research_tabs,
+        "V13 tab separates retrospective development from fresh evidence",
+    )
+    require(
+        "ACTIVATION GOVERNANCE · FAIL-CLOSED" in research_tabs
+        and "MANUAL APPROVAL STATUS" in research_tabs
+        and "ACTIVATION LEASE" in research_tabs
+        and "APPLY IMPLEMENTATION" in research_tabs,
+        "V13 tab shows its manual approval and transition boundary",
+    )
+    require(
+        "fetch('/api/v13/regime-overlay'" in v13_status
+        and "data-v13-failures" in v13_status
+        and "textContent" in v13_status,
+        "V13 tab renders read-only status and safe diagnostics",
+    )
+    require(
+        "data-v13-approval" in v13_status
+        and "data-v13-transition" in v13_status
+        and "data-v13-lease" in v13_status,
+        "V13 tab renders approval, transition and lease status",
+    )
+    require(
+        "data-v13-context-status" in v13_status
+        and "data-v13-context-target" in v13_status
+        and "data-v13-context-source" in v13_status
+        and "data-v13-lease-expires" in v13_status
+        and "data-v13-next-window" in v13_status
+        and "data-v13-candidate" in v13_status
+        and "data-v13-control-id" in v13_status
+        and "data-v13-boundary" in v13_status,
+        "V13 tab renders signed-context and lease timing metadata",
+    )
+    require(
+        "LATEST AUTOMATIC COLLECTION · IMMUTABLE SESSION RESULT"
+        in research_tabs
+        and "data-v13-automation-status" in v13_status
+        and "data-v13-automation-source" in v13_status
+        and "data-v13-automation-consumed" in v13_status
+        and "data-v13-automation-requests" in v13_status
+        and "data-v13-automation-recovery" in v13_status
+        and "data-v13-automation-failure" in v13_status,
+        "V13 tab renders automatic attempt and recovery diagnostics",
+    )
+    require(
+        "+${(returnDelta * 100).toFixed(1)} percentage points" in v13_status
+        and "versus V10 control" in v13_status,
+        "V13 return gate uses percentage points versus its control",
+    )
+    require(
+        "Multi-model research, forward evidence, and operational monitoring"
+        in dashboard_template
+        and "Multi-model research, forward evidence, and operational monitoring"
+        in final_polish,
+        "Model Research header describes the complete multi-model platform",
+    )
+    require(
+        "LATEST COMPLETED-EOD RESEARCH SNAPSHOT" in layout
+        and "PRODUCTION RANKING SESSION" in layout
+        and "OFFICIAL FORWARD EVIDENCE" in layout,
+        "V8 research, production ranking, and evidence labels are separated",
+    )
+    require(
+        "Latest Price" in layout and "Completed-EOD Change" in layout,
+        "Live prices are labeled separately from completed-EOD fields",
+    )
+    require(
+        "hydrateSelectedV8Signal" in layout
+        and "V8 COMPLETED-EOD RANK SIGNAL" in layout,
+        "Selected-stock V8 signal is repaired from the synchronized ranking snapshot",
+    )
+    require(
+        "fmtSession" in operations
+        and "first holdout market session" in operations,
+        "Market-session dates cannot shift to the prior local calendar day",
+    )
+    require(
+        "Y-axis = model lifecycle stage" in comparison
+        and "this is not a money or return axis" in comparison
+        and "DECISION · Top 10 selected" in comparison
+        and "ENTRY · Next open" in comparison
+        and "EXIT · 5 sessions complete" in comparison,
+        "V8 holdout Y-axis is an explicit categorical lifecycle stage",
+    )
+    require(
+        "data-holdout-event" in comparison
+        and "data-holdout-action" in comparison
+        and "holdoutPinned" in comparison
+        and "smc-holdout-tooltip" in comparison,
+        "V8 holdout chart supports filters, hover, pinning, zoom and navigation",
+    )
+
+    client = authenticated_client()
+    live = client.get("/dashboard?view=live")
+    require(
+        live.status_code == 200,
+        "Authenticated Live Stock Viewer renders",
+    )
+    require(
+        b'id="v11-phase2-status"' not in live.data,
+        "V11 research panel remains off the live page",
+    )
+    require(
+        b'/static/js/model_research_tabs.js' not in live.data,
+        "Model-specific tabs remain exclusive to Model Research",
+    )
+    require(
+        b'/static/js/v13_regime_overlay_status.js' not in live.data,
+        "V13 research renderer remains off the live page",
+    )
+    require(
+        b'/static/js/v10_cycle3_accelerated_v2_dashboard.js' not in live.data
+        and b'/static/js/v10_cycle3_holdout_monitor.js' not in live.data,
+        "V10 research evidence renderers remain off the Live Stock Viewer",
+    )
+
+    print("Status: PASSED")
+    print("Post-login dashboard rendering: VERIFIED")
+    print("Internal server error: NOT REPRODUCED")
+    print("Brokerage orders: OFF")
+
+
+if __name__ == "__main__":
+    main()

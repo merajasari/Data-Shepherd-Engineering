@@ -1,0 +1,28 @@
+{
+  "contract": "DATA_SHEPHERD_V8_TO_PAPER_SHADOW_SIGNAL_BRIDGE",
+  "version": 1,
+  "status": "PREREGISTERED_DISABLED",
+  "activation_mode": "MANUAL_SEPARATE_APPROVAL",
+  "activation_not_before_utc": "2026-09-01T00:00:00+00:00",
+  "source_strategy_id": "V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
+  "source_frozen_sha256": "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41",
+  "source_universe_size": 100,
+  "selected_names": 10,
+  "target_weight_each": "0.10",
+  "execution_timing": "NEXT_MARKET_OPEN",
+  "holding_sessions": 5,
+  "modeled_cost_bps": 10,
+  "signal_requirements": {
+    "ranking_artifact_sha256": true,
+    "universe_sha256": true,
+    "canonical_provenance_seal": true,
+    "timezone_aware_decision_timestamp": true
+  },
+  "destination_root": "data/trading/paper_shadow",
+  "production_holdout_journal_read": false,
+  "production_holdout_journal_write": false,
+  "holdout_outcomes_read": false,
+  "brokerage_orders": false,
+  "live_credentials_required": false,
+  "notes": "Preregistered signal-export bridge only. It is disabled until a separate manual activation checkpoint after the formal V8 boundary."
+}

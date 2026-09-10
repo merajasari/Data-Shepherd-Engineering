@@ -20,6 +20,7 @@ DATA_INGESTION = PROJECT_ROOT / "data-ingestion"
 sys.path.insert(0, str(DATA_INGESTION))
 
 from v5_symbols import get_v5_data_symbols  # noqa: E402
+from ml.feature_source import get_feature_backend, get_feature_dataset_path  # noqa: E402
 
 REFRESH_STATE = PROJECT_ROOT / "data/live/v5_eod_refresh_state.json"
 V8_GUARD = PROJECT_ROOT / "data/model/v8/eod_guard/status.json"
@@ -83,13 +84,19 @@ def _latest(path: Path):
         return None
 
 
-def _layer_status(name, root, suffix, symbols, target):
+def _layer_status(name, root, suffix, symbols, target, feature_backend=None):
     latest_by_symbol = {}
     at_target = []
     missing = []
     behind = []
     for symbol in symbols:
-        path = root / symbol / f"{symbol}{suffix}"
+        path = (
+            get_feature_dataset_path(
+                symbol, project_root=PROJECT_ROOT, backend=feature_backend
+            )
+            if name == "features"
+            else root / symbol / f"{symbol}{suffix}"
+        )
         ts = _latest(path)
         latest_by_symbol[symbol] = ts
         if ts is None:
@@ -112,6 +119,7 @@ def _layer_status(name, root, suffix, symbols, target):
         "max_latest_utc": max_latest,
         "pending_symbols": sorted(set(missing + behind)),
         "complete_for_target": target is not None and len(at_target) == len(symbols),
+        "backend": feature_backend if name == "features" else None,
     }
 
 
@@ -153,8 +161,12 @@ def build_status():
     symbols = list(get_v5_data_symbols())
     target = _target_timestamp(refresh)
 
+    feature_backend = get_feature_backend()
     layers = {
-        name: _layer_status(name, root, suffix, symbols, target)
+        name: _layer_status(
+            name, root, suffix, symbols, target,
+            feature_backend=feature_backend if name == "features" else None,
+        )
         for name, (root, suffix) in LAYERS.items()
     }
     status = _overall_status(layers, target)
@@ -183,6 +195,7 @@ def build_status():
         "target_session_utc": target.isoformat() if target is not None else None,
         "target_date_utc": refresh.get("target_date_utc"),
         "expected_symbols": len(symbols),
+        "feature_backend": feature_backend,
         "status": status,
         "data_converged": converged,
         "layers": layers,
@@ -217,6 +230,7 @@ def main():
     print("=" * 88)
     print(f"Target: {d['target_session_utc']}")
     print(f"Status: {d['status']}")
+    print(f"Feature backend: {d['feature_backend']}")
     for name in ("bronze", "silver", "gold", "features"):
         layer = d["layers"][name]
         print(f"{name.title():8}: {layer['symbols_at_target']}/{layer['symbols_expected']} at target | common={layer['common_latest_utc']}")

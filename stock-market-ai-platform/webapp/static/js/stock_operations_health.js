@@ -5,6 +5,13 @@
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
   };
+  const fmtSession = value => {
+    const ymd = String(value || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '—';
+    return new Date(`${ymd}T00:00:00Z`).toLocaleDateString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
+    });
+  };
   const stateClass = status => {
     const s = String(status || '').toUpperCase();
     if (['HEALTHY','READY','RUNNING','LIVE','PASS','DATA_CONVERGED','END_TO_END_READY_VERIFIED'].includes(s)) return 'good';
@@ -57,10 +64,10 @@
           <div class="ops-cell"><div class="ops-label">Scheduler</div><div class="ops-value ${stateClass(d.scheduler?.status)}">${esc(d.scheduler?.status)}</div></div>
           <div class="ops-cell"><div class="ops-label">Last Exit</div><div class="ops-value">${esc(d.scheduler?.last_exit_code ?? '—')}</div></div>
           <div class="ops-cell"><div class="ops-label">Tiingo Budget</div><div class="ops-value">${esc(d.tiingo?.rolling_requests_used)} / ${esc(d.tiingo?.rolling_request_limit)}</div></div>
-          <div class="ops-cell"><div class="ops-label">Target Session</div><div class="ops-value" style="font-size:14px">${esc(fmtTs(d.convergence?.target_session_utc))}</div></div>
+          <div class="ops-cell"><div class="ops-label">Last Verified EOD Session</div><div class="ops-value" style="font-size:14px">${esc(fmtSession(d.convergence?.target_session_utc))}</div></div>
           <div class="ops-cell"><div class="ops-label">Convergence</div><div class="ops-value ${stateClass(d.convergence?.status)}" style="font-size:14px">${esc(d.convergence?.status)}</div></div>
           <div class="ops-cell"><div class="ops-label">V8 Gate</div><div class="ops-value ${stateClass(d.v8?.guard_status)}">${esc(d.v8?.guard_status)}</div></div>
-          <div class="ops-cell"><div class="ops-label">V10 Confirmation</div><div class="ops-value ${stateClass(d.v10?.status)}" style="font-size:14px">${esc(d.v10?.status)}</div></div>
+          <div class="ops-cell"><div class="ops-label">V10 Cycle 3 Holdout</div><div class="ops-value ${stateClass(d.v10?.status)}" style="font-size:14px">${esc(d.v10?.status)}</div></div>
           <div class="ops-cell"><div class="ops-label">Real Orders</div><div class="ops-value good">NO</div></div>
         </div>
 
@@ -68,13 +75,13 @@
           <div class="ops-label">CURRENT PRODUCTION DECISION STATE</div>
           <div class="ops-state-title ${decisionClass}">${esc(decisionState)}</div>
           <div class="ops-grid">
-            <div class="ops-cell"><div class="ops-label">EOD Target Being Built</div><div class="ops-value" style="font-size:14px">${esc(fmtTs(d.convergence?.target_session_utc))}</div></div>
-            <div class="ops-cell"><div class="ops-label">Latest Fully Converged Feature Session</div><div class="ops-value" style="font-size:14px">${esc(fmtTs(latestConverged))}</div></div>
-            <div class="ops-cell"><div class="ops-label">Production Ranking Timestamp</div><div class="ops-value" style="font-size:14px">${esc(fmtTs(rankingTs))}</div><div class="ops-mini">blank while gate is closed</div></div>
+            <div class="ops-cell"><div class="ops-label">Last Verified Pipeline Session</div><div class="ops-value" style="font-size:14px">${esc(fmtSession(d.convergence?.target_session_utc))}</div></div>
+            <div class="ops-cell"><div class="ops-label">Latest Fully Converged Feature Session</div><div class="ops-value" style="font-size:14px">${esc(fmtSession(latestConverged))}</div></div>
+            <div class="ops-cell"><div class="ops-label">Production Ranking Session</div><div class="ops-value" style="font-size:14px">${esc(fmtSession(rankingTs))}</div><div class="ops-mini">blank while gate is closed</div></div>
             <div class="ops-cell"><div class="ops-label">Decision Gate</div><div class="ops-value ${decisionClass}">${gateOpen ? 'OPEN' : 'CLOSED'}</div></div>
           </div>
           <div class="ops-separation">
-            The separate <strong>Frozen V8 development snapshot</strong> elsewhere on this dashboard is historical research/reference evidence. It is not the current production decision. This panel is the authoritative operational state for the EOD target currently being assembled.
+            The separate <strong>Frozen V8 development snapshot</strong> elsewhere on this dashboard is historical research/reference evidence. It is not the current production decision. This panel reports the last target session verified end to end. The latest feature-session field may be newer while the next convergence proof is being published.
           </div>
         </div>
 
@@ -89,12 +96,12 @@
           <div class="ops-note">
             Verification: <strong class="${stateClass(d.convergence?.verification)}">${esc(d.convergence?.verification)}</strong> ·
             V8 gate ${gateOpen ? 'OPEN' : 'CLOSED'} ·
-            feature common latest ${esc(fmtTs(latestConverged))}.
+            feature common latest session ${esc(fmtSession(latestConverged))}.
           </div>
         </div>
         <div class="ops-note">
           Health snapshot: ${esc(fmtTs(d.generated_at_utc))} · error log ${esc(d.error_log?.bytes ?? 0)} bytes ·
-          V10 decision ${esc(d.v10?.decision)} · monitoring is read-only.
+          V10 Cycle 3 ${esc(d.v10?.decision)} · first holdout market session ${esc(fmtSession(d.v10?.formal_holdout_start_utc))} · monitoring is read-only.
         </div>`;
 
       const firstCard = anchor.querySelector('.v4-card');

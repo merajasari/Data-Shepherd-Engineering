@@ -35,6 +35,28 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _migrate_member_account_columns(conn: sqlite3.Connection) -> None:
+    """Bring an existing member database forward without replacing user data."""
+    existing = {
+        str(row["name"])
+        for row in conn.execute("PRAGMA table_info(member_accounts)").fetchall()
+    }
+    additions = {
+        "username": "username TEXT COLLATE NOCASE",
+        "password_hash": "password_hash TEXT",
+        "email_verified": "email_verified INTEGER NOT NULL DEFAULT 0",
+        "must_change_password": "must_change_password INTEGER NOT NULL DEFAULT 1",
+        "active": "active INTEGER NOT NULL DEFAULT 1",
+        "verified_at_utc": "verified_at_utc TEXT",
+        "last_login_at_utc": "last_login_at_utc TEXT",
+    }
+    for column, definition in additions.items():
+        if column not in existing:
+            conn.execute(
+                f"ALTER TABLE member_accounts ADD COLUMN {definition}"
+            )
+
+
 def initialize_account_store() -> None:
     with _connect() as conn:
         try:
@@ -72,6 +94,7 @@ def initialize_account_store() -> None:
             ON email_verifications(account_id);
             """
         )
+        _migrate_member_account_columns(conn)
 
 
 def normalize_email(email: str) -> str:

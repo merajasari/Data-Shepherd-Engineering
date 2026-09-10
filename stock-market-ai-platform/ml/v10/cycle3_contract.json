@@ -1,0 +1,87 @@
+{
+  "research_version": "stock_v10_cycle3",
+  "stage": "preregistered_development_only_transition_efficiency",
+  "registered_at_utc": "2026-08-24T00:00:00+00:00",
+  "hypothesis": "Positive-regime noninferiority can be restored by reducing unnecessary defensive entries and limiting displacement from V8 while preserving immediate return to exact V8 scoring on the first non-negative decision.",
+  "baseline": "v8_distance_only",
+  "development_data_policy": {
+    "allowed_timestamp_rule": "decision and realized exit timestamps must be strictly earlier than 2026-11-02T00:00:00Z",
+    "original_v10_protected_boundary_utc": "2026-11-02T00:00:00+00:00",
+    "original_v10_holdout_outcomes_read": false,
+    "original_v10_holdout_scored": false
+  },
+  "provisional_fresh_future_holdout": {
+    "boundary_utc": "2027-01-04T00:00:00+00:00",
+    "activation_rule": "activated only after one preregistered candidate passes all 13 gates and a separate freeze-design audit registers its immutable SHA",
+    "currently_activated": false,
+    "outcomes_read": false,
+    "outcomes_scored": false
+  },
+  "fixed_portfolio_contract": {
+    "top_n": 10,
+    "weighting": "equal_weight",
+    "entry": "next_session_open",
+    "holding_sessions": 5,
+    "cohort_offsets": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "primary_cost_bps_per_dollar_traded": 10,
+    "benchmark": "SPY"
+  },
+  "fixed_signal_contract": {
+    "v8_signal": "distance_from_low_20d",
+    "defensive_signal": "0.5 * percentile_rank(downside_vol_ratio_20) + 0.5 * percentile_rank(volume_trend_5_20)",
+    "negative_regime": "SPY trailing-20-session return < 0 using decision-time data only",
+    "positive_behavior": "exact V8 raw score on the first non-negative decision; no defensive exit buffer"
+  },
+  "candidates": [
+    {
+      "candidate_id": "c3_confirm2_full_defensive",
+      "negative_entry": "two consecutive completed negative_spy20 decisions",
+      "negative_score": "100% defensive signal",
+      "positive_score": "exact V8 raw score"
+    },
+    {
+      "candidate_id": "c3_confirm2_blend50",
+      "negative_entry": "two consecutive completed negative_spy20 decisions",
+      "negative_score": "50% percentile-ranked V8 signal + 50% defensive signal",
+      "positive_score": "exact V8 raw score"
+    },
+    {
+      "candidate_id": "c3_immediate_blend25",
+      "negative_entry": "first completed negative_spy20 decision",
+      "negative_score": "75% percentile-ranked V8 signal + 25% defensive signal",
+      "positive_score": "exact V8 raw score"
+    }
+  ],
+  "gates": [
+    "development_mean_delta_ic_positive",
+    "rolling_252d_positive_rate_ge_75pct",
+    "cagr_beats_v8",
+    "sharpe_beats_v8",
+    "terminal_wealth_beats_v8",
+    "relative_return_beats_v8",
+    "drawdown_not_worse_by_more_than_10pct_abs",
+    "calmar_not_below_90pct_v8",
+    "cagr_wins_at_least_3_of_5_cohorts",
+    "sharpe_wins_at_least_3_of_5_cohorts",
+    "year_relative_return_wins_at_least_half",
+    "wins_all_negative_regimes",
+    "positive_regime_relative_noninferiority"
+  ],
+  "positive_regime_noninferiority_tolerance": 0.00025,
+  "selection_rule": "A candidate is eligible only if all 13 gates pass. If multiple candidates pass, select the one with the lowest mean transition notional; break an exact tie by candidate_id lexical order. If none pass, decision is DO_NOT_FREEZE.",
+  "multiple_comparison_policy": "The candidate set is fixed at three before evaluation. No weights, confirmation lengths, thresholds, costs, Top-N, holding periods, or gates may be changed after results are inspected.",
+  "prohibitions": {
+    "tune_after_results": false,
+    "access_original_v10_holdout": false,
+    "access_fresh_future_holdout": false,
+    "modify_v8": false,
+    "modify_production": false,
+    "brokerage_orders": false
+  }
+}

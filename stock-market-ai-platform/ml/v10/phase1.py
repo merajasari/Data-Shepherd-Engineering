@@ -37,7 +37,7 @@ from ml.v10.config import (
 )
 
 PHASE = 1
-SOURCE_PANEL = Path("data/model/v10/source_panel/complementary_signal_panel.parquet")
+SOURCE_PANEL = Path("data/model/v9/phase1/complementary_signal_panel.parquet")
 OUTPUT_ROOT = Path("data/model/v10/phase1")
 DAILY_PATH = OUTPUT_ROOT / "daily_regime_ic.parquet"
 SUMMARY_PATH = OUTPUT_ROOT / "regime_conditioned_summary.csv"
@@ -62,7 +62,7 @@ def _rank_corr(a, b):
 
 def _load_panel():
     if not SOURCE_PANEL.exists():
-        raise FileNotFoundError(f"Missing {SOURCE_PANEL}; run python -m ml.v10.source_panel first")
+        raise FileNotFoundError(f"Missing {SOURCE_PANEL}; run V9 Phase 1 first")
     p = pd.read_parquet(SOURCE_PANEL).copy()
     p["timestamp_utc"] = pd.to_datetime(p["timestamp_utc"], utc=True)
     if p["timestamp_utc"].max() >= FUTURE_HOLDOUT_START_UTC:

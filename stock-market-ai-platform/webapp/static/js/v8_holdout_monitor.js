@@ -24,8 +24,32 @@
         </ul>`;
     }
 
+    const lower = document.querySelector('.v4-dashboard .v4-lower');
+    const structure = document.getElementById('v8-portfolio-structure');
+    if (lower && structure && help) {
+      let row = document.getElementById('v8-structure-help-row');
+      if (!row) {
+        const style = document.createElement('style');
+        style.id = 'v8-structure-help-layout-style';
+        style.textContent = `
+          #v8-structure-help-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;margin-top:20px;align-items:stretch}
+          #v8-structure-help-row>#v8-portfolio-structure,#v8-structure-help-row>.v4-help{margin:0;min-width:0;height:100%}
+          #v8-structure-help-row>.v4-help{padding:20px;background:rgba(8,20,36,.55);border:1px solid var(--border);border-radius:18px}
+          #v8-structure-help-row>.v4-help ul{margin-bottom:0}
+          @media(max-width:1000px){#v8-structure-help-row{grid-template-columns:1fr}}
+        `;
+        document.head.appendChild(style);
+        row = document.createElement('div');
+        row.id = 'v8-structure-help-row';
+        lower.insertAdjacentElement('afterend', row);
+      }
+      row.append(structure, help);
+      lower.style.gridTemplateColumns = '1fr';
+    }
+
     try {
       await loadScript('/static/js/stock_operations_health.js');
+      await loadScript('/static/js/v8_launch_day_operations.js');
       await loadScript('/static/js/v8_pnl_visual.js');
       await loadScript('/static/js/v8_leaders.js');
       await loadScript('/static/js/v8_ranking_board.js');
@@ -34,10 +58,13 @@
       await loadScript('/static/js/v8_dashboard_final_polish.js');
       await loadScript('/static/js/v8_launch_readiness.js');
       await loadScript('/static/js/v10_confirmation_dashboard.js');
+      await loadScript('/static/js/v10_cycle3_holdout_monitor.js');
     } catch (e) {
       console.error('Unable to load one or more V8/V10 dashboard enhancements.', e);
     }
   };
   core.onerror = () => console.error('Unable to load V8 dashboard core.');
-  document.head.appendChild(core);
+  loadScript('/static/js/v8_holdout_snapshot.js')
+    .then(() => document.head.appendChild(core))
+    .catch(error => console.error('Unable to load synchronized V8 snapshot reader.', error));
 })();

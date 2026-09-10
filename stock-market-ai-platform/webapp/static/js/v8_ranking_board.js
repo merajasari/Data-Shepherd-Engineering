@@ -106,9 +106,7 @@
 
   async function load(){
     try {
-      const r = await fetch('/api/v8/holdout',{cache:'no-store'});
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
+      const d = await window.DataShepherdV8Snapshot.get();
       allRows = Array.isArray(d.latest_research_rankings) ? d.latest_research_rankings.slice().sort((a,b)=>Number(a.rank)-Number(b.rank)) : [];
       const ts = d.latest_research_rankings_timestamp_utc ? new Date(d.latest_research_rankings_timestamp_utc) : null;
       board.querySelector('#v8rb-badge').textContent = `${allRows.length || 0} STOCKS · FROZEN V8`;

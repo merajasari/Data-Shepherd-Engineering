@@ -16,7 +16,10 @@ SPEC = importlib.util.spec_from_file_location("dsv10", HERE / "generate_datashep
 v10 = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(v10)
-v9 = v10.v9
+# V10 originally exposed its V9 module for the older video chain.  The
+# consolidated V10 intentionally imports V8 directly, so keep this alias
+# optional.  V11 only needs the shared V8/V7/V6 rendering modules below.
+v9 = getattr(v10, "v9", None)
 v8 = v10.v8
 v7 = v10.v7
 v6 = v10.v6
@@ -124,7 +127,7 @@ def natural_british_voice(text, path):
             print("Narration mastering unavailable; using clean unmastered AIFF fallback.")
     finally:
         shutil.rmtree(tmp,ignore_errors=True)
-    print(f"Narration voice: {voice_name} (natural British female, ~{base} wpm)")
+    print(f"Narration voice: {voice_name} (natural clause-paced delivery, ~{base} wpm)")
 
 v6.voice = natural_british_voice
 

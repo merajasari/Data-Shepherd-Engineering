@@ -1,0 +1,21 @@
+{
+  "brokerage_orders": false,
+  "candidate_id": "c3_confirm2_blend50",
+  "duplicate_safe": true,
+  "frozen_v10_sha256": "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38",
+  "holdout_outcomes_read": false,
+  "live_trading_enabled": false,
+  "market_data_request": false,
+  "output_root": "V13_FRESH_REGIME_OVERLAY_INBOX_ONLY",
+  "paper_trading_only": true,
+  "ranking_symbols_required": 100,
+  "regime_flags_required": 2,
+  "source": "READ_ONLY_FROZEN_V10_CYCLE3_RANKING_LOGIC",
+  "source_session": "LATEST_COMPLETED_SESSION_BEFORE_TARGET",
+  "status": "PREREGISTERED_V13_SIGNED_CONTEXT_PUBLISHER",
+  "v8_modified": false,
+  "v10_modified": false,
+  "v11_modified": false,
+  "v12_modified": false,
+  "v13_evidence_append": false
+}

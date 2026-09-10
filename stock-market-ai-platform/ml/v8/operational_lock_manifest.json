@@ -1,0 +1,42 @@
+{
+  "contract": "V8_FROZEN_FORWARD_HOLDOUT_OPERATIONAL_CHANGE_CONTROL",
+  "locked_at_utc": "2026-08-24T00:00:00+00:00",
+  "holdout_start_utc": "2026-09-01T00:00:00+00:00",
+  "frozen_candidate_sha256": "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41",
+  "candidate_id": "V8_DISTANCE_ONLY_TOP10_5D_NEXT_OPEN_10BPS",
+  "rules": {
+    "top_n": 10,
+    "weighting": "equal_weight",
+    "entry": "next_session_open",
+    "holding_sessions": 5,
+    "cost_bps_per_dollar_traded": 10,
+    "brokerage_orders": false
+  },
+  "protected_files": [
+    {
+      "path": "ml/v8/holdout_runner.py",
+      "sha256": "4a68d8beefd7ecf7da2b839a63ff3a7f15f6c7b0d07a82e27f039fec0b30c97e"
+    },
+    {
+      "path": "ml/v8/eod_guard.py",
+      "sha256": "0dd450183da2896850cac9d143237ff22ff9418558e74f0f147be38d93ec5b6b"
+    },
+    {
+      "path": "ml/v8/eod_orchestrator.py",
+      "sha256": "08b59c27dd21ae1dd5d1c2d8e8fba5afce90e61f56dd7cacb49d819e35dd5d1e"
+    },
+    {
+      "path": "ml/v8/scheduled_entrypoint.py",
+      "sha256": "15642bffc39b9d1b8a36e2aa57353ea1fa5535366d323ce050a4f8f00389b403"
+    },
+    {
+      "path": "ml/v8/operational_monitor.py",
+      "sha256": "c7e8318e134986535a658d74b995725051f96fbc88536235932fe65bc1bcff5f"
+    },
+    {
+      "path": "scripts/mac/install_v8_paper.sh",
+      "sha256": "237a052c7f212f04f05f3037a579a7e40d6b18875c35f6c85dc62a3a79b38214"
+    }
+  ],
+  "change_policy": "Any hash mismatch blocks validation. Changes require explicit review, a complete validation-suite pass, and deliberate manifest re-locking. Holdout outcomes must never justify a change."
+}

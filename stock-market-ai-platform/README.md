@@ -1,7 +1,5 @@
 # Data Shepherd Engineering
 
-[Complete system architecture](docs/system-architecture.md)
-
 Data Shepherd Engineering is an experimental research platform for systematic stock and crypto research, model evaluation, paper simulation, and forward paper monitoring.
 
 > **Research and simulation only. Not financial advice. No real brokerage orders are placed by the current platform.**
@@ -385,57 +383,3 @@ Generated model/data artifacts should not be committed unless explicitly intende
 5. Add forward-performance visualizations only after genuine future-evaluation observations exist.
 6. Research ALT constituent-level turnover/costs in a new research version without changing the V2 Phase 5 freeze.
 7. Continue stock-model work without changing frozen benchmarks.
-
-
-
-## Stock research generations: V8 and V10
-
-The active stock platform now presents two generations only:
-
-- **V8** — frozen production reference and independently gated holdout monitor.
-- **V10** — active research generation, including the retained automatic-tuning
-  engine, purged walk-forward evaluation, fixed-winner confirmation safeguards,
-  and risk-controlled automatic-tuning Cycle 2.
-
-V10 tuning commands:
-
-```bash
-python -m ml.v10.source_panel
-python -m ml.v10.auto_tuning_registry
-python -m ml.v10.auto_tuning_evaluator
-python -m ml.v10.auto_tuning_confirmation
-python -m ml.v10.auto_tuning_cycle2_registry
-python -m ml.v10.auto_tuning_cycle2_evaluator
-```
-
-New tuning artifacts are written under `data/model/v10/auto_tuning/`. Historical
-`data/model/v9/` results, if present on a runtime host, are provenance records
-only. They must not be relabelled as V10 evidence or used to reset confirmation
-or holdout gates. V8 is not modified by the consolidation, and no real brokerage
-orders are enabled.
-
-
-## Site-wide Shepherd AI assistant
-
-Every rendered HTML page can include a floating, page-aware assistant. The browser sends only
-the current page title, path, visible text, the user's question, and a short in-panel conversation
-history to the same-origin Flask endpoint. Password input values and arbitrary server files are
-not included.
-
-Server configuration:
-
-```bash
-OPENAI_API_KEY=your-server-side-key
-SITE_AI_MODEL=gpt-4.1-mini
-```
-
-Keep `OPENAI_API_KEY` in the local server environment or uncommitted `.env`; never expose it
-in JavaScript or commit it. The endpoint applies payload and per-user/IP rate limits, renders
-answers as plain text, and instructs the model to distinguish development, shadow/paper, and
-untouched holdout evidence. It does not place orders or provide personalized financial advice.
-
-Verification:
-
-```bash
-python -m unittest tests.test_site_ai_service
-```

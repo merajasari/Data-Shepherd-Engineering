@@ -26,6 +26,11 @@ on:
       - "stock-market-ai-platform/ml/v8/eod_orchestrator.py"
       - "stock-market-ai-platform/webapp/app.py"
       - "stock-market-ai-platform/webapp/services/prediction_service.py"
+      - "stock-market-ai-platform/webapp/services/v10_cycle3_accelerated_service.py"
+      - "stock-market-ai-platform/webapp/static/js/model_research_tabs.js"
+      - "stock-market-ai-platform/webapp/static/js/v10_confirmation_dashboard.js"
+      - "stock-market-ai-platform/webapp/static/js/v10_cycle3_accelerated_dashboard.js"
+      - "stock-market-ai-platform/webapp/static/js/v10_cycle3_holdout_monitor.js"
       - "stock-market-ai-platform/webapp/templates/index.html"
       - "stock-market-ai-platform/ml/train_model.py"
       - "stock-market-ai-platform/ml/train_model_v3.py"
@@ -38,6 +43,7 @@ on:
       - "stock-market-ai-platform/tests/test_spark_scheduler_gate.py"
       - "stock-market-ai-platform/tests/test_v8_production_inference.py"
       - "stock-market-ai-platform/tests/test_v8_site_cutover.py"
+      - "stock-market-ai-platform/tests/test_v10_cycle3_accelerated_dashboard.py"
       - ".github/workflows/spark-feature-parity.yml"
   workflow_dispatch:
 
@@ -138,5 +144,12 @@ jobs:
           python -m unittest discover \
             -s tests \
             -p "test_v8_site_cutover.py" \
+            -v
+
+      - name: Run V10 accelerated dashboard tests
+        run: |
+          python -m unittest discover \
+            -s tests \
+            -p "test_v10_cycle3_accelerated_dashboard.py" \
             -v
 

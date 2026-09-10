@@ -9,10 +9,14 @@ events are skipped deterministically. No strategy parameters are tuned here.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import fcntl
 import hashlib
 import json
+import os
 from pathlib import Path
+import tempfile
 
 import numpy as np
 import pandas as pd
@@ -36,6 +40,7 @@ LOCK_PATH = FREEZE_ROOT / "frozen_candidate.sha256"
 PHASE1_PANEL = ROOT / "phase1" / "orthogonal_signal_panel.parquet"
 HOLDOUT_ROOT = ROOT / "holdout"
 JOURNAL_PATH = HOLDOUT_ROOT / "journal.jsonl"
+JOURNAL_LOCK_PATH = HOLDOUT_ROOT / "journal.lock"
 STATUS_PATH = HOLDOUT_ROOT / "status.json"
 
 
@@ -156,13 +161,17 @@ def _rank_for_date(ts, symbols, frames):
     return d
 
 
-def _read_events():
+def _read_events(path=None):
+    path = JOURNAL_PATH if path is None else Path(path)
     rows = []
-    if JOURNAL_PATH.exists():
-        for line in JOURNAL_PATH.read_text().splitlines():
+    if path.exists():
+        for line_number, line in enumerate(path.read_text().splitlines(), start=1):
             line = line.strip()
             if line:
-                rows.append(json.loads(line))
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError(f"Corrupt holdout journal line {line_number}: {path}") from exc
     return rows
 
 
@@ -170,15 +179,44 @@ def _event_key(e):
     return (e.get("event_type"), e.get("decision_timestamp_utc"), e.get("cohort_offset"))
 
 
-def _append(e, existing):
+@contextmanager
+def _journal_lock(lock_path=None):
+    """Serialize journal read/check/append cycles across processes."""
+    lock_path = JOURNAL_LOCK_PATH if lock_path is None else Path(lock_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _append_unlocked(e, existing, path=None):
+    """Append one durable JSONL event. Caller must hold the journal lock."""
+    path = JOURNAL_PATH if path is None else Path(path)
     key = _event_key(e)
     if key in existing:
         return False
-    HOLDOUT_ROOT.mkdir(parents=True, exist_ok=True)
-    with JOURNAL_PATH.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(e, sort_keys=True) + "\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as journal:
+        journal.write(json.dumps(e, sort_keys=True) + "\n")
+        journal.flush()
+        os.fsync(journal.fileno())
     existing.add(key)
     return True
+
+
+def _append(e, existing=None, path=None, lock_path=None):
+    """Independently locked, duplicate-safe durable append."""
+    path = JOURNAL_PATH if path is None else Path(path)
+    lock_path = JOURNAL_LOCK_PATH if lock_path is None else Path(lock_path)
+    with _journal_lock(lock_path):
+        disk_existing = {_event_key(row) for row in _read_events(path)}
+        appended = _append_unlocked(e, disk_existing, path)
+        if existing is not None:
+            existing.update(disk_existing)
+        return appended
 
 
 def _transition_notional(previous, new):
@@ -189,12 +227,32 @@ def _transition_notional(previous, new):
     return float(sum(abs(nw.get(s, 0.0) - ow.get(s, 0.0)) for s in set(nw) | set(ow)))
 
 
+def _atomic_write_json(path, payload):
+    """Write JSON atomically and durably in the destination directory."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
+            temp_file.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_name, path)
+        dir_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
 def _status(payload):
-    HOLDOUT_ROOT.mkdir(parents=True, exist_ok=True)
     payload = dict(payload)
     payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
     payload["frozen_sha256"] = EXPECTED_SHA
-    STATUS_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    _atomic_write_json(STATUS_PATH, payload)
 
 
 def main():
@@ -220,6 +278,8 @@ def main():
     existing = {_event_key(e) for e in events}
     appended = 0
 
+    # Every append independently rechecks the on-disk journal while holding the
+    # journal lock, so concurrent schedulers cannot write duplicate event keys.
     # 1) Append every newly available decision in chronological order.
     for decision_ts in available:
         i = date_to_idx[decision_ts]

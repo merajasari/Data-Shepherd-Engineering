@@ -1,0 +1,30 @@
+{
+  "contract_id": "V10_CYCLE3_ACCELERATED_SEPTEMBER_8_DIAGNOSTIC_RECONSTRUCTION_V1",
+  "status": "DIAGNOSTIC_RECONSTRUCTION_ONLY_NOT_PROSPECTIVE_EVIDENCE",
+  "target_decision_session_utc": "2026-09-08T00:00:00+00:00",
+  "source_candidate": {
+    "candidate_id": "c3_confirm2_blend50",
+    "frozen_sha256": "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38",
+    "candidate_modified": false
+  },
+  "evidence_classification": {
+    "prospective_evidence": false,
+    "promotion_eligible": false,
+    "backfill_into_v1_journal": false,
+    "diagnostic_only": true
+  },
+  "authority": {
+    "paper_trading_only": true,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false,
+    "human_review_required": true
+  },
+  "isolation": {
+    "v1_accelerated_journal_modified": false,
+    "january_confirmation_modified": false,
+    "v8_modified": false
+  },
+  "required_acknowledgement": "I AUTHORIZE A V10 SEPTEMBER 8 DIAGNOSTIC RECONSTRUCTION ONLY; IT IS NOT PROSPECTIVE OR PROMOTION EVIDENCE"
+}
+

@@ -13,8 +13,9 @@ UID_VALUE="$(id -u)"
 # Backup V8 scheduler. It never invokes the holdout runner directly. Every
 # invocation goes through ml.v8.eod_orchestrator, which acquires the shared V8
 # orchestration lock, runs the fail-closed EOD guard, and only then invokes the
-# frozen append-only holdout runner. This makes the standalone scheduler safe
-# to coexist with the main EOD refresh scheduler without concurrent V8 writes.
+# frozen append-only holdout runner. The monitored scheduler entry point catches
+# failures and publishes deduplicated macOS notifications without touching
+# production evidence. This remains safe alongside the main EOD refresh scheduler.
 INTERVAL_SECONDS=300
 
 mkdir -p "$LAUNCH_DIR" "$LOG_DIR"
@@ -31,7 +32,7 @@ cat > "$PLIST" <<EOF
 <key>Label</key><string>$LABEL</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.v8.eod_orchestrator; else echo '[SKIP] V8 backup scheduler already running'; fi</string>
+<string>if mkdir '$LOCK_DIR' 2&gt;/dev/null; then trap 'rmdir &quot;$LOCK_DIR&quot; 2&gt;/dev/null || true' EXIT INT TERM; cd '$PROJECT_DIR' &amp;&amp; '$PYTHON' -u -m ml.v8.scheduled_entrypoint; else echo '[SKIP] V8 backup scheduler already running'; fi</string>
 </array>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>
@@ -49,7 +50,9 @@ echo "Installed $LABEL"
 echo "Backup schedule: every 5 minutes"
 echo "Scheduler overlap guard: $LOCK_DIR"
 echo "Shared V8 orchestration lock: data/model/v8/eod_guard/orchestrator.lock"
-echo "Production path: python -m ml.v8.eod_orchestrator"
+echo "Production path: python -m ml.v8.scheduled_entrypoint"
+echo "Guarded orchestrator: python -m ml.v8.eod_orchestrator"
+echo "Operational alerts: macOS Notification Center; new failures and recoveries only"
 echo "Fail-closed gate: EOD guard must open before holdout runner invocation"
 echo "Frozen V8 contract: verified by the holdout runner on every invocation"
 echo "Holdout safety: no journal evidence before 2026-09-01"
