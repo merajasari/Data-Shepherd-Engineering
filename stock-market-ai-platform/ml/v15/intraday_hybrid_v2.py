@@ -20,7 +20,6 @@ import pandas as pd
 from ml.v14.logistic_forward import load_market as load_daily_market
 from ml.v15.intraday_logistic import (
     LogisticRegression,
-    _group_sessions,
     build_examples,
     canonical_sha256,
     load_dataset,
@@ -180,14 +179,18 @@ def _daily_rows(frame: pd.DataFrame) -> dict[str, dict[str, float]]:
 def _pretrain_daily_context(
     daily_frames: Mapping[str, pd.DataFrame],
     candidate_symbols: Sequence[str],
-    first_context_session: str,
+    first_intraday_session: str,
     contract: Mapping[str, object],
 ) -> tuple[LogisticRegression, np.ndarray, np.ndarray, dict[str, object], dict[str, dict[str, dict[str, float]]]]:
     slow = contract["slow_context_model"]
     mapped = {symbol: _daily_rows(daily_frames[symbol]) for symbol in candidate_symbols}
     common = sorted(set.intersection(*(set(rows) for rows in mapped.values())))
-    if first_context_session not in common:
-        raise ValueError(f"V15_V2_DAILY_CONTEXT_SESSION_MISSING:{first_context_session}")
+    prior = [session for session in common if session < first_intraday_session]
+    if not prior:
+        raise ValueError(
+            f"V15_V2_PRIOR_DAILY_CONTEXT_UNAVAILABLE:{first_intraday_session}"
+        )
+    first_context_session = prior[-1]
     context_index = common.index(first_context_session)
     purge = int(slow["purge_gap_sessions"])
     if context_index < purge:
@@ -231,6 +234,8 @@ def _pretrain_daily_context(
         "bias": model.bias,
         "training_start_session": min(record["session"] for record in training_records),
         "training_cutoff_session": cutoff,
+        "first_intraday_session": first_intraday_session,
+        "first_daily_context_session": first_context_session,
         "training_rows": len(training_records),
         "training_data_sha256": canonical_sha256(training_records),
         "frozen_during_v2_evaluation": True,
@@ -308,17 +313,20 @@ def build_hybrid_examples(
     symbols = sorted(symbol for symbol in intraday_dataset if symbol != "SPY")
     if sorted(daily_frames) != sorted(symbols + ["SPY"]):
         raise ValueError("V15_V2_DAILY_UNIVERSE_MISMATCH")
-    grouped = {symbol: _group_sessions(rows) for symbol, rows in intraday_dataset.items()}
-    common = sorted(set.intersection(*(set(rows) for rows in grouped.values())))
-    previous = {common[index]: common[index - 1] for index in range(1, len(common))}
-    first_context = previous[base_sessions[0]]
     model, daily_mean, daily_std, slow_snapshot, mapped = _pretrain_daily_context(
-        daily_frames, symbols, first_context, contract
+        daily_frames, symbols, base_sessions[0], contract
     )
+    common_daily = sorted(set.intersection(*(set(rows) for rows in mapped.values())))
+    context_session_by_intraday: dict[str, str] = {}
+    for session in base_sessions:
+        prior = [daily_session for daily_session in common_daily if daily_session < session]
+        if not prior:
+            raise ValueError(f"V15_V2_PRIOR_DAILY_CONTEXT_UNAVAILABLE:{session}")
+        context_session_by_intraday[session] = prior[-1]
     contexts: dict[str, dict[str, dict[str, float]]] = {}
     context_audit: list[dict[str, object]] = []
     for session in base_sessions:
-        context_session = previous[session]
+        context_session = context_session_by_intraday[session]
         if context_session not in contexts:
             contexts[context_session], audit = _daily_context_for_session(
                 context_session, symbols, mapped, model, daily_mean, daily_std
@@ -326,7 +334,7 @@ def build_hybrid_examples(
             context_audit.extend(audit)
     hybrid: dict[str, list[dict[str, object]]] = {}
     for session in base_sessions:
-        context_session = previous[session]
+        context_session = context_session_by_intraday[session]
         rows: list[dict[str, object]] = []
         for base_row in base[session]:
             symbol = str(base_row["symbol"])

@@ -160,6 +160,30 @@ def main() -> None:
     assert np.allclose(before, after)
     print("[PASS] Current-session daily data cannot influence the 10:00 decision")
 
+    missing_prior = {symbol: frame.copy(deep=True) for symbol, frame in daily.items()}
+    expected_prior = next(
+        row["daily_context_session"]
+        for row in examples[protected_session]
+        if row["symbol"] == protected_symbol
+    )
+    for symbol, frame in missing_prior.items():
+        drop_index = [
+            index
+            for index in frame.index
+            if pd.Timestamp(index).date().isoformat() == expected_prior
+        ]
+        missing_prior[symbol] = frame.drop(index=drop_index)
+    _, fallback_examples, _ = build_hybrid_examples(
+        intraday, missing_prior, test_contract
+    )
+    fallback_prior = next(
+        row["daily_context_session"]
+        for row in fallback_examples[protected_session]
+        if row["symbol"] == protected_symbol
+    )
+    assert fallback_prior < expected_prior < protected_session
+    print("[PASS] Calendar gaps use the latest earlier common daily session")
+
     result = evaluate_walk_forward(intraday, daily, test_contract)
     assert result["test_sessions"] == 25
     assert result["fold_count"] == 3
