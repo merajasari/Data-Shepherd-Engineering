@@ -1,6 +1,6 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
 from webapp.services.v10_cycle3_holdout_service import get_v10_cycle3_holdout_dashboard
-from webapp.services.v10_cycle3_accelerated_service import get_v10_cycle3_accelerated_dashboard
+from webapp.services.v10_cycle3_accelerated_v2_service import get_v10_cycle3_accelerated_dashboard
 from webapp.services.v11_phase2_service import get_v11_phase2_dashboard
 from webapp.services.v13_regime_overlay_service import get_v13_regime_overlay_dashboard
 """Data Shepherd Engineering presentation layer."""
@@ -72,7 +72,7 @@ def inject_dashboard_modules(response):
             shared=['<script src="/static/js/v8_holdout_snapshot.js" defer></script>','<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
             scripts.extend(shared)
             if request.args.get("view")!="live":
-                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v10_confirmation_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_accelerated_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_holdout_monitor.js" defer></script>','<script src="/static/js/model_research_tabs.js" defer></script>','<script src="/static/js/v13_regime_overlay_status.js" defer></script>','<script src="/static/js/v8_stream_health_visual.js" defer></script>'])
+                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v10_confirmation_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_accelerated_v2_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_holdout_monitor.js" defer></script>','<script src="/static/js/model_research_tabs.js" defer></script>','<script src="/static/js/v13_regime_overlay_status.js" defer></script>','<script src="/static/js/v8_stream_health_visual.js" defer></script>'])
         if marker in html:
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
@@ -336,7 +336,7 @@ def api_v10_cycle3_holdout():
     response.headers["Cache-Control"]="private, max-age=5"
     response.headers["X-Data-Serving-Path"]="lightweight-files"
     return response
-@app.get("/api/v10/cycle3/accelerated")
+@app.get("/api/v10/cycle3/accelerated-v2")
 def api_v10_cycle3_accelerated():
     response=jsonify(get_v10_cycle3_accelerated_dashboard())
     response.headers["Cache-Control"]="private, max-age=5"
