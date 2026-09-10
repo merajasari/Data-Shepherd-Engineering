@@ -137,6 +137,14 @@
   }
 
   const validTab = id => MODELS.some(model => model.id === id);
+  function revealPaneStart() {
+    const panelTop = panels.getBoundingClientRect().top;
+    const tabBottom = nav.getBoundingClientRect().bottom;
+    const clearance = 12;
+    if (panelTop < tabBottom + clearance) {
+      window.scrollBy({top: panelTop - tabBottom - clearance, behavior: 'auto'});
+    }
+  }
   function activate(id, options = {}) {
     if (!validTab(id)) id = 'overview';
     nav.querySelectorAll('[role=tab]').forEach(button => {
@@ -148,12 +156,15 @@
     try { sessionStorage.setItem('data-shepherd-research-tab', id); } catch (_) {}
     if (options.hash !== false && history.replaceState) history.replaceState(null, '', `${location.pathname}${location.search}#research-${id}`);
     if (options.focus) nav.querySelector(`[data-research-tab="${id}"]`)?.focus();
-    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    requestAnimationFrame(() => {
+      if (options.reveal) revealPaneStart();
+      window.dispatchEvent(new Event('resize'));
+    });
   }
 
   nav.addEventListener('click', event => {
     const button = event.target.closest('[data-research-tab]');
-    if (button) activate(button.dataset.researchTab);
+    if (button) activate(button.dataset.researchTab, {reveal:true});
   });
   nav.addEventListener('keydown', event => {
     if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
@@ -161,13 +172,13 @@
     const current = buttons.indexOf(document.activeElement);
     let next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
     event.preventDefault();
-    activate(buttons[next].dataset.researchTab, {focus:true});
+    activate(buttons[next].dataset.researchTab, {focus:true,reveal:true});
   });
 
   reconcile();
   let requested = location.hash.match(/^#research-(overview|v8|v10|v14|v13)$/)?.[1];
   if (!requested) { try { requested = sessionStorage.getItem('data-shepherd-research-tab'); } catch (_) {} }
-  activate(validTab(requested) ? requested : 'overview', {hash:false});
+  activate(validTab(requested) ? requested : 'overview', {hash:false,reveal:true});
 
   let queued = false;
   const observer = new MutationObserver(() => {

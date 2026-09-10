@@ -185,6 +185,7 @@ def main() -> None:
     app_source = (project_root / "webapp/app.py").read_text(encoding="utf-8")
     assert "V14_ML_AI" in tabs
     assert "research-(overview|v8|v10|v14|v13)" in tabs
+    assert "revealPaneStart" in tabs and "window.scrollBy" in tabs
     assert "/api/v14/ml-ai" in renderer and "/api/v14/ml-ai" in app_source
     assert "Learned standardized coefficients" in renderer
     assert "100-STOCK ML RANKING BOARD" in renderer
