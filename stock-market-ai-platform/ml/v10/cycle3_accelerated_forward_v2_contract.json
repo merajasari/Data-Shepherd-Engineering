@@ -1,0 +1,86 @@
+{
+  "contract_id": "V10_CYCLE3_ACCELERATED_PAPER_FORWARD_V2",
+  "registered_at_utc": "2026-09-10T00:00:00+00:00",
+  "status": "AUTHORIZED_PROSPECTIVE_PAPER_FORWARD",
+  "amendment_reason": "Start a clean prospective V10 evidence lane on September 10, 2026 after the V1 September 8 miss; preserve V1, V8, and January confirmation unchanged.",
+  "source_candidate": {
+    "candidate_id": "c3_confirm2_blend50",
+    "frozen_sha256": "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38",
+    "development_gates_passed": 13,
+    "development_gates_total": 13,
+    "candidate_modified": false
+  },
+  "evidence_window": {
+    "first_decision_session_utc": "2026-09-10T00:00:00+00:00",
+    "last_decision_session_utc": "2026-12-18T00:00:00+00:00",
+    "independent_confirmation_start_utc": "2027-01-04T00:00:00+00:00",
+    "decision_lock_rule": "after the completed 16:00 America/New_York close and before the next eligible 09:30 America/New_York open",
+    "missed_decisions_backfilled": false,
+    "cross_confirmation_boundary_outcomes_allowed": false,
+    "january_confirmation_modified": false
+  },
+  "market_calendar": {
+    "calendar": "NYSE",
+    "source": "https://www.nyse.com/trade/hours-calendars",
+    "known_full_closures_2026_utc_dates": [
+      "2026-09-07",
+      "2026-11-26",
+      "2026-12-25"
+    ]
+  },
+  "fixed_portfolio_contract": {
+    "top_n": 10,
+    "weighting": "equal_weight",
+    "entry": "next_session_open",
+    "holding_sessions": 5,
+    "cohort_offsets": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "primary_cost_bps_per_dollar_traded": 10,
+    "benchmark": "SPY",
+    "control": "V8_DISTANCE_FROM_LOW_20D_SAME_DATES"
+  },
+  "evidence_policy": {
+    "append_only": true,
+    "hash_chained": true,
+    "duplicate_safe": true,
+    "prospective_decisions_only": true,
+    "overlapping_exits_are_diagnostic_not_independent": true,
+    "complete_block_definition": "one completed EXIT from each of cohort offsets 0 through 4",
+    "minimum_blocks_for_provisional_paper_champion_review": 8,
+    "minimum_blocks_for_stronger_limited_live_review": 12,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "candidate_retuning_allowed": false,
+    "results_used_for_candidate_selection": false
+  },
+  "promotion_gates": {
+    "provisional_review": {
+      "mean_net_return_after_cost_greater_than": 0,
+      "mean_v10_minus_v8_net_return_at_least": 0,
+      "mean_v10_minus_spy_return_at_least": 0,
+      "maximum_drawdown_not_worse_than_v8_by_more_than_absolute": 0.1,
+      "operational_integrity_required": true
+    },
+    "stronger_review_additional": {
+      "minimum_completed_defensive_exits": 5,
+      "mean_defensive_v10_minus_v8_net_return_greater_than": 0
+    }
+  },
+  "authority": {
+    "paper_trading_only": true,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_allowed": false,
+    "modify_v8": false,
+    "invoke_v8_production": false,
+    "read_v8_holdout_outcomes": false,
+    "modify_original_v10_holdout": false,
+    "read_original_v10_holdout_outcomes": false,
+    "modify_january_confirmation": false
+  }
+}
