@@ -47,10 +47,10 @@ launchctl bootout "gui/$UID_VALUE/$LABEL" 2>/dev/null || true
 rmdir "$LOCK_DIR" 2>/dev/null || true
 launchctl bootstrap "gui/$UID_VALUE" "$PLIST"
 
-if launchctl print "gui/$UID_VALUE/com.datashepherd.v5refresh" >/dev/null 2>&1; then
-  echo "Shared market-data refresher detected: com.datashepherd.v5refresh"
+if launchctl print "gui/$UID_VALUE/com.datashepherd.v8refresh" >/dev/null 2>&1; then
+  echo "Shared market-data refresher detected: com.datashepherd.v8refresh"
 else
-  echo "WARNING: com.datashepherd.v5refresh is not loaded. V14 will wait until the shared feature snapshot is current."
+  echo "WARNING: com.datashepherd.v8refresh is not loaded. V14 will wait until the shared feature snapshot is current."
 fi
 echo "Installed $LABEL (data readiness + V14 collector every $INTERVAL_SECONDS seconds)."
 echo "Logs: $LOG_DIR/v14_logistic_forward.log and $LOG_DIR/v14_logistic_forward.err.log"
