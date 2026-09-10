@@ -1,0 +1,50 @@
+{
+  "contract_id": "V14_LOGISTIC_WALK_FORWARD_PAPER_FORWARD_V1",
+  "candidate_id": "v14_logistic_walk_forward_top10",
+  "model": {
+    "type": "numpy_logistic_regression",
+    "target": "target_up_5d",
+    "target_definition": "close_price_higher_after_five_completed_sessions",
+    "features": [
+      "daily_return",
+      "return_5d",
+      "return_20d",
+      "price_vs_sma_20",
+      "volatility_ratio_5_20",
+      "volume_ratio"
+    ],
+    "training_scope": "pooled_cross_sectional_expanding_window",
+    "purge_gap_sessions": 5,
+    "minimum_training_rows": 500,
+    "learning_rate": 0.05,
+    "epochs": 1500,
+    "l2": 0.001,
+    "ranking": "descending_predicted_probability",
+    "tie_break": "ascending_symbol"
+  },
+  "portfolio": {
+    "universe": "frozen_v8_100_stock_universe",
+    "top_n": 10,
+    "weighting": "equal_weight",
+    "entry": "next_session_open",
+    "holding_sessions": 5,
+    "cost_bps_per_dollar_traded": 10,
+    "cohort_offsets": [0, 1, 2, 3, 4]
+  },
+  "evaluation": {
+    "paper_forward_start_utc": "2026-09-11T00:00:00+00:00",
+    "outcomes_for_model_selection": false,
+    "online_retraining": true,
+    "training_cutoff_is_recorded": true,
+    "model_snapshot_is_recorded": true
+  },
+  "authority": {
+    "paper_trading_only": true,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "modify_v8": false,
+    "modify_v10": false
+  }
+}
