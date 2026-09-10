@@ -24,6 +24,7 @@ source .venv/bin/activate
 python -m ml.v14.logistic_forward_regression
 python -m ml.v14.logistic_forward
 python -m ml.v14.logistic_forward_scheduled_entrypoint
+python -m ml.v14.logistic_forward_scheduler_regression
 python -m json.tool data/model/v14/logistic_forward/status.json
 ```
 
@@ -33,3 +34,34 @@ Each decision records the training cutoff, row count, model hash, learned
 weights, normalization statistics, predicted probabilities, and selected
 symbols. The runner never reads V8/V10 outcomes to retrain or select this
 candidate.
+
+## Scheduled refresh and collection (macOS)
+
+Install the isolated LaunchAgent from the project root:
+
+```bash
+./scripts/mac/install_v14_logistic_forward.sh
+```
+
+The job runs every five minutes while the user session is active. Each run is
+serialized by a lock directory, refreshes the shared Tiingo Bronze data within
+the rolling hourly request budget, propagates Silver/Gold/features, and only
+then invokes the V14 collector when all required feature files are current.
+Partial refreshes and quota waits are recorded in
+`data/model/v14/logistic_forward/refresh_status.json` and do not create a
+decision from an uncertain snapshot.
+
+This job intentionally does not call `ml.run_v5_data_refresh`'s V8 production
+publishing path: it never runs V8 inference, the V8 EOD orchestrator, or the
+model-comparison refresh. If the older `com.datashepherd.v5refresh` LaunchAgent
+is installed, unload that older market-data job before enabling this one so two
+agents do not consume the same Tiingo quota. The existing V8 paper scheduler
+may remain installed; V8/V10 state is not modified by the V14 job.
+
+To inspect the job and logs:
+
+```bash
+launchctl print "gui/$(id -u)/com.datashepherd.v14logisticforward"
+tail -f logs/v14_logistic_forward.log logs/v14_logistic_forward.err.log
+python -m json.tool data/model/v14/logistic_forward/refresh_status.json
+```
