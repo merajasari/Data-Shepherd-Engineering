@@ -1,0 +1,155 @@
+{
+  "contract_id": "V15_INTRADAY_V11_V14_HYBRID_WALK_FORWARD_DEVELOPMENT_V2",
+  "candidate_id": "v15_v2_intraday_hybrid_1000et_top10",
+  "classification": "PREREGISTERED_POST_V1_DEVELOPMENT_CANDIDATE_NOT_FROZEN",
+  "heritage": {
+    "v1_disposition_id": "V15_INTRADAY_LOGISTIC_V1_REJECTED_DEVELOPMENT_DISPOSITION",
+    "v1_disposition_sha256": "3522d7d94c17bfd459630c93c5782808fc1917d3c3691c3062141bdadeea31e7",
+    "v1_outcomes_read_before_v2_design": true,
+    "v1_results_reused_as_fresh_evidence": false,
+    "v11_contract_id": "V11_INTRADAY_PHASE2_BALANCED_MOMENTUM_CONFIRMATION_V1",
+    "v11_role": "COMPLETED_FIVE_MINUTE_FEATURES_TIMING_AND_FIXED_CONTROL",
+    "v14_contract_id": "V14_LOGISTIC_WALK_FORWARD_PAPER_FORWARD_V1",
+    "v14_role": "PRIOR_CLOSE_DAILY_FEATURES_AND_FIXED_PRETRAINED_PROBABILITY_CONTEXT"
+  },
+  "objective": {
+    "primary": "MAXIMIZE_COMPOUNDED_NET_RETURN_AFTER_MODELED_COST",
+    "capital_efficiency": "ONE_INTRADAY_THIRTY_MINUTE_HOLD_PER_ELIGIBLE_SESSION",
+    "speed_interpretation": "FASTER_VALIDATED_LEARNING_AND_INTRADAY_CAPITAL_TURNOVER_NOT_RELAXED_GOVERNANCE",
+    "risk_constraints": [
+      "POSITIVE_NET_RETURN",
+      "POSITIVE_RELATIVE_RETURN_VERSUS_V11",
+      "POSITIVE_RELATIVE_RETURN_VERSUS_V14_CONTEXT_CONTROL",
+      "POSITIVE_RELATIVE_RETURN_VERSUS_SPY",
+      "MAX_DRAWDOWN_NO_MORE_THAN_FIVE_PERCENTAGE_POINTS_WORSE_THAN_V11"
+    ]
+  },
+  "data": {
+    "intraday_source": "V11_COMPLETE_HISTORICAL_FIVE_MINUTE_DATASET",
+    "daily_source": "SYNCHRONIZED_DAILY_FEATURE_DATASET",
+    "bar_interval_minutes": 5,
+    "regular_session_only": true,
+    "completed_bars_only": true,
+    "required_universe_symbols": 101,
+    "candidate_symbols": 100,
+    "benchmark": "SPY",
+    "decision_bar_index": 5,
+    "decision_time_eastern": "10:00",
+    "daily_context_as_of": "PRIOR_COMPLETED_SESSION_ONLY",
+    "current_session_daily_close_prohibited": true,
+    "minimum_eligible_intraday_sessions": 252
+  },
+  "slow_context_model": {
+    "type": "NUMPY_LOGISTIC_REGRESSION",
+    "target": "target_up_5d",
+    "features": [
+      "daily_return",
+      "return_5d",
+      "return_20d",
+      "price_vs_sma_20",
+      "volatility_ratio_5_20",
+      "volume_ratio"
+    ],
+    "training_scope": "POOLED_CROSS_SECTIONAL_PRETRAINED_BEFORE_EARLIEST_INTRADAY_SESSION",
+    "purge_gap_sessions": 5,
+    "minimum_training_rows": 5000,
+    "learning_rate": 0.05,
+    "epochs": 1500,
+    "l2": 0.001,
+    "frozen_during_v2_evaluation": true,
+    "training_cutoff_recorded": true,
+    "model_snapshot_recorded": true
+  },
+  "hybrid_model": {
+    "type": "NUMPY_LOGISTIC_REGRESSION_WITH_PREREGISTERED_INTERACTIONS",
+    "target": "positive_cost_adjusted_relative_return_30m",
+    "target_definition": "stock_return_minus_spy_return_minus_modeled_cost_is_positive_from_next_bar_open_through_sixth_holding_bar_close",
+    "fast_features": [
+      "return_5m",
+      "return_15m",
+      "vwap_distance",
+      "volume_acceleration",
+      "realized_volatility_30m",
+      "opening_gap"
+    ],
+    "slow_features": [
+      "daily_return",
+      "return_5d",
+      "return_20d",
+      "price_vs_sma_20",
+      "volatility_ratio_5_20",
+      "volume_ratio",
+      "v14_daily_probability"
+    ],
+    "interaction_features": [
+      "v14_daily_probability_x_return_5m",
+      "v14_daily_probability_x_return_15m",
+      "return_20d_x_return_15m",
+      "price_vs_sma_20_x_vwap_distance",
+      "volatility_ratio_5_20_x_realized_volatility_30m",
+      "volume_ratio_x_volume_acceleration",
+      "daily_return_x_opening_gap"
+    ],
+    "feature_transform": "FAST_SPY_RELATIVE_EXCEPT_REALIZED_VOLATILITY_AND_SLOW_CROSS_SECTIONAL_ZSCORES_BEFORE_INTERACTIONS",
+    "training_scope": "POOLED_CROSS_SECTIONAL_EXPANDING_WINDOW",
+    "purge_gap_sessions": 1,
+    "minimum_training_sessions": 126,
+    "minimum_training_rows": 12600,
+    "learning_rate": 0.03,
+    "epochs": 1200,
+    "l2": 0.005,
+    "ranking": "DESCENDING_PREDICTED_PROBABILITY",
+    "tie_break": "ASCENDING_SYMBOL"
+  },
+  "portfolio": {
+    "top_n": 10,
+    "weighting": "EQUAL_WEIGHT",
+    "entry": "NEXT_5MIN_BAR_OPEN",
+    "holding_bars": 6,
+    "exit": "SIXTH_HOLDING_BAR_CLOSE",
+    "modeled_total_cost_bps_round_trip": 10,
+    "v11_control": "V11_MOMENTUM_BALANCED_6_SAME_SESSION",
+    "v14_context_control": "TOP10_FIXED_PRETRAINED_V14_DAILY_PROBABILITY_SAME_INTRADAY_WINDOW",
+    "benchmark": "SPY_SAME_WINDOW"
+  },
+  "evaluation": {
+    "walk_forward_only": true,
+    "test_sessions_per_fold": 20,
+    "minimum_final_test_sessions": 60,
+    "positive_fold_definition": "MEAN_V15_MINUS_V11_GREATER_THAN_ZERO",
+    "future_data_in_training": false,
+    "selection_on_test_data": false,
+    "outcomes_for_model_selection": false,
+    "training_cutoff_recorded": true,
+    "model_snapshot_recorded": true,
+    "development_evidence_only": true,
+    "fresh_paper_boundary_required_after_development": true,
+    "gates": {
+      "v15_net_total_return_greater_than": 0.0,
+      "v15_relative_to_v11_greater_than": 0.0,
+      "v15_relative_to_v14_context_greater_than": 0.0,
+      "v15_relative_to_spy_greater_than": 0.0,
+      "v15_v11_win_rate_at_least": 0.5,
+      "v15_spy_win_rate_at_least": 0.5,
+      "positive_fold_share_at_least": 0.6,
+      "v15_drawdown_minus_v11_drawdown_at_most": 0.05
+    }
+  },
+  "authority": {
+    "development_only": true,
+    "model_frozen": false,
+    "paper_forward_allowed": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "scheduler_installation_allowed": false,
+    "dashboard_active_model_label_allowed": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  }
+}
