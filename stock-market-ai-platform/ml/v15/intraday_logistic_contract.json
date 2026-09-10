@@ -1,0 +1,81 @@
+{
+  "contract_id": "V15_INTRADAY_LOGISTIC_WALK_FORWARD_DEVELOPMENT_V1",
+  "candidate_id": "v15_intraday_logistic_1000et_top10",
+  "classification": "PREREGISTERED_DEVELOPMENT_CANDIDATE_NOT_FROZEN",
+  "heritage": {
+    "v11_contract_id": "V11_INTRADAY_PHASE2_BALANCED_MOMENTUM_CONFIRMATION_V1",
+    "v11_role": "COMPLETED_BAR_FEATURES_TIMING_AND_CONTROL_ONLY",
+    "v14_contract_id": "V14_LOGISTIC_WALK_FORWARD_PAPER_FORWARD_V1",
+    "v14_role": "LOGISTIC_WALK_FORWARD_METHOD_ONLY",
+    "prior_forward_evidence_reused": 0
+  },
+  "data": {
+    "source": "V11_COMPLETE_HISTORICAL_FIVE_MINUTE_DATASET",
+    "bar_interval_minutes": 5,
+    "regular_session_only": true,
+    "completed_bars_only": true,
+    "required_universe_symbols": 101,
+    "candidate_symbols": 100,
+    "benchmark": "SPY",
+    "decision_bar_index": 5,
+    "decision_time_eastern": "10:00"
+  },
+  "model": {
+    "type": "numpy_logistic_regression",
+    "target": "positive_cost_adjusted_relative_return_30m",
+    "target_definition": "stock_return_minus_spy_return_minus_modeled_cost_is_positive_from_next_bar_open_through_sixth_holding_bar_close",
+    "features": [
+      "return_5m",
+      "return_15m",
+      "vwap_distance",
+      "volume_acceleration",
+      "realized_volatility_30m",
+      "opening_gap"
+    ],
+    "feature_transform": "SPY_RELATIVE_EXCEPT_REALIZED_VOLATILITY_THEN_CROSS_SECTIONAL_ZSCORE",
+    "training_scope": "POOLED_CROSS_SECTIONAL_EXPANDING_WINDOW",
+    "purge_gap_sessions": 1,
+    "minimum_training_sessions": 40,
+    "minimum_training_rows": 4000,
+    "learning_rate": 0.05,
+    "epochs": 800,
+    "l2": 0.001,
+    "ranking": "DESCENDING_PREDICTED_PROBABILITY",
+    "tie_break": "ASCENDING_SYMBOL"
+  },
+  "portfolio": {
+    "top_n": 10,
+    "weighting": "EQUAL_WEIGHT",
+    "entry": "NEXT_5MIN_BAR_OPEN",
+    "holding_bars": 6,
+    "exit": "SIXTH_HOLDING_BAR_CLOSE",
+    "modeled_total_cost_bps_round_trip": 10,
+    "control": "V11_MOMENTUM_BALANCED_6_SAME_SESSION",
+    "benchmark": "SPY_SAME_WINDOW"
+  },
+  "evaluation": {
+    "walk_forward_only": true,
+    "test_sessions_per_fold": 10,
+    "minimum_final_test_sessions": 5,
+    "future_data_in_training": false,
+    "selection_on_test_data": false,
+    "outcomes_for_model_selection": false,
+    "training_cutoff_recorded": true,
+    "model_snapshot_recorded": true
+  },
+  "authority": {
+    "development_only": true,
+    "paper_trading_only": true,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "scheduler_installation_allowed": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  }
+}
