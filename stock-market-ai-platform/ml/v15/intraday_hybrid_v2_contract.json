@@ -116,6 +116,7 @@
     "walk_forward_only": true,
     "test_sessions_per_fold": 20,
     "minimum_final_test_sessions": 60,
+    "use_all_remaining_sessions_after_minimum_is_met": true,
     "positive_fold_definition": "MEAN_V15_MINUS_V11_GREATER_THAN_ZERO",
     "future_data_in_training": false,
     "selection_on_test_data": false,

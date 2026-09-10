@@ -161,8 +161,9 @@ def main() -> None:
     print("[PASS] Current-session daily data cannot influence the 10:00 decision")
 
     result = evaluate_walk_forward(intraday, daily, test_contract)
-    assert result["test_sessions"] >= 10
-    assert result["fold_count"] >= 1
+    assert result["test_sessions"] == 25
+    assert result["fold_count"] == 3
+    assert result["folds"][-1]["test_sessions"] == 5
     assert result["model_frozen"] is False
     assert result["paper_forward_allowed"] is False
     assert result["fresh_paper_boundary_required"] is True

@@ -35,7 +35,7 @@ MANIFEST_PATH = (
 )
 OUTPUT_PATH = ROOT / "data/research/v15/intraday_hybrid_v2/latest_results.json"
 EXPECTED_CONTRACT_SHA256 = (
-    "1102ccbb98189bbd0dd329a871a5ba994cd88bdc898bc61c34840b960142f59e"
+    "e5d2799e91e8c8a826efc00d176a4561bca546d69d200fdb3343fffe1a06f4cc"
 )
 
 FAST_FEATURE_NAMES = (
@@ -113,6 +113,8 @@ def load_contract(path: Path = CONTRACT_PATH) -> dict[str, object]:
         failures.append("V15_V2_INTRADAY_WINDOW_INVALID")
     if evaluation.get("development_evidence_only") is not True:
         failures.append("V15_V2_DEVELOPMENT_BOUNDARY_MISSING")
+    if evaluation.get("use_all_remaining_sessions_after_minimum_is_met") is not True:
+        failures.append("V15_V2_COMPLETE_OOS_WINDOW_MISSING")
     if evaluation.get("fresh_paper_boundary_required_after_development") is not True:
         failures.append("V15_V2_FRESH_BOUNDARY_MISSING")
     required_false = (
@@ -390,6 +392,12 @@ def evaluate_walk_forward(
     fold_size = int(evaluation["test_sessions_per_fold"])
     purge = int(model_spec["purge_gap_sessions"])
     cursor = minimum_train + purge - 1
+    available_test_sessions = len(sessions) - cursor
+    if available_test_sessions < minimum_final:
+        raise ValueError(
+            f"V15_V2_INSUFFICIENT_TEST_SESSIONS:"
+            f"{available_test_sessions}<{minimum_final}"
+        )
     folds: list[dict[str, object]] = []
     observations: list[dict[str, object]] = []
     top_n = int(contract["portfolio"]["top_n"])
@@ -397,8 +405,6 @@ def evaluate_walk_forward(
     fold_number = 1
     while cursor < len(sessions):
         remaining = len(sessions) - cursor
-        if remaining < minimum_final:
-            break
         test_sessions = sessions[cursor : cursor + min(fold_size, remaining)]
         training_sessions = sessions[: cursor - purge + 1]
         training_rows = [row for session in training_sessions for row in by_session[session]]
