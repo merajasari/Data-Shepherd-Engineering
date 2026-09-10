@@ -19,7 +19,7 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 cd "$PROJECT_DIR"
-"$PYTHON" -m ml.v10.cycle3_accelerated_forward_v2_v2_contract
+"$PYTHON" -m ml.v10.cycle3_accelerated_forward_v2_contract
 
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -48,7 +48,7 @@ launchctl bootstrap "gui/$UID_VALUE" "$PLIST"
 echo "Installed $LABEL"
 echo "Schedule: every 5 minutes"
 echo "Feature backend: spark"
-echo "First eligible decision session: 2026-09-08"
+echo "First eligible decision session: 2026-09-10"
 echo "No missed decision may be backfilled"
 echo "Original January 4 confirmation: unchanged"
 echo "Automatic promotion: disabled; human review required"
