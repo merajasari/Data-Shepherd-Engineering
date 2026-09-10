@@ -57,6 +57,10 @@ def main() -> None:
         "Model Research loads its page-specific model tabs",
     )
     require(
+        b'/static/js/v14_ml_ai_dashboard.js' in research.data,
+        "Model Research loads the V14 ML/AI model-lab renderer",
+    )
+    require(
         b'/static/js/v13_regime_overlay_status.js' in research.data,
         "Model Research loads its read-only V13 status renderer",
     )
@@ -140,6 +144,40 @@ def main() -> None:
         ),
         "V10 accelerated API separates runtime health from study integrity",
     )
+    v14_api = client.get("/api/v14/ml-ai")
+    require(v14_api.status_code == 200, "V14 ML/AI dashboard API responds")
+    v14_payload = v14_api.get_json()
+    require(
+        v14_payload.get("classification")
+        == "TRAINED_ML_LOGISTIC_REGRESSION_PAPER_FORWARD"
+        and v14_payload.get("model_type") == "numpy_logistic_regression"
+        and v14_payload.get("paper_forward_start_utc")
+        == "2026-09-11T00:00:00+00:00",
+        "V14 API identifies genuine trained ML and its clean evidence boundary",
+    )
+    require(
+        v14_payload.get("runner_invoked") is False
+        and v14_payload.get("brokerage_orders") is False
+        and v14_payload.get("v8_modified") is False
+        and v14_payload.get("v10_modified") is False,
+        "V14 dashboard cannot run models, place orders, or modify V8/V10",
+    )
+    require(
+        all(
+            key in v14_payload
+            for key in (
+                "coefficients",
+                "rankings",
+                "open_positions",
+                "event_history",
+                "curve",
+                "current_equity",
+                "current_spy_equity",
+                "next_lifecycle_event",
+            )
+        ),
+        "V14 API exposes model lineage, rankings, positions, and forward charts",
+    )
     v13_api = client.get("/api/v13/regime-overlay")
     require(v13_api.status_code == 200, "V13 read-only dashboard API responds")
     v13_payload = v13_api.get_json()
@@ -212,6 +250,9 @@ def main() -> None:
         project_root
         / "webapp/static/js/v10_cycle3_accelerated_v2_dashboard.js"
     ).read_text()
+    v14_status = (
+        project_root / "webapp/static/js/v14_ml_ai_dashboard.js"
+    ).read_text()
     v10_january_status = (
         project_root / "webapp/static/js/v10_cycle3_holdout_monitor.js"
     ).read_text()
@@ -222,9 +263,18 @@ def main() -> None:
     )
     require(
         all(label in research_tabs for label in (
-            "Overview", "V8 Frozen", "V10 Cycle 3", "V13 Dev",
+            "Overview", "V8 Frozen", "V10 Cycle 3", "V14_ML_AI", "V13 Dev",
         )),
         "Model Research exposes the active classified model-tab set",
+    )
+    require(
+        "fetch(API" in v14_status
+        and "/api/v14/ml-ai" in v14_status
+        and "Learned standardized coefficients" in v14_status
+        and "100-STOCK ML RANKING BOARD" in v14_status
+        and "Interactive paper-forward performance" in v14_status
+        and "Dashboard invoked runner" in v14_status,
+        "V14 tab renders learning, ranking, performance, and authority surfaces",
     )
     require(
         "V11 Intraday" not in research_tabs

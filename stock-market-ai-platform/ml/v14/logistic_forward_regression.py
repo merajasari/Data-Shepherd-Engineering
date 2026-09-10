@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta, timezone
 from pathlib import Path
+import json
 import tempfile
 
 import numpy as np
@@ -141,6 +142,16 @@ def main() -> None:
         assert after_decision["decisions"] >= 1
         assert any('"event_type": "DECISION"' in line for line in events)
         assert all('"candidate_id": "v14_logistic_walk_forward_top10"' in line for line in events)
+        decision_event = next(
+            json.loads(line)
+            for line in events
+            if json.loads(line).get("event_type") == "DECISION"
+        )
+        assert len(decision_event["ranked_predictions"]) == 100
+        assert sum(
+            item["selected_top10"]
+            for item in decision_event["ranked_predictions"]
+        ) == 10
         print("[PASS] Paper-forward runner creates isolated V14 decisions")
 
         after_entry = run_once(
@@ -154,6 +165,27 @@ def main() -> None:
         assert not (root / "v8").exists()
         assert not (root / "v10").exists()
         print("[PASS] Entry remains paper-only and cannot write V8/V10 state")
+
+        after_exit = run_once(
+            now_utc=dates[decision_index + 6].to_pydatetime().replace(
+                tzinfo=timezone.utc
+            ) + timedelta(hours=21),
+            contract=contract,
+            journal_path=journal,
+            status_path=status,
+            load_market_fn=lambda _: _market(),
+        )
+        exit_events = [
+            json.loads(line)
+            for line in journal.read_text().splitlines()
+            if json.loads(line).get("event_type") == "EXIT"
+        ]
+        assert after_exit["completed_exits"] >= 1
+        assert exit_events
+        assert exit_events[0]["spy_return"] is not None
+        assert exit_events[0]["net_relative_return"] is not None
+        assert len(exit_events[0]["symbol_returns"]) == 10
+        print("[PASS] Exit records V14, SPY, relative, and symbol-level evidence")
 
     print("Status: PASSED")
 

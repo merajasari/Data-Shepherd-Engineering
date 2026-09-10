@@ -396,6 +396,15 @@ def run_once(
             "cohort_offset": cohort,
             "symbols": picks,
             "predicted_probabilities": {row.symbol: float(row.predicted_probability) for row in ranked.head(top_n).itertuples()},
+            "ranked_predictions": [
+                {
+                    "rank": rank,
+                    "symbol": row.symbol,
+                    "predicted_probability": float(row.predicted_probability),
+                    "selected_top10": rank <= top_n,
+                }
+                for rank, row in enumerate(ranked.itertuples(), 1)
+            ],
             **metadata,
             "paper_trading_only": True,
             "brokerage_orders": False,
@@ -424,6 +433,9 @@ def run_once(
                 break
             prices[symbol] = price
         else:
+            spy_entry_price = float(frames["SPY"].loc[entry_ts, "open"])
+            if not np.isfinite(spy_entry_price) or spy_entry_price <= 0:
+                continue
             previous = None
             prior = [event for event in events if event.get("event_type") == "ENTRY" and event.get("cohort_offset") == decision.get("cohort_offset")]
             if prior:
@@ -440,6 +452,7 @@ def run_once(
                 "symbols": decision["symbols"],
                 "entry_timestamp_utc": entry_ts.isoformat(),
                 "entry_prices": prices,
+                "spy_entry_price": spy_entry_price,
                 "transition_notional": traded,
                 "modeled_cost_rate": traded * int(contract["portfolio"]["cost_bps_per_dollar_traded"]) / 10000.0,
                 "paper_trading_only": True,
@@ -463,9 +476,23 @@ def run_once(
             continue
         if any(symbol not in frames or exit_ts not in frames[symbol].index for symbol in entry["symbols"]):
             continue
-        returns = [float(frames[symbol].loc[exit_ts, "open"]) / float(entry["entry_prices"][symbol]) - 1.0 for symbol in entry["symbols"]]
-        gross = float(np.mean(returns))
+        exit_prices = {
+            symbol: float(frames[symbol].loc[exit_ts, "open"])
+            for symbol in entry["symbols"]
+        }
+        returns = {
+            symbol: exit_prices[symbol] / float(entry["entry_prices"][symbol]) - 1.0
+            for symbol in entry["symbols"]
+        }
+        gross = float(np.mean(list(returns.values())))
         cost = float(entry.get("modeled_cost_rate", 0.0))
+        spy_entry_price = float(entry.get("spy_entry_price", 0.0) or 0.0)
+        spy_exit_price = float(frames["SPY"].loc[exit_ts, "open"])
+        spy_return = (
+            spy_exit_price / spy_entry_price - 1.0
+            if spy_entry_price > 0 and np.isfinite(spy_exit_price)
+            else None
+        )
         exit_event = {
             "event_type": "EXIT",
             "journal_type": "V14_LOGISTIC_WALK_FORWARD_PAPER_FORWARD",
@@ -474,8 +501,15 @@ def run_once(
             "decision_timestamp_utc": entry["decision_timestamp_utc"],
             "cohort_offset": entry["cohort_offset"],
             "exit_timestamp_utc": exit_ts.isoformat(),
+            "exit_prices": exit_prices,
+            "symbol_returns": returns,
             "gross_portfolio_return": gross,
             "net_portfolio_return": gross - cost,
+            "spy_exit_price": spy_exit_price,
+            "spy_return": spy_return,
+            "net_relative_return": (
+                gross - cost - spy_return if spy_return is not None else None
+            ),
             "modeled_cost_rate": cost,
             "paper_trading_only": True,
             "brokerage_orders": False,
@@ -498,8 +532,12 @@ def run_once(
     }
     latest = sorted(events, key=lambda event: str(event.get("created_at_utc", "")))
     if latest:
-        payload["latest_model_sha256"] = latest[-1].get("model_sha256")
         payload["latest_lifecycle_event_type"] = latest[-1].get("event_type")
+    latest_decisions = [
+        event for event in latest if event.get("event_type") == "DECISION"
+    ]
+    if latest_decisions:
+        payload["latest_model_sha256"] = latest_decisions[-1].get("model_sha256")
     _atomic_write(status_path, payload)
     return payload
 

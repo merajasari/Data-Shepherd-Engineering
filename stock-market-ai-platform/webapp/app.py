@@ -1,6 +1,7 @@
 from webapp.services.v8_holdout_service import get_v8_holdout_dashboard
 from webapp.services.v10_cycle3_holdout_service import get_v10_cycle3_holdout_dashboard
 from webapp.services.v10_cycle3_accelerated_v2_service import get_v10_cycle3_accelerated_dashboard
+from webapp.services.v14_ml_ai_service import get_v14_ml_ai_dashboard
 from webapp.services.v11_phase2_service import get_v11_phase2_dashboard
 from webapp.services.v13_regime_overlay_service import get_v13_regime_overlay_dashboard
 """Data Shepherd Engineering presentation layer."""
@@ -72,7 +73,7 @@ def inject_dashboard_modules(response):
             shared=['<script src="/static/js/v8_holdout_snapshot.js" defer></script>','<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
             scripts.extend(shared)
             if request.args.get("view")!="live":
-                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v10_confirmation_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_accelerated_v2_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_holdout_monitor.js" defer></script>','<script src="/static/js/model_research_tabs.js" defer></script>','<script src="/static/js/v13_regime_overlay_status.js" defer></script>','<script src="/static/js/v8_stream_health_visual.js" defer></script>'])
+                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v10_confirmation_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_accelerated_v2_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_holdout_monitor.js" defer></script>','<script src="/static/js/model_research_tabs.js" defer></script>','<script src="/static/js/v14_ml_ai_dashboard.js" defer></script>','<script src="/static/js/v13_regime_overlay_status.js" defer></script>','<script src="/static/js/v8_stream_health_visual.js" defer></script>'])
         if marker in html:
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
@@ -185,6 +186,7 @@ def _customer_chat_fallback(message,page="platform"):
     if _customer_chat_is_advice_request(message):
         return "I can explain Data Shepherd's research evidence, rankings, and risk labels, but I cannot recommend buying or selling an asset, set a price target, or provide personalized financial advice. You can ask me how a model score or chart should be interpreted."
     if "v10" in text:return "V10 Cycle 3 is the frozen c3_confirm2_blend50 candidate. Its reconstructed chart line, accelerated paper-forward evidence beginning September 8, 2026, and independent January 4, 2027 confirmation are three separate evidence streams. Automatic promotion is disabled and brokerage orders remain off."
+    if "v14" in text or "logistic" in text or "machine learning" in text:return "V14 is the platform's trained machine-learning candidate. It retrains logistic regression with a five-session purge gap, records every learned coefficient and model snapshot, ranks the frozen 100-stock universe by predicted five-session up probability, and collects isolated paper-forward evidence beginning September 11, 2026. Brokerage orders and automatic promotion are disabled."
     if "v8" in text or "holdout" in text:return "V8 is the sole frozen near-term forward model. Its formal holdout begins September 1, 2026 using Top 10 equal weights, next-open entry, a five-session hold, and 10-bps modeled trading cost."
     if "comparison" in text or "chart" in text:return "The Model Performance Comparison places V4, V5, frozen V8, frozen V10 Cycle 3 reconstruction, and SPY on the same hypothetical $100,000 basis. It excludes live balances and genuine forward evidence."
     if "rank" in text or "signal" in text:return "The ranking score orders stocks cross-sectionally. It is not a probability, guaranteed return, price forecast, or individualized trade recommendation."
@@ -341,6 +343,12 @@ def api_v10_cycle3_accelerated():
     response=jsonify(get_v10_cycle3_accelerated_dashboard())
     response.headers["Cache-Control"]="private, max-age=5"
     response.headers["X-Data-Serving-Path"]="accelerated-status-and-journal-only; no-runner; no-january-holdout"
+    return response
+@app.get("/api/v14/ml-ai")
+def api_v14_ml_ai():
+    response=jsonify(get_v14_ml_ai_dashboard())
+    response.headers["Cache-Control"]="private, max-age=5"
+    response.headers["X-Data-Serving-Path"]="lightweight-v14-status-journal-and-live-cache; no-runner; no-network"
     return response
 @app.get("/api/v11/phase2")
 def api_v11_phase2():

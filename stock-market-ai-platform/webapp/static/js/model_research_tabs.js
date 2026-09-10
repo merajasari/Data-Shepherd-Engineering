@@ -7,6 +7,7 @@
     {id:'overview', label:'Overview', eyebrow:'SHARED RESEARCH CONTEXT', title:'Cross-model overview', note:'Common market data, platform health, and the normalized model-comparison chart remain together here.'},
     {id:'v8', label:'V8 Frozen', eyebrow:'V8 · FROZEN FORWARD MODEL', title:'V8 rankings and holdout evidence', note:'Frozen ranking research and genuine append-only forward evidence are labeled and kept separate within this tab.'},
     {id:'v10', label:'V10 Cycle 3', eyebrow:'V10 · FROZEN CYCLE 3 · ACCELERATED PAPER-FORWARD', title:'V10 Cycle 3 evidence and review runway', note:'Prospective September–December evidence, the independent January confirmation, and rejected legacy V10 research remain visibly separate.'},
+    {id:'v14', label:'V14_ML_AI', eyebrow:'V14 · TRAINED MACHINE LEARNING · PAPER-FORWARD', title:'V14 logistic-regression model lab', note:'Learned coefficients, prediction probabilities, model snapshots, paper positions, and genuine forward evidence remain isolated from V8 and V10.'},
     {id:'v13', label:'V13 Dev', eyebrow:'V13 · PREREGISTERED DEVELOPMENT · NOT FROZEN', title:'V13 regime-overlay research', note:'V13 is a preregistered successor hypothesis with activation governed by an explicit short-lived paper-only lease. Its retrospective curve remains on Overview and never counts as fresh evidence.'}
   ];
 
@@ -164,7 +165,7 @@
   });
 
   reconcile();
-  let requested = location.hash.match(/^#research-(overview|v8|v10|v13)$/)?.[1];
+  let requested = location.hash.match(/^#research-(overview|v8|v10|v14|v13)$/)?.[1];
   if (!requested) { try { requested = sessionStorage.getItem('data-shepherd-research-tab'); } catch (_) {} }
   activate(validTab(requested) ? requested : 'overview', {hash:false});
 
