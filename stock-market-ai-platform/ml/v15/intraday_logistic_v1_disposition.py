@@ -83,3 +83,19 @@ def validate_result_artifact(
     if not result.get("source_manifest_sha256"):
         raise ValueError("V15_V1_SOURCE_MANIFEST_BINDING_MISSING")
     return result
+
+
+def main() -> None:
+    receipt = load_disposition()
+    result = validate_result_artifact()
+    print("V15 V1 DEVELOPMENT DISPOSITION")
+    print("=" * 72)
+    print(f"Decision: {receipt['decision']}")
+    print(f"Observed result SHA-256: {receipt['observed_result_sha256']}")
+    print(f"Source manifest SHA-256: {result['source_manifest_sha256']}")
+    print("Paper forward allowed: NO")
+    print("Brokerage orders: OFF")
+
+
+if __name__ == "__main__":
+    main()
