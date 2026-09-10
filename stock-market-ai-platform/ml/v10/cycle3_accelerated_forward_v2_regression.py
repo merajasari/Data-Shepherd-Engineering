@@ -31,7 +31,7 @@ from ml.v10.cycle3_accelerated_forward_v2_runner import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-INSTALLER_PATH = PROJECT_ROOT / "scripts/mac/install_v10_cycle3_accelerated.sh"
+INSTALLER_PATH = PROJECT_ROOT / "scripts/mac/install_v10_cycle3_accelerated_v2.sh"
 
 
 def _sessions(end: str) -> pd.DatetimeIndex:
@@ -114,7 +114,7 @@ def _assert_scheduler_uses_spark_backend() -> None:
     assert "FEATURE_BACKEND=pandas" not in source
     assert "<key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>" in source
     entrypoint = (
-        PROJECT_ROOT / "ml/v10/cycle3_accelerated_scheduled_entrypoint.py"
+        PROJECT_ROOT / "ml/v10/cycle3_accelerated_v2_scheduled_entrypoint.py"
     ).read_text(encoding="utf-8")
     assert 'result.get("current_run_health") is not True' in entrypoint
     assert 'result["promotion"]["operational_integrity"]' not in entrypoint
@@ -130,7 +130,7 @@ def _assert_market_calendar_and_dst() -> None:
     assert _is_market_session(date(2026, 9, 7), closures) is False
     assert _is_market_session(date(2026, 11, 26), closures) is False
     assert _is_market_session(date(2026, 12, 25), closures) is False
-    assert _next_market_session(date(2026, 9, 4), closures) == date(2026, 9, 10)
+    assert _next_market_session(date(2026, 9, 4), closures) == date(2026, 9, 8)
     assert _next_market_session(date(2026, 11, 25), closures) == date(2026, 11, 27)
     september_close, september_open = _session_lock_window(
         pd.Timestamp("2026-09-04", tz="UTC"), closures
@@ -172,8 +172,8 @@ def _assert_prospective_and_duplicate_safe() -> None:
         assert first["entries"] == 0
         assert first["appended_this_run"] == 1
         assert first["feature_backend"] in {"pandas", "spark"}
-        assert first["latest_source_session"] == "2026-09-08"
-        assert first["expected_latest_completed_session"] == "2026-09-08"
+        assert first["latest_source_session"] == "2026-09-10"
+        assert first["expected_latest_completed_session"] == "2026-09-10"
         assert first["source_price_symbols_available"] == 101
         assert first["source_price_symbols_required"] == 101
         assert first["source_readiness_status"] == "READY"
@@ -186,7 +186,7 @@ def _assert_prospective_and_duplicate_safe() -> None:
             now_utc=datetime(2026, 9, 10, 20, 15, tzinfo=timezone.utc),
             journal_path=journal_path,
             status_path=status_path,
-            load_market=lambda: _market("2026-09-08"),
+            load_market=lambda: _market("2026-09-10"),
             rank_for_date=_rank,
             verify_source=lambda: None,
         )
@@ -197,7 +197,7 @@ def _assert_prospective_and_duplicate_safe() -> None:
             now_utc=datetime(2026, 9, 11, 20, 10, tzinfo=timezone.utc),
             journal_path=journal_path,
             status_path=status_path,
-            load_market=lambda: _market("2026-09-09"),
+            load_market=lambda: _market("2026-09-11"),
             rank_for_date=_rank,
             verify_source=lambda: None,
         )
@@ -238,19 +238,14 @@ def _assert_clean_start() -> None:
             verify_source=lambda: None,
         )
         assert result["decisions"] == 1
-        assert result["missed_decisions_not_backfilled"] == [
-            "2026-09-08",
-            "2026-09-09",
-        ]
+        assert result["missed_decisions_not_backfilled"] == []
         rows = AcceleratedEvidenceJournal(root / "journal.jsonl").read()
         assert rows[0]["decision_timestamp_utc"].startswith("2026-09-10")
-        assert result["promotion"]["operational_integrity"] is False
+        assert result["promotion"]["operational_integrity"] is True
         assert result["current_run_health"] is True
         assert result["current_run_operational_failures"] == []
-        assert result["study_integrity"] is False
-        assert result["historical_integrity_failures"] == [
-            "missed_decisions_not_backfilled:2026-09-10,2026-09-09"
-        ]
+        assert result["study_integrity"] is True
+        assert result["historical_integrity_failures"] == []
 
 
 def _assert_current_source_failure_is_not_historical() -> None:
@@ -267,11 +262,10 @@ def _assert_current_source_failure_is_not_historical() -> None:
         assert result["current_run_health"] is False
         assert result["source_readiness_status"] == "SOURCE_LAGGING"
         assert result["current_run_operational_failures"] == [
-            "missing_market_sessions:2026-09-11"
+            "missing_market_sessions:2026-09-10,2026-09-11"
         ]
-        assert result["historical_integrity_failures"] == [
-            "missed_decisions_not_backfilled:2026-09-10"
-        ]
+        assert result["historical_integrity_failures"] == []
+        assert result["study_integrity"] is False
 
 
 def _assert_promotion_checkpoints() -> None:

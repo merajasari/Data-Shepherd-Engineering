@@ -20,9 +20,9 @@
       #${panelId} .a10-badge{border:1px solid rgba(54,216,255,.42);border-radius:999px;padding:8px 12px;color:#36d8ff;font-size:12px;font-weight:900;text-align:center;overflow-wrap:anywhere;max-width:100%}
       #${panelId} .a10-badge.alert{border-color:rgba(255,109,109,.5);color:#ff8d8d}
       #${panelId} .a10-live{margin-top:16px;padding:18px;border:1px solid rgba(54,216,255,.3);border-radius:16px;background:linear-gradient(145deg,rgba(8,34,47,.76),rgba(7,16,31,.74))}
-      #${panelId} .a10-live-grid{display:grid;grid-template-columns:minmax(250px,.5fr) minmax(0,1.5fr);gap:18px;align-items:stretch}
-      #${panelId} .a10-live-summary{padding:18px;border:1px solid rgba(57,227,161,.3);border-radius:14px;background:rgba(7,16,31,.42)}
-      #${panelId} .a10-live-equity{margin-top:8px;font-size:clamp(2.15rem,4vw,3.55rem);font-weight:950;letter-spacing:-.035em}
+      #${panelId} .a10-live-grid{display:grid;grid-template-columns:minmax(300px,.62fr) minmax(0,1.38fr);gap:18px;align-items:stretch}
+      #${panelId} .a10-live-summary{min-width:0;padding:18px;border:1px solid rgba(57,227,161,.3);border-radius:14px;background:rgba(7,16,31,.42)}
+      #${panelId} .a10-live-equity{margin-top:8px;font-size:clamp(1.85rem,3vw,3.25rem);font-weight:950;line-height:1.05;letter-spacing:-.035em;white-space:nowrap;font-variant-numeric:tabular-nums}
       #${panelId} .a10-live-change{margin-top:4px;font-size:1.05rem;font-weight:900}
       #${panelId} .a10-live-sub{margin-top:8px;color:#91a6c2;font-size:11px;line-height:1.5}
       #${panelId} .a10-live-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}

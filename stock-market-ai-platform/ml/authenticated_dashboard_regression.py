@@ -276,6 +276,12 @@ def main() -> None:
         and "Diagnostic promotion eligibility" not in v10_accelerated_status
         and "Preserved study-integrity disclosure" not in v10_accelerated_status
         and "if(value==null||value==='')return '—'" in v10_accelerated_status
+        and "grid-template-columns:minmax(300px,.62fr) minmax(0,1.38fr)"
+        in v10_accelerated_status
+        and "font-size:clamp(1.85rem,3vw,3.25rem)"
+        in v10_accelerated_status
+        and "white-space:nowrap;font-variant-numeric:tabular-nums"
+        in v10_accelerated_status
         and "Preregistered promotion gates" in v10_accelerated_status,
         "V10 accelerated tab renders live equity, comparison charts, and gates",
     )
