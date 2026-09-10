@@ -2,7 +2,8 @@
 
 The comparison intentionally excludes V6, V7, V11, and V12. It contains V4, V5,
 the exact frozen V8 candidate, the separately frozen V10 Cycle 3 candidate,
-the isolated V13 retrospective development reconstruction, and SPY. Every
+the exact-contract V14 ten-year retrospective counterfactual, the isolated
+V13 retrospective development reconstruction, and SPY. Every
 historical strategy curve starts from the same hypothetical $100,000 capital
 basis at its own first scientifically eligible observation. V13 is genuinely
 simulated as a $100,000 integer-share portfolio for this retrospective chart;
@@ -31,6 +32,8 @@ V8_PATH = Path("data/model/v8/phase5/economic_period_results.csv")
 V8_FREEZE_PATH = Path("data/model/v8/phase7/frozen_candidate_spec.json")
 V10_PATH = Path("data/model/v10/cycle3/economic_period_results.csv")
 V10_FREEZE_PATH = Path("data/model/v10/cycle3/freeze/frozen_candidate_spec.json")
+V14_PATH = Path("data/model/v14/logistic_forward/retrospective_10y.json")
+V14_CONTRACT_PATH = Path("ml/v14/logistic_forward_contract.json")
 V13_PATH = Path("data/research/v13/development/retrospective_reconstruction.json")
 OUTPUT_PATH = Path("webapp/static/generated/stock_model_comparison.json")
 
@@ -42,6 +45,8 @@ V10_CANDIDATE_ID = "c3_confirm2_blend50"
 V10_COST_BPS = 10
 V10_HOLDOUT_START_UTC = pd.Timestamp("2027-01-04T00:00:00Z")
 V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
+V14_EXPECTED_SHA = "b1a933792b2d5298281708292dc94e565130397ce79a1533bf89cbe1c805abd3"
+V14_CLASSIFICATION = "RETROSPECTIVE_COUNTERFACTUAL_NOT_PAPER_FORWARD_EVIDENCE"
 V8_EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 V13_EXPECTED_SHA = "42d7cb6397beb0016715b1dccf4ec070d14132198dc537a6823b68b9546f7702"
 V13_RETROSPECTIVE_STARTING_CAPITAL = 100_000.0
@@ -353,6 +358,7 @@ def _load_v13():
         "retrospective development reconstruction; not frozen; not fresh evidence",
     )
     record["reconstruction_sha256"] = identity
+    record["candidate_id"] = payload.get("candidate_id")
     record["simulation_starting_capital"] = simulation_capital
     record["forward_paper_starting_capital"] = forward_paper_capital
     record["requested_start_date"] = payload.get("requested_start_date")
@@ -362,6 +368,79 @@ def _load_v13():
     record["source_chunk_days"] = source_chunk_days
     record["source_coverage_validated"] = True
     record["source_coverage"] = source_inputs.get("source_coverage")
+    return record
+
+
+def _load_v14():
+    if not V14_PATH.exists():
+        raise FileNotFoundError(
+            f"Missing {V14_PATH}; run python -m ml.v14.logistic_retrospective_10y"
+        )
+    payload = json.loads(V14_PATH.read_text(encoding="utf-8"))
+    if payload.get("status") != "V14_EXACT_CONTRACT_TEN_YEAR_RETROSPECTIVE_COMPLETE":
+        raise ValueError("V14 retrospective reconstruction status is invalid")
+    if payload.get("classification") != V14_CLASSIFICATION:
+        raise ValueError("V14 retrospective result is not labeled counterfactual")
+    if payload.get("contract_sha256") != V14_EXPECTED_SHA:
+        raise RuntimeError("V14 retrospective contract SHA mismatch")
+    if float(payload.get("starting_capital") or 0.0) != STARTING_CAPITAL:
+        raise RuntimeError("V14 retrospective did not start from $100,000")
+    safety = payload.get("research_safety") or {}
+    required_false = (
+        "paper_forward_journal_read",
+        "paper_forward_journal_modified",
+        "v8_modified",
+        "v10_modified",
+        "brokerage_orders",
+        "automatic_promotion",
+    )
+    if any(safety.get(key) is not False for key in required_false):
+        raise RuntimeError("V14 retrospective safety boundary is invalid")
+    limitations = payload.get("limitations") or {}
+    if limitations.get("retrospective_not_forward_evidence") is not True:
+        raise RuntimeError("V14 retrospective evidence boundary is missing")
+    if limitations.get("current_fixed_universe_survivorship_bias") is not True:
+        raise RuntimeError("V14 fixed-universe survivorship bias is not disclosed")
+
+    identity = payload.get("reconstruction_sha256")
+    body = dict(payload)
+    body.pop("reconstruction_sha256", None)
+    body.pop("generated_at_utc", None)
+    if identity != __import__("hashlib").sha256(
+        json.dumps(body, separators=(",", ":"), sort_keys=True, ensure_ascii=True).encode("utf-8")
+    ).hexdigest():
+        raise RuntimeError("V14 retrospective reconstruction SHA mismatch")
+    raw = payload.get("history") or []
+    rows = [
+        {
+            "timestamp": str(row["timestamp"]),
+            "equity": float(row["portfolio_equity"]),
+            "source": str(row.get("source") or "V14 retrospective counterfactual"),
+        }
+        for row in raw
+        if row.get("timestamp") is not None and row.get("portfolio_equity") is not None
+    ]
+    record = _series_record(
+        "V14",
+        "V14 ML 10Y retrospective",
+        rows,
+        (
+            f"Exact V14 contract SHA {V14_EXPECTED_SHA}: pooled expanding-window "
+            "NumPy logistic regression retrained each decision with a five-session "
+            "purge gap; frozen current 100-stock universe, Top-10 equal weight, "
+            "next-open entry, five-session hold, five staggered sleeves, and 10-bps "
+            "modeled cost. Retrospective counterfactual only, with disclosed "
+            "fixed-current-universe survivorship bias; never paper-forward evidence."
+        ),
+        "retrospective counterfactual; not paper-forward evidence",
+    )
+    record["reconstruction_sha256"] = identity
+    record["requested_start_date"] = payload.get("requested_start_date")
+    record["actual_first_entry_session"] = payload.get("actual_first_entry_session")
+    record["spy_same_window_ending_equity"] = payload.get("spy_same_window_ending_equity")
+    record["spy_same_window_total_return_pct"] = payload.get("spy_same_window_total_return_pct")
+    record["v14_minus_spy_total_return_pct_points"] = payload.get("v14_minus_spy_total_return_pct_points")
+    record["survivorship_bias_disclosed"] = True
     return record
 
 
@@ -387,25 +466,26 @@ def main():
     v5 = _load_v5()
     v8 = _load_v8()
     v10 = _load_v10()
+    v14 = _load_v14()
     v13 = _load_v13()
     earliest = min(
         pd.Timestamp(item["start_timestamp"])
-        for item in [v4, v5, v8, v10, v13]
+        for item in [v4, v5, v8, v10, v14, v13]
     )
     spy = _load_spy(earliest)
-    series = [v4, v5, v8, v10, v13, spy]
+    series = [v4, v5, v8, v10, v14, v13, spy]
     latest = max(pd.Timestamp(s["end_timestamp"]) for s in series)
 
     payload = {
-        "schema_version": 5,
+        "schema_version": 6,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "title": "Stock model performance comparison",
         "starting_capital": STARTING_CAPITAL,
         "default_range": "3Y",
         "excluded_models": ["V6", "V7", "V11", "V12"],
         "latest_timestamp": latest.isoformat(),
-        "comparison_policy": "Each model is shown as its own historical strategy curve starting from the same hypothetical $100,000 capital. V13 is genuinely simulated as a $100,000 integer-share portfolio split across five $20,000 sleeves; its separately governed forward paper experiment remains locked to $5,000. No V13 capital rebasing is used. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; unavailable intraday history is never fabricated.",
-        "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. V13 is a retrospective development-only counterfactual, not frozen and not fresh evidence; its exact five-minute source begins in August 2017 and complete fixed-universe eligibility can begin later. Genuine V8, V10, and V13 forward/fresh evidence remains separate and is never backfilled. V11 and V12 remain excluded from this model-history chart.",
+        "comparison_policy": "Each model is shown as its own historical strategy curve starting from the same hypothetical $100,000 capital. V14 answers the ten-year what-if with an exact-contract retrospective replay; it is not the V14 paper-forward account and it carries fixed-current-universe survivorship bias. V13 is genuinely simulated as a $100,000 integer-share portfolio split across five $20,000 sleeves; its separately governed forward paper experiment remains locked to $5,000. Live paper-account balances are intentionally excluded. Model curves begin only when their scientifically eligible evidence begins; unavailable history is never fabricated.",
+        "holdout_note": "The V8 line is its frozen-candidate historical reconstruction. The V10 line is the separately frozen Cycle 3 candidate development reconstruction. V14 is a retrospective ten-year counterfactual using the frozen V14 learning and portfolio contract, not paper-forward evidence. V13 is retrospective development-only, not frozen and not fresh evidence. Genuine V8, V10, V13, and V14 forward/fresh evidence remains separate and is never backfilled. V11 and V12 remain excluded from this model-history chart.",
         "lineage": {
             "v8_candidate_id": V8_SCORE_ID,
             "v8_frozen_sha256": V8_EXPECTED_SHA,
@@ -414,6 +494,20 @@ def main():
             "v10_frozen_sha256": V10_EXPECTED_SHA,
             "v10_forward_holdout_start_utc": V10_HOLDOUT_START_UTC.isoformat(),
             "v10_classification": "FROZEN_CYCLE3_DEVELOPMENT_RECONSTRUCTION",
+            "v14_candidate_id": v14["candidate_id"],
+            "v14_contract_sha256": V14_EXPECTED_SHA,
+            "v14_reconstruction_sha256": v14["reconstruction_sha256"],
+            "v14_classification": V14_CLASSIFICATION,
+            "v14_requested_start_date": v14["requested_start_date"],
+            "v14_actual_first_entry_session": v14["actual_first_entry_session"],
+            "v14_starting_capital": STARTING_CAPITAL,
+            "v14_ending_equity": v14["ending_equity"],
+            "v14_total_return_pct": v14["total_return_pct"],
+            "v14_spy_same_window_ending_equity": v14["spy_same_window_ending_equity"],
+            "v14_spy_same_window_total_return_pct": v14["spy_same_window_total_return_pct"],
+            "v14_minus_spy_total_return_pct_points": v14["v14_minus_spy_total_return_pct_points"],
+            "v14_survivorship_bias_disclosed": True,
+            "v14_paper_forward_evidence_included": False,
             "v13_contract_sha256": V13_EXPECTED_SHA,
             "v13_reconstruction_sha256": v13["reconstruction_sha256"],
             "v13_classification": "RETROSPECTIVE_DEVELOPMENT_ONLY_NOT_FRESH_EVIDENCE",
@@ -445,6 +539,9 @@ def main():
             "v13_fresh_evidence_written": False,
             "v13_candidate_frozen": False,
             "v13_production_evidence_modified": False,
+            "v14_paper_forward_journal_read": False,
+            "v14_paper_forward_journal_modified": False,
+            "v14_counterfactual_promoted": False,
             "brokerage_orders": False,
         },
     }
@@ -456,7 +553,7 @@ def main():
     print(f"Output: {OUTPUT_PATH}")
     for s in series:
         print(f"{s['model_id']:>3}: {s['start_timestamp']} -> {s['end_timestamp']} | obs={s['observations']:,} | ${s['ending_equity']:,.2f} | {s['total_return_pct']:+.2f}%")
-    print("V6/V7/V11/V12 excluded. V13 is retrospective development only. V8/V10/V13 forward or fresh evidence and live paper balances are excluded. No orders or state changes.")
+    print("V6/V7/V11/V12 excluded. V14 is a retrospective ten-year counterfactual and V13 is retrospective development only. V8/V10/V13/V14 forward or fresh evidence and live paper balances are excluded. No orders or state changes.")
 
 
 if __name__ == "__main__":

@@ -18,10 +18,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_PATH = PROJECT_ROOT / "webapp/static/generated/stock_model_comparison.json"
 DASHBOARD_JS = PROJECT_ROOT / "webapp/static/js/v4_equity_chart.js"
 
-EXPECTED_IDS = ["V4", "V5", "V8", "V10", "V13", "SPY"]
+EXPECTED_IDS = ["V4", "V5", "V8", "V10", "V14", "V13", "SPY"]
 EXPECTED_V8_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 EXPECTED_V10_ID = "c3_confirm2_blend50"
 EXPECTED_V10_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
+EXPECTED_V14_SHA = "b1a933792b2d5298281708292dc94e565130397ce79a1533bf89cbe1c805abd3"
 EXPECTED_V13_SHA = "42d7cb6397beb0016715b1dccf4ec070d14132198dc537a6823b68b9546f7702"
 V8_BOUNDARY = pd.Timestamp("2026-09-01T00:00:00Z")
 V10_BOUNDARY = pd.Timestamp("2027-01-04T00:00:00Z")
@@ -42,7 +43,7 @@ def load_json(path):
 def validate_artifact():
     require(ARTIFACT_PATH.exists(), f"missing {ARTIFACT_PATH}")
     payload = load_json(ARTIFACT_PATH)
-    require(payload.get("schema_version") == 5, "comparison schema must be version 5")
+    require(payload.get("schema_version") == 6, "comparison schema must be version 6")
     require(
         payload.get("excluded_models") == ["V6", "V7", "V11", "V12"],
         "V6/V7/V11/V12 exclusion changed",
@@ -69,9 +70,14 @@ def validate_artifact():
 
     v8 = by_id["V8"]
     v10 = by_id["V10"]
+    v14 = by_id["V14"]
     v13 = by_id["V13"]
     require(v8.get("label") == "V8 frozen", "V8 chart label changed")
     require(v10.get("label") == "V10 Cycle 3 frozen", "V10 chart label is not Cycle 3 frozen")
+    require(
+        v14.get("label") == "V14 ML 10Y retrospective",
+        "V14 chart label does not disclose its retrospective status",
+    )
     require(
         v13.get("label") == "V13 regime overlay retrospective DEV",
         "V13 chart label does not disclose retrospective development status",
@@ -90,6 +96,15 @@ def validate_artifact():
     )
     require(EXPECTED_V10_ID in v10.get("methodology", ""), "V10 methodology lacks frozen candidate ID")
     require(EXPECTED_V10_SHA in v10.get("methodology", ""), "V10 methodology lacks frozen SHA")
+    require(EXPECTED_V14_SHA in v14.get("methodology", ""), "V14 methodology lacks contract SHA")
+    require(
+        "never paper-forward evidence" in v14.get("methodology", ""),
+        "V14 retrospective is not separated from paper-forward evidence",
+    )
+    require(v14.get("survivorship_bias_disclosed") is True, "V14 survivorship bias is hidden")
+    require(v14.get("starting_capital") == 100_000.0, "V14 does not start at $100,000")
+    require(float(v14.get("ending_equity") or 0.0) > 0, "V14 ending equity is invalid")
+    require(bool(v14.get("reconstruction_sha256")), "V14 reconstruction identity is missing")
     require(
         math.isclose(float(v10["ending_equity"]), EXPECTED_V10_EQUITY, rel_tol=0, abs_tol=0.02),
         f"unexpected frozen Cycle 3 terminal equity: {v10['ending_equity']}",
@@ -122,6 +137,12 @@ def validate_artifact():
     require(lineage.get("v10_candidate_id") == EXPECTED_V10_ID, "V10 lineage candidate mismatch")
     require(lineage.get("v10_frozen_sha256") == EXPECTED_V10_SHA, "V10 lineage SHA mismatch")
     require(lineage.get("v10_forward_holdout_start_utc") == V10_BOUNDARY.isoformat(), "V10 boundary mismatch")
+    require(lineage.get("v14_contract_sha256") == EXPECTED_V14_SHA, "V14 contract SHA mismatch")
+    require(lineage.get("v14_reconstruction_sha256") == v14.get("reconstruction_sha256"), "V14 reconstruction lineage mismatch")
+    require(lineage.get("v14_classification") == "RETROSPECTIVE_COUNTERFACTUAL_NOT_PAPER_FORWARD_EVIDENCE", "V14 classification mismatch")
+    require(lineage.get("v14_starting_capital") == 100_000.0, "V14 lineage basis changed")
+    require(lineage.get("v14_survivorship_bias_disclosed") is True, "V14 lineage hides survivorship bias")
+    require(lineage.get("v14_paper_forward_evidence_included") is False, "V14 paper-forward evidence entered comparison")
     require(lineage.get("v13_contract_sha256") == EXPECTED_V13_SHA, "V13 contract SHA mismatch")
     require(lineage.get("v13_reconstruction_sha256") == v13.get("reconstruction_sha256"), "V13 reconstruction lineage mismatch")
     require(lineage.get("v13_classification") == "RETROSPECTIVE_DEVELOPMENT_ONLY_NOT_FRESH_EVIDENCE", "V13 classification mismatch")
@@ -160,6 +181,11 @@ def validate_frozen_sources():
     require(builder.V10_EXPECTED_SHA == EXPECTED_V10_SHA, "builder points at wrong V10 SHA")
     require(builder.V10_PATH == Path("data/model/v10/cycle3/economic_period_results.csv"), "builder uses wrong V10 source")
     require(builder.V10_HOLDOUT_START_UTC == V10_BOUNDARY, "builder uses wrong V10 boundary")
+    require(builder.V14_EXPECTED_SHA == EXPECTED_V14_SHA, "builder points at wrong V14 contract")
+    require(
+        builder.V14_PATH == Path("data/model/v14/logistic_forward/retrospective_10y.json"),
+        "builder uses wrong V14 retrospective source",
+    )
     require(builder.V13_EXPECTED_SHA == EXPECTED_V13_SHA, "builder points at wrong V13 contract")
     require(builder.V13_FRESH_BOUNDARY_UTC == V13_BOUNDARY, "builder uses wrong V13 boundary")
     require(
@@ -172,9 +198,17 @@ def validate_dashboard_source():
     source = DASHBOARD_JS.read_text(encoding="utf-8")
     required = [
         "pageHeader.insertAdjacentElement('afterend', card)",
-        "V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 vs V13 retrospective DEV vs SPY",
-        "V6, V7, V11, and V12 are intentionally excluded from this model-history chart",
-        "const ORDER = ['V4','V5','V8','V10','V13','SPY']",
+        "V4 vs V5 vs frozen V8 vs frozen V10 Cycle 3 vs V14 ML 10Y retrospective vs V13 retrospective DEV vs SPY",
+        "V6, V7, V11, and V12 are intentionally excluded.",
+        "const ORDER = ['V4','V5','V8','V10','V14','V13','SPY']",
+        "V14:'#a3ff12'",
+        "V14 TEN-YEAR WHAT-IF",
+        "RETROSPECTIVE · NOT PROMOTION EVIDENCE",
+        "renderV14Answer()",
+        "smc-lineage-v14-contract",
+        "smc-lineage-v14-reconstruction",
+        "smc-lineage-v14-bias",
+        "V14 ML 10Y",
         "V13:'#ff8a3d'",
         "data-range=\"10Y\"",
         "else if(range==='10Y')",
@@ -203,8 +237,8 @@ def validate_dashboard_source():
         "LATEST ANY-SERIES OBS.",
         "last obs.",
         "endpoints may differ by model",
-        "V13 historical reconstruction uses an actual $100,000 integer-share portfolio",
-        "V13 forward paper evidence remains separately locked to $5,000",
+        "V14 answers the ten-year what-if through an exact-contract retrospective replay",
+        "its genuine September 2026 paper-forward evidence remains separate",
     ]
     for marker in required:
         require(marker in source, f"dashboard regression marker missing: {marker}")
@@ -233,12 +267,16 @@ def main():
     validate_dashboard_source()
 
     v10 = next(row for row in payload["series"] if row["model_id"] == "V10")
+    v14 = next(row for row in payload["series"] if row["model_id"] == "V14")
     v13 = next(row for row in payload["series"] if row["model_id"] == "V13")
     print(f"[PASS] Models/order: {', '.join(EXPECTED_IDS)}")
     print(f"[PASS] V8 frozen SHA: {EXPECTED_V8_SHA}")
     print(f"[PASS] V10 Cycle 3 candidate: {EXPECTED_V10_ID}")
     print(f"[PASS] V10 frozen SHA: {EXPECTED_V10_SHA}")
     print(f"[PASS] V10 development equity: ${float(v10['ending_equity']):,.2f}")
+    print(f"[PASS] V14 ten-year retrospective equity: ${float(v14['ending_equity']):,.2f}")
+    print("[PASS] V14 starts at $100,000 and remains retrospective counterfactual only")
+    print("[PASS] V14 fixed-current-universe survivorship bias is disclosed")
     print(f"[PASS] V13 retrospective contract SHA: {EXPECTED_V13_SHA}")
     print(f"[PASS] V13 reconstruction SHA: {v13['reconstruction_sha256']}")
     print(f"[PASS] V13 display equity: ${float(v13['ending_equity']):,.2f}")

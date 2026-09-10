@@ -277,6 +277,14 @@ def main() -> None:
         "V14 tab renders learning, ranking, performance, and authority surfaces",
     )
     require(
+        "const ORDER = ['V4','V5','V8','V10','V14','V13','SPY']" in comparison
+        and "V14 TEN-YEAR WHAT-IF" in comparison
+        and "renderV14Answer()" in comparison
+        and "RETROSPECTIVE · NOT PROMOTION EVIDENCE" in comparison
+        and "smc-lineage-v14-reconstruction" in comparison,
+        "Model comparison renders the V14 ten-year counterfactual and lineage",
+    )
+    require(
         "V11 Intraday" not in research_tabs
         and "model-research-pane-v11" not in research_tabs
         and "v11-phase2-status" not in dashboard_template,
