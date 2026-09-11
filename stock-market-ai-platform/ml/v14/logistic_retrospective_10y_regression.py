@@ -114,6 +114,7 @@ def main() -> None:
         ):
             series = comparison._load_v14()
         assert series["model_id"] == "V14"
+        assert series["candidate_id"] == contract["candidate_id"]
         assert series["starting_capital"] == 100_000.0
         assert series["survivorship_bias_disclosed"] is True
     print("[PASS] Retrospective coefficients, probabilities, and ranks match the forward learner")
