@@ -1,0 +1,66 @@
+{
+  "disposition_id": "V15_INTRADAY_HYBRID_V2_REJECTED_DEVELOPMENT_DISPOSITION",
+  "candidate_id": "v15_v2_intraday_hybrid_1000et_top10",
+  "contract_id": "V15_INTRADAY_V11_V14_HYBRID_WALK_FORWARD_DEVELOPMENT_V2",
+  "contract_sha256": "e5d2799e91e8c8a826efc00d176a4561bca546d69d200fdb3343fffe1a06f4cc",
+  "source_manifest_sha256": "1d49fbd7a76a7e90c403d5043907f51ba10e26e1915f2edfc50cac68dc730733",
+  "evaluation_completed_date_utc": "2026-09-11",
+  "observed_result_sha256": "a48f04a29b9f7f0799a136686a37432d39a4ed9de1a33657a9ee29694466dde8",
+  "evidence": {
+    "eligible_sessions": 307,
+    "fold_count": 10,
+    "test_sessions": 181,
+    "v15_net_total_return": -0.15821997410249033,
+    "v11_control_net_total_return": -0.15473465593223612,
+    "v14_context_control_net_total_return": -0.12291759832190541,
+    "spy_total_return": 0.013185843480631343,
+    "v15_relative_to_v11": -0.004123342089812243,
+    "v15_relative_to_v14_context": -0.04024978236143151,
+    "v15_relative_to_spy": -0.16917510117816636,
+    "v15_v11_win_rate": 0.5248618784530387,
+    "v15_spy_win_rate": 0.35911602209944754,
+    "positive_fold_share": 0.6,
+    "v15_max_drawdown": 0.16693038143493066,
+    "v11_max_drawdown": 0.15641753534532354,
+    "approximate_pre_cost_total_return": 0.008886
+  },
+  "gate_results": {
+    "drawdown_control": true,
+    "fold_stability": true,
+    "positive_net_return": false,
+    "positive_relative_to_spy": false,
+    "positive_relative_to_v11": false,
+    "positive_relative_to_v14_context": false,
+    "spy_win_rate": false,
+    "v11_win_rate": true
+  },
+  "diagnosis": {
+    "primary": "DAILY_TEN_BPS_ROUND_TRIP_COST_OVERWHELMED_A_SMALL_PRE_COST_EDGE",
+    "sessions_charged_modeled_cost": 181,
+    "simple_modeled_cost_load": 0.181,
+    "classifier_replacement_alone_is_sufficient": false,
+    "selective_no_trade_capability_required": true
+  },
+  "decision": "REJECTED_DO_NOT_ADVANCE_TO_PAPER_FORWARD",
+  "reuse_policy": {
+    "v2_outcomes_may_inform_v3_development_design": true,
+    "v2_results_must_not_be_relabeled_as_fresh_v3_evidence": true,
+    "v3_requires_a_separate_contract": true,
+    "future_paper_evidence_requires_a_new_boundary": true
+  },
+  "authority": {
+    "model_frozen": false,
+    "scheduler_installation_allowed": false,
+    "paper_forward_allowed": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  },
+  "disposition_sha256": "0193f7c0ec9850c61bd1d942e561e11793016d39f6443951513981e7322926cb"
+}
