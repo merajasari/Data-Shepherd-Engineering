@@ -1,0 +1,69 @@
+{
+  "disposition_id": "V15_SELECTIVE_INTRADAY_V3_REJECTED_DEVELOPMENT_DISPOSITION",
+  "candidate_id": "v15_v3_selective_intraday_return_regression",
+  "contract_id": "V15_SELECTIVE_INTRADAY_RETURN_REGRESSION_DEVELOPMENT_V3",
+  "contract_sha256": "0d62d527889a9e0d9f530d4439bc0e61d65da61d83c05a46ec7b8a65c192504a",
+  "source_manifest_sha256": "1d49fbd7a76a7e90c403d5043907f51ba10e26e1915f2edfc50cac68dc730733",
+  "evaluation_completed_date_utc": "2026-09-11",
+  "observed_result_sha256": "54bf40e635f9a9285c035a43acbc3e0512e0fe4963dc9df0660809194b848341",
+  "evidence": {
+    "status": "V15_V3_REJECTED_DEVELOPMENT_CANDIDATE",
+    "eligible_sessions": 307,
+    "fold_count": 10,
+    "test_sessions": 181,
+    "completed_trades": 1,
+    "cash_sessions": 180,
+    "trade_rate_numerator": 1,
+    "trade_rate_denominator": 181,
+    "displayed_v15_net_total_return": "+0.82%",
+    "displayed_spy_total_return": "+1.89%",
+    "displayed_v11_control_net_total_return": "-14.82%",
+    "displayed_v14_context_control_net_total_return": "-12.52%",
+    "profitable_trade_rate": 1.0,
+    "positive_fold_share": 0.1,
+    "displayed_v15_max_drawdown": "0.00%"
+  },
+  "gate_results": {
+    "drawdown_control": true,
+    "fold_stability": false,
+    "maximum_trade_rate": true,
+    "minimum_trade_rate": false,
+    "minimum_trades": false,
+    "positive_net_return": true,
+    "positive_relative_to_spy": false,
+    "positive_relative_to_v11": true,
+    "positive_relative_to_v14_context": true,
+    "profitable_trade_rate": true
+  },
+  "diagnosis": {
+    "primary": "FIXED_TOP10_ABSOLUTE_BUFFER_SUPPRESSED_PARTICIPATION",
+    "v3_removed_daily_overtrading": true,
+    "v3_produced_positive_net_return": true,
+    "fixed_top10_mean_diluted_strongest_stock_signals": true,
+    "fixed_absolute_prediction_floor_was_not_scale_adaptive": true,
+    "one_trade_is_insufficient_evidence": true,
+    "observed_120_minute_candidates_were_strongest_in_v3_diagnostics": true
+  },
+  "decision": "REJECTED_DO_NOT_ADVANCE_TO_PAPER_FORWARD",
+  "reuse_policy": {
+    "v3_outcomes_may_inform_v4_development_design": true,
+    "v3_results_must_not_be_relabeled_as_fresh_v4_evidence": true,
+    "v4_requires_a_separate_contract": true,
+    "future_paper_evidence_requires_a_new_boundary": true
+  },
+  "authority": {
+    "model_frozen": false,
+    "scheduler_installation_allowed": false,
+    "paper_forward_allowed": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  },
+  "disposition_sha256": "f8413758ce52bd4f536bf84072cd6fb2b404030335da11cafe855551899bc0f6"
+}
