@@ -47,6 +47,7 @@ V10_HOLDOUT_START_UTC = pd.Timestamp("2027-01-04T00:00:00Z")
 V10_EXPECTED_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
 V14_EXPECTED_SHA = "b1a933792b2d5298281708292dc94e565130397ce79a1533bf89cbe1c805abd3"
 V14_CLASSIFICATION = "RETROSPECTIVE_COUNTERFACTUAL_NOT_PAPER_FORWARD_EVIDENCE"
+V14_CANDIDATE_ID = "v14_logistic_walk_forward_top10"
 V8_EXPECTED_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 V13_EXPECTED_SHA = "42d7cb6397beb0016715b1dccf4ec070d14132198dc537a6823b68b9546f7702"
 V13_RETROSPECTIVE_STARTING_CAPITAL = 100_000.0
@@ -383,6 +384,11 @@ def _load_v14():
         raise ValueError("V14 retrospective result is not labeled counterfactual")
     if payload.get("contract_sha256") != V14_EXPECTED_SHA:
         raise RuntimeError("V14 retrospective contract SHA mismatch")
+    candidate_id = str(payload.get("candidate_id") or "")
+    if candidate_id != V14_CANDIDATE_ID:
+        raise RuntimeError(
+            f"V14 retrospective candidate mismatch: {candidate_id} != {V14_CANDIDATE_ID}"
+        )
     if float(payload.get("starting_capital") or 0.0) != STARTING_CAPITAL:
         raise RuntimeError("V14 retrospective did not start from $100,000")
     safety = payload.get("research_safety") or {}
@@ -434,6 +440,7 @@ def _load_v14():
         ),
         "retrospective counterfactual; not paper-forward evidence",
     )
+    record["candidate_id"] = candidate_id
     record["reconstruction_sha256"] = identity
     record["requested_start_date"] = payload.get("requested_start_date")
     record["actual_first_entry_session"] = payload.get("actual_first_entry_session")
