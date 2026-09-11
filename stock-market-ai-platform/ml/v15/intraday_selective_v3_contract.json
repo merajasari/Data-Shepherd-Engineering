@@ -1,0 +1,115 @@
+{
+  "contract_id": "V15_SELECTIVE_INTRADAY_RETURN_REGRESSION_DEVELOPMENT_V3",
+  "candidate_id": "v15_v3_selective_intraday_return_regression",
+  "classification": "PREREGISTERED_POST_V2_DEVELOPMENT_CANDIDATE_NOT_FROZEN",
+  "heritage": {
+    "v2_disposition_id": "V15_INTRADAY_HYBRID_V2_REJECTED_DEVELOPMENT_DISPOSITION",
+    "v2_disposition_sha256": "0193f7c0ec9850c61bd1d942e561e11793016d39f6443951513981e7322926cb",
+    "v2_outcomes_read_before_v3_design": true,
+    "v2_results_reused_as_fresh_evidence": false,
+    "v2_feature_contract_sha256": "e5d2799e91e8c8a826efc00d176a4561bca546d69d200fdb3343fffe1a06f4cc",
+    "feature_role": "V11_COMPLETED_INTRADAY_PLUS_PRIOR_CLOSE_V14_CONTEXT",
+    "v2_primary_diagnosis": "DAILY_TEN_BPS_ROUND_TRIP_COST_OVERWHELMED_A_SMALL_PRE_COST_EDGE"
+  },
+  "objective": {
+    "primary": "MAXIMIZE_COMPOUNDED_NET_RETURN_AFTER_MODELED_COST",
+    "method": "TRADE_ONLY_WHEN_TRAINING_ONLY_PREDICTED_EDGE_CLEARS_COST_AND_SAFETY_BUFFER",
+    "cash_is_valid_position": true,
+    "speed_interpretation": "INTRADAY_CAPITAL_TURNOVER_ONLY_WHEN_EXPECTED_EDGE_IS_POSITIVE_AFTER_COST"
+  },
+  "data": {
+    "intraday_source": "V11_COMPLETE_HISTORICAL_FIVE_MINUTE_DATASET",
+    "daily_context_source": "V15_V2_PRIOR_COMPLETED_SESSION_FEATURE_PIPELINE",
+    "required_universe_symbols": 101,
+    "candidate_symbols": 100,
+    "bar_interval_minutes": 5,
+    "decision_time_eastern": "10:00",
+    "decision_bar_index": 5,
+    "entry": "NEXT_5MIN_BAR_OPEN",
+    "current_session_daily_close_prohibited": true,
+    "minimum_eligible_intraday_sessions": 300
+  },
+  "model": {
+    "type": "NUMPY_RIDGE_RETURN_REGRESSION",
+    "target": "COST_ADJUSTED_STOCK_MINUS_SPY_RETURN_BY_HORIZON",
+    "target_definition": "stock_gross_return_minus_spy_same_window_return_minus_ten_bps_round_trip_cost",
+    "feature_source": "V15_V2_FROZEN_TWENTY_FEATURE_VECTOR",
+    "feature_count": 20,
+    "training_scope": "POOLED_CROSS_SECTIONAL_EXPANDING_WINDOW",
+    "purge_gap_sessions": 1,
+    "minimum_outer_training_sessions": 126,
+    "minimum_training_rows": 12600,
+    "ridge_alpha": 0.01,
+    "ranking": "DESCENDING_PREDICTED_COST_ADJUSTED_RELATIVE_RETURN",
+    "tie_break": "ASCENDING_SYMBOL"
+  },
+  "nested_selection": {
+    "selection_data": "OUTER_TRAINING_SESSIONS_ONLY",
+    "inner_validation_sessions": 40,
+    "minimum_inner_training_sessions": 80,
+    "candidate_holding_bars": [6, 12, 24],
+    "candidate_holding_minutes": [30, 60, 120],
+    "candidate_safety_buffers": [0.0005, 0.001, 0.0015],
+    "minimum_inner_trades": 8,
+    "inner_net_total_return_greater_than": 0.0,
+    "inner_max_drawdown_at_most": 0.08,
+    "selection_objective": "HIGHEST_COMPOUNDED_NET_RETURN",
+    "tie_break_order": [
+      "LOWEST_MAX_DRAWDOWN",
+      "HIGHEST_SAFETY_BUFFER",
+      "SHORTEST_HOLDING_WINDOW"
+    ],
+    "no_eligible_configuration": "HOLD_CASH_FOR_OUTER_FOLD",
+    "outer_test_outcomes_used_for_selection": false
+  },
+  "portfolio": {
+    "top_n": 10,
+    "weighting": "EQUAL_WEIGHT",
+    "modeled_total_cost_bps_round_trip": 10,
+    "cost_applied_only_when_trade_occurs": true,
+    "trade_rule": "MEAN_TOP10_PREDICTED_NET_RELATIVE_RETURN_EXCEEDS_SELECTED_SAFETY_BUFFER",
+    "no_trade_return": 0.0,
+    "v11_control": "V11_BALANCED_TOP10_SAME_SELECTED_HORIZON_TRADES_EVERY_SESSION",
+    "v14_context_control": "V14_CONTEXT_TOP10_SAME_SELECTED_HORIZON_TRADES_EVERY_SESSION",
+    "benchmark": "SPY_SAME_SELECTED_WINDOW_EVERY_SESSION"
+  },
+  "evaluation": {
+    "walk_forward_only": true,
+    "test_sessions_per_fold": 20,
+    "minimum_final_test_sessions": 60,
+    "use_all_remaining_sessions_after_minimum_is_met": true,
+    "future_data_in_training": false,
+    "selection_on_outer_test_data": false,
+    "development_evidence_only": true,
+    "fresh_paper_boundary_required_after_development": true,
+    "gates": {
+      "v15_net_total_return_greater_than": 0.0,
+      "v15_relative_to_v11_greater_than": 0.0,
+      "v15_relative_to_v14_context_greater_than": 0.0,
+      "v15_relative_to_spy_greater_than": 0.0,
+      "completed_trades_at_least": 30,
+      "trade_rate_at_least": 0.1,
+      "trade_rate_at_most": 0.6,
+      "profitable_trade_rate_at_least": 0.5,
+      "positive_fold_share_at_least": 0.6,
+      "v15_max_drawdown_at_most": 0.1
+    }
+  },
+  "authority": {
+    "development_only": true,
+    "model_frozen": false,
+    "paper_forward_allowed": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "scheduler_installation_allowed": false,
+    "dashboard_active_model_label_allowed": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  }
+}
