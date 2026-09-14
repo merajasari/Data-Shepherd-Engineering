@@ -20,13 +20,13 @@
   "contract_id": "V15_PROSPECTIVE_RISK_SCALED_INTRADAY_PAPER_V7",
   "created_at_utc": "2026-09-14T00:00:00+00:00",
   "evidence_boundary": {
+    "activation_requires_verified_runner": true,
     "evidence_is_prospective_paper_only": true,
     "first_eligible_session": "2026-09-21",
     "historical_rows_count_as_v7_evidence": false,
     "journal_path": "data/research/v15/prospective_v7/journal.jsonl",
     "missed_decisions_may_be_backfilled": false,
-    "only_events_journaled_after_contract_freeze_count": true,
-    "activation_requires_verified_runner": true
+    "only_events_journaled_after_contract_freeze_count": true
   },
   "frozen_mechanics": {
     "decision_bar_index": 5,
@@ -36,6 +36,9 @@
     "feature_source": "V11_COMPLETED_5MIN_BARS_PLUS_PRIOR_CLOSE_V14_CONTEXT",
     "holding_minutes": 120,
     "leverage": false,
+    "matched_controls_share_exposure": true,
+    "matched_spy_stop_applied": false,
+    "matched_stock_controls_share_stop": true,
     "maximum_invested_fraction": 0.6,
     "modeled_total_cost_bps_round_trip": 10,
     "protective_stop_gap_aware": true,
@@ -60,17 +63,35 @@
   "lifecycle": {
     "decision_checkpoint": [
       "09:58",
-      "10:03"
+      "10:08"
     ],
+    "decision_features_fixed_to_first_six_completed_bars": true,
     "decision_must_precede_entry_event": true,
     "entry_checkpoint": [
       "10:03",
-      "10:08"
+      "10:13"
     ],
     "entry_must_precede_exit_event": true,
     "exit_checkpoint": [
       "11:58",
       "12:08"
+    ],
+    "late_decision_after_checkpoint_prohibited": true,
+    "late_entry_after_checkpoint_prohibited": true,
+    "late_exit_after_checkpoint_prohibited": true,
+    "market_closures": [
+      "2026-11-26",
+      "2026-12-25",
+      "2027-01-01",
+      "2027-01-18",
+      "2027-02-15",
+      "2027-03-26",
+      "2027-05-31",
+      "2027-06-18",
+      "2027-07-05",
+      "2027-09-06",
+      "2027-11-25",
+      "2027-12-24"
     ],
     "scheduler_interval_seconds": 300,
     "source_bars_after_decision_bar_prohibited_for_signal": true,
@@ -94,5 +115,14 @@
     "human_review_required": true,
     "minimum_active_blocks": 6,
     "minimum_completed_trades": 30
+  },
+  "training_policy": {
+    "daily_context_must_precede_decision_session": true,
+    "fixed_history_last_session": "2026-09-10",
+    "fixed_history_manifest_sha256": "1d49fbd7a76a7e90c403d5043907f51ba10e26e1915f2edfc50cac68dc730733",
+    "historical_training_expansion_during_v7": false,
+    "model_and_threshold_prepared_once_before_activation": true,
+    "prepared_artifact_path": "data/research/v15/prospective_v7/model_snapshot.json",
+    "prepared_artifact_replacement_prohibited": true
   }
 }

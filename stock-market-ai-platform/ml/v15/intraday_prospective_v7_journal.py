@@ -117,7 +117,10 @@ class V7EvidenceJournal:
             raise ValueError(f"V15_V7_JOURNAL_LIVE_AUTHORITY_INVALID:{line_number}")
         if row.get("brokerage_orders") is not False:
             raise ValueError(f"V15_V7_JOURNAL_ORDER_AUTHORITY_INVALID:{line_number}")
-        if date.fromisoformat(str(row["session_date"])) < date(2026, 9, 21):
+        boundary = date.fromisoformat(
+            str(contract["evidence_boundary"]["first_eligible_session"])
+        )
+        if date.fromisoformat(str(row["session_date"])) < boundary:
             raise ValueError(f"V15_V7_JOURNAL_DATE_INVALID:{line_number}")
         timestamp = datetime.fromisoformat(str(row["occurred_at_utc"]))
         if timestamp.tzinfo is None:

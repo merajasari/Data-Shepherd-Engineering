@@ -11,7 +11,7 @@ from ml.v15.intraday_logistic import canonical_sha256
 
 CONTRACT_PATH = Path(__file__).with_name("intraday_prospective_v7_contract.json")
 EXPECTED_CONTRACT_SHA256 = (
-    "221a9763e5ab239e2489de97230c214524e5cb9825d45bb3d5d95a9dcf9760b7"
+    "98e1c92137bebb0be31df2937fdd9a9e213957713e15c06cb479564a0856c222"
 )
 
 
@@ -31,6 +31,7 @@ def load_contract(path: Path = CONTRACT_PATH) -> dict[str, object]:
     lifecycle = contract.get("lifecycle", {})
     review = contract.get("review", {})
     authority = contract.get("authority", {})
+    training = contract.get("training_policy", {})
 
     if heritage.get("historical_results_are_design_context_not_v7_evidence") is not True:
         failures.append("V15_V7_HISTORICAL_EVIDENCE_BOUNDARY_MISSING")
@@ -69,6 +70,12 @@ def load_contract(path: Path = CONTRACT_PATH) -> dict[str, object]:
         failures.append("V15_V7_CASH_RESERVE_INVALID")
     if mechanics.get("short_sales") is not False or mechanics.get("leverage") is not False:
         failures.append("V15_V7_DIRECTION_OR_LEVERAGE_INVALID")
+    if mechanics.get("matched_controls_share_exposure") is not True:
+        failures.append("V15_V7_CONTROL_EXPOSURE_PARITY_INVALID")
+    if mechanics.get("matched_stock_controls_share_stop") is not True:
+        failures.append("V15_V7_CONTROL_STOP_PARITY_INVALID")
+    if mechanics.get("matched_spy_stop_applied") is not False:
+        failures.append("V15_V7_SPY_STOP_POLICY_INVALID")
 
     if lifecycle.get("timezone") != "America/New_York":
         failures.append("V15_V7_TIMEZONE_INVALID")
@@ -80,6 +87,38 @@ def load_contract(path: Path = CONTRACT_PATH) -> dict[str, object]:
         failures.append("V15_V7_ENTRY_ORDERING_MISSING")
     if lifecycle.get("source_bars_after_decision_bar_prohibited_for_signal") is not True:
         failures.append("V15_V7_SIGNAL_LEAKAGE_PROHIBITION_MISSING")
+    if tuple(lifecycle.get("decision_checkpoint", ())) != ("09:58", "10:08"):
+        failures.append("V15_V7_DECISION_WINDOW_INVALID")
+    if tuple(lifecycle.get("entry_checkpoint", ())) != ("10:03", "10:13"):
+        failures.append("V15_V7_ENTRY_WINDOW_INVALID")
+    if tuple(lifecycle.get("exit_checkpoint", ())) != ("11:58", "12:08"):
+        failures.append("V15_V7_EXIT_WINDOW_INVALID")
+    if lifecycle.get("decision_features_fixed_to_first_six_completed_bars") is not True:
+        failures.append("V15_V7_DECISION_BAR_FREEZE_MISSING")
+    if any(lifecycle.get(name) is not True for name in (
+        "late_decision_after_checkpoint_prohibited",
+        "late_entry_after_checkpoint_prohibited",
+        "late_exit_after_checkpoint_prohibited",
+    )):
+        failures.append("V15_V7_LATE_LIFECYCLE_PROHIBITION_MISSING")
+    closures = tuple(lifecycle.get("market_closures", ()))
+    if "2026-11-26" not in closures or "2026-12-25" not in closures:
+        failures.append("V15_V7_MARKET_CALENDAR_INVALID")
+
+    if training.get("fixed_history_manifest_sha256") != (
+        "1d49fbd7a76a7e90c403d5043907f51ba10e26e1915f2edfc50cac68dc730733"
+    ):
+        failures.append("V15_V7_TRAINING_MANIFEST_INVALID")
+    if training.get("fixed_history_last_session") != "2026-09-10":
+        failures.append("V15_V7_TRAINING_CUTOFF_INVALID")
+    if training.get("model_and_threshold_prepared_once_before_activation") is not True:
+        failures.append("V15_V7_MODEL_PREPARATION_BOUNDARY_MISSING")
+    if training.get("prepared_artifact_replacement_prohibited") is not True:
+        failures.append("V15_V7_MODEL_REPLACEMENT_PROHIBITION_MISSING")
+    if training.get("historical_training_expansion_during_v7") is not False:
+        failures.append("V15_V7_TRAINING_EXPANSION_PROHIBITION_MISSING")
+    if training.get("daily_context_must_precede_decision_session") is not True:
+        failures.append("V15_V7_DAILY_CONTEXT_BOUNDARY_MISSING")
 
     gates = review.get("gates", {}) if isinstance(review, Mapping) else {}
     if int(review.get("minimum_completed_trades", 0)) < 30:
