@@ -193,7 +193,6 @@ def run_scheduled(
     journal = V7EvidenceJournal(journal_path)
     rows = journal.read()
     lifecycle = _session_lifecycle(rows, local_session)
-    stage, minimum_bars = _stage(now, lifecycle)
     runner_invoked = False
     collector_invoked = False
     runner_status: str | None = None
@@ -214,7 +213,11 @@ def run_scheduled(
 
     broad_state = schedule_state(now)
     if broad_state in {"WAITING_FOR_PROSPECTIVE_BOUNDARY", "MARKET_CLOSED"}:
+        stage, minimum_bars = broad_state, None
         status = broad_state
+    else:
+        stage, minimum_bars = _stage(now, lifecycle)
+
     elif not model_ready:
         status = "WAITING_FOR_VERIFIED_MODEL_PREPARATION"
     elif stage.startswith("MISSED_"):
