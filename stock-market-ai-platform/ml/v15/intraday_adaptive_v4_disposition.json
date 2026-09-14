@@ -5,7 +5,7 @@
   "contract_sha256": "2233fed531b9d38aa981fe4149b2fa560902104b64da3c4ae1300416a8620f4d",
   "source_manifest_sha256": "1d49fbd7a76a7e90c403d5043907f51ba10e26e1915f2edfc50cac68dc730733",
   "evaluation_completed_date_utc": "2026-09-11",
-  "observed_result_sha256": "079ecc06707e2a59d59a6440d2513fe0b90e59d13444f23f9f91475ade231ee0",
+  "observed_result_sha256": "bf1d12042734926f4e3ed3c49abe3a9847c7aea18cfd6d528965ac10b8181f00",
   "evidence": {
     "status": "V15_V4_REJECTED_DEVELOPMENT_CANDIDATE",
     "eligible_sessions": 307,
@@ -72,5 +72,5 @@
     "modify_v13": false,
     "modify_v14": false
   },
-  "disposition_sha256": "9098fa6cdeb13f2f6eb89f785b6db4dd758947142b50428522724eab3bb9aa57"
+  "disposition_sha256": "bec2a14d3ea6adea06fbc08686a4535f6a74a5755154cb3c68148d05b4329082"
 }

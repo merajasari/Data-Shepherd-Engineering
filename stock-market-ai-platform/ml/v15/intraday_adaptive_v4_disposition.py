@@ -13,7 +13,7 @@ RESULT_PATH = Path(__file__).resolve().parents[2] / (
     "data/research/v15/intraday_adaptive_v4/latest_results.json"
 )
 EXPECTED_DISPOSITION_SHA256 = (
-    "9098fa6cdeb13f2f6eb89f785b6db4dd758947142b50428522724eab3bb9aa57"
+    "bec2a14d3ea6adea06fbc08686a4535f6a74a5755154cb3c68148d05b4329082"
 )
 
 

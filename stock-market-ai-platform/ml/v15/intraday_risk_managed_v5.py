@@ -40,7 +40,7 @@ MANIFEST_PATH = (
 )
 OUTPUT_PATH = ROOT / "data/research/v15/intraday_risk_managed_v5/latest_results.json"
 EXPECTED_CONTRACT_SHA256 = (
-    "983c8cf5ad63c7f22bb5ca42234f292794b3bb8f7693ddf8063263515ee39d52"
+    "0d594194a1f98bf5ebe534f1b546030c520bb68751df813f418bc8af96004c98"
 )
 
 

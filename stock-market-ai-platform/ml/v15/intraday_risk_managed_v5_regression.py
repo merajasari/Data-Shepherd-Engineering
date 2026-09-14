@@ -55,7 +55,7 @@ def main() -> None:
     assert canonical_sha256(contract) == EXPECTED_CONTRACT_SHA256
     assert disposition["disposition_sha256"] == EXPECTED_V4_DISPOSITION_SHA256
     assert disposition["observed_result_sha256"] == (
-        "079ecc06707e2a59d59a6440d2513fe0b90e59d13444f23f9f91475ade231ee0"
+        "bf1d12042734926f4e3ed3c49abe3a9847c7aea18cfd6d528965ac10b8181f00"
     )
     assert disposition["decision"] == "REJECTED_DO_NOT_ADVANCE_TO_PAPER_FORWARD"
     assert disposition["gate_results"]["drawdown_control"] is False

@@ -4,11 +4,11 @@
   "classification": "PREREGISTERED_POST_V4_DEVELOPMENT_CANDIDATE_NOT_FROZEN",
   "heritage": {
     "v4_disposition_id": "V15_ADAPTIVE_INTRADAY_V4_REJECTED_DEVELOPMENT_DISPOSITION",
-    "v4_disposition_sha256": "9098fa6cdeb13f2f6eb89f785b6db4dd758947142b50428522724eab3bb9aa57",
+    "v4_disposition_sha256": "bec2a14d3ea6adea06fbc08686a4535f6a74a5755154cb3c68148d05b4329082",
     "v4_outcomes_read_before_v5_design": true,
     "v4_results_reused_as_fresh_evidence": false,
     "v4_feature_contract_sha256": "2233fed531b9d38aa981fe4149b2fa560902104b64da3c4ae1300416a8620f4d",
-    "v4_observed_result_sha256": "079ecc06707e2a59d59a6440d2513fe0b90e59d13444f23f9f91475ade231ee0",
+    "v4_observed_result_sha256": "bf1d12042734926f4e3ed3c49abe3a9847c7aea18cfd6d528965ac10b8181f00",
     "feature_role": "V11_COMPLETED_INTRADAY_PLUS_PRIOR_CLOSE_V14_CONTEXT",
     "v4_primary_diagnosis": "TOP_ONE_CONCENTRATION_CREATED_EXCESS_SINGLE_POSITION_DOWNSIDE"
   },
