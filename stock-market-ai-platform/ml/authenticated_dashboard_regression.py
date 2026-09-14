@@ -57,6 +57,10 @@ def main() -> None:
         "Model Research loads its page-specific model tabs",
     )
     require(
+        b'/static/js/overview_live_paper_dashboard.js' in research.data,
+        "Model Research loads the overview live-paper comparison",
+    )
+    require(
         b'/static/js/v14_ml_ai_dashboard.js' in research.data,
         "Model Research loads the V14 ML/AI model-lab renderer",
     )
@@ -313,6 +317,9 @@ def main() -> None:
     v15_status = (
         project_root / "webapp/static/js/v15_intraday_v7_dashboard.js"
     ).read_text()
+    overview_live_paper = (
+        project_root / "webapp/static/js/overview_live_paper_dashboard.js"
+    ).read_text()
     v10_january_status = (
         project_root / "webapp/static/js/v10_cycle3_holdout_monitor.js"
     ).read_text()
@@ -351,6 +358,20 @@ def main() -> None:
         and "Brokerage orders" in v15_status
         and "Automatic promotion" in v15_status,
         "V15 tab renders intraday ML, prospective evidence, and authority surfaces",
+    )
+    require(
+        "overview-live-paper-comparison" in overview_live_paper
+        and "/api/v10/cycle3/accelerated-v2" in overview_live_paper
+        and "/api/v14/ml-ai" in overview_live_paper
+        and "/api/v15/intraday-v7" in overview_live_paper
+        and "V10 accelerated" in overview_live_paper
+        and "V14 ML" in overview_live_paper
+        and "V15 intraday" in overview_live_paper
+        and "Promise.allSettled" in overview_live_paper
+        and "pointermove" in overview_live_paper
+        and "ResizeObserver" in overview_live_paper
+        and "No historical reconstruction" in overview_live_paper,
+        "Overview renders an interactive isolated V10/V14/V15 live-paper chart",
     )
     require(
         research_tabs.index("id:'v14'") < research_tabs.index("id:'v15'")
@@ -564,8 +585,9 @@ def main() -> None:
         "V11 research panel remains off the live page",
     )
     require(
-        b'/static/js/model_research_tabs.js' not in live.data,
-        "Model-specific tabs remain exclusive to Model Research",
+        b'/static/js/model_research_tabs.js' not in live.data
+        and b'/static/js/overview_live_paper_dashboard.js' not in live.data,
+        "Model tabs and overview paper comparison remain exclusive to Model Research",
     )
     require(
         b'/static/js/v13_regime_overlay_status.js' not in live.data,
