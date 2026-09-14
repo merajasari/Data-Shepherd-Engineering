@@ -234,7 +234,7 @@ def main() -> None:
                 "event_history",
                 "review",
                 "next_lifecycle_event",
-                "model_prepared_and_verified",
+                "prepared_model_verified",
             )
         ),
         "V15 API exposes model lineage, lifecycle, controls, and review state",
