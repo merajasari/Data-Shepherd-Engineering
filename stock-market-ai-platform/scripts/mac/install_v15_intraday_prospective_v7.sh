@@ -19,6 +19,7 @@ fi
 
 cd "$PROJECT_DIR"
 "$PYTHON" -m ml.v15.intraday_prospective_v7_regression
+"$PYTHON" -m ml.v15.intraday_prospective_v7_runner_regression
 "$PYTHON" -m ml.v15.intraday_prospective_v7_runner --prepare
 
 cat > "$PLIST" <<EOF
