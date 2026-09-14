@@ -61,6 +61,10 @@ def main() -> None:
         "Model Research loads the V14 ML/AI model-lab renderer",
     )
     require(
+        b'/static/js/v15_intraday_v7_dashboard.js' in research.data,
+        "Model Research loads the V15 intraday ML paper-shadow renderer",
+    )
+    require(
         b'/static/js/v13_regime_overlay_status.js' in research.data,
         "Model Research loads its read-only V13 status renderer",
     )
@@ -178,6 +182,59 @@ def main() -> None:
         ),
         "V14 API exposes model lineage, rankings, positions, and forward charts",
     )
+    v15_api = client.get("/api/v15/intraday-v7")
+    require(v15_api.status_code == 200, "V15 intraday dashboard API responds")
+    v15_payload = v15_api.get_json()
+    require(
+        v15_payload.get("classification")
+        == "PREREGISTERED_PROSPECTIVE_INTRADAY_ML_PAPER_SHADOW"
+        and v15_payload.get("candidate_id")
+        == "v15_v7_v5_signal_fixed_60pct_exposure"
+        and v15_payload.get("first_eligible_session") == "2026-09-21"
+        and v15_payload.get("model_type")
+        == "RIDGE_RETURN_REGRESSION_V11_V14_HYBRID",
+        "V15 API identifies the frozen intraday ML candidate and clean boundary",
+    )
+    require(
+        v15_payload.get("historical_results_are_v7_evidence") is False
+        and v15_payload.get("historical_reconstruction_read") is False
+        and v15_payload.get("v5_result_artifact_read") is False
+        and v15_payload.get("runner_invoked") is False
+        and v15_payload.get("dashboard_network_requests") == 0
+        and v15_payload.get("brokerage_orders") is False
+        and v15_payload.get("automatic_promotion") is False
+        and all(
+            v15_payload.get(key) is False
+            for key in (
+                "v8_modified",
+                "v10_modified",
+                "v11_modified",
+                "v13_modified",
+                "v14_modified",
+            )
+        ),
+        "V15 dashboard preserves evidence isolation and has no execution authority",
+    )
+    require(
+        all(
+            key in v15_payload
+            for key in (
+                "coefficients",
+                "curve",
+                "current_equity",
+                "current_v11_equity",
+                "current_v14_equity",
+                "current_spy_equity",
+                "latest_decision",
+                "open_positions",
+                "event_history",
+                "review",
+                "next_lifecycle_event",
+                "model_prepared_and_verified",
+            )
+        ),
+        "V15 API exposes model lineage, lifecycle, controls, and review state",
+    )
     v13_api = client.get("/api/v13/regime-overlay")
     require(v13_api.status_code == 200, "V13 read-only dashboard API responds")
     v13_payload = v13_api.get_json()
@@ -253,6 +310,9 @@ def main() -> None:
     v14_status = (
         project_root / "webapp/static/js/v14_ml_ai_dashboard.js"
     ).read_text()
+    v15_status = (
+        project_root / "webapp/static/js/v15_intraday_v7_dashboard.js"
+    ).read_text()
     v10_january_status = (
         project_root / "webapp/static/js/v10_cycle3_holdout_monitor.js"
     ).read_text()
@@ -263,7 +323,8 @@ def main() -> None:
     )
     require(
         all(label in research_tabs for label in (
-            "Overview", "V8 Frozen", "V10 Cycle 3", "V14_ML_AI", "V13 Dev",
+            "Overview", "V8 Frozen", "V10 Cycle 3", "V14_ML_AI",
+            "V15 Intraday", "V13 Dev",
         )),
         "Model Research exposes the active classified model-tab set",
     )
@@ -275,6 +336,29 @@ def main() -> None:
         and "Interactive paper-forward performance" in v14_status
         and "Dashboard invoked runner" in v14_status,
         "V14 tab renders learning, ranking, performance, and authority surfaces",
+    )
+    require(
+        "fetch(API" in v15_status
+        and "/api/v15/intraday-v7" in v15_status
+        and "V15 V7 Intraday Hybrid Intelligence" in v15_status
+        and "Interactive prospective performance" in v15_status
+        and "Immutable hybrid model coefficients" in v15_status
+        and "PREREGISTERED HUMAN-REVIEW GATES" in v15_status
+        and "TAMPER-EVIDENT APPEND-ONLY LIFECYCLE" in v15_status
+        and "Historical V5 evidence included" in v15_status
+        and "Dashboard invoked runner" in v15_status
+        and "Dashboard network requests" in v15_status
+        and "Brokerage orders" in v15_status
+        and "Automatic promotion" in v15_status,
+        "V15 tab renders intraday ML, prospective evidence, and authority surfaces",
+    )
+    require(
+        research_tabs.index("id:'v14'") < research_tabs.index("id:'v15'")
+        < research_tabs.index("id:'v13'")
+        and "V15 V7 · INTRADAY ML · PROSPECTIVE PAPER SHADOW" in research_tabs
+        and "Only post-September 21 paper-shadow events count as V15 evidence."
+        in research_tabs,
+        "V15 tab is ordered and labeled as a separate prospective evidence lane",
     )
     require(
         "const ORDER = ['V4','V5','V8','V10','V14','V13','SPY']" in comparison
@@ -486,6 +570,11 @@ def main() -> None:
     require(
         b'/static/js/v13_regime_overlay_status.js' not in live.data,
         "V13 research renderer remains off the live page",
+    )
+    require(
+        b'/static/js/v14_ml_ai_dashboard.js' not in live.data
+        and b'/static/js/v15_intraday_v7_dashboard.js' not in live.data,
+        "V14 and V15 ML research renderers remain off the live page",
     )
     require(
         b'/static/js/v10_cycle3_accelerated_v2_dashboard.js' not in live.data
