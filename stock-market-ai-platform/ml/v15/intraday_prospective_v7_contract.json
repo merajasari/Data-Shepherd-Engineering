@@ -1,0 +1,97 @@
+{
+  "contract_id": "V15_PROSPECTIVE_RISK_SCALED_INTRADAY_PAPER_V7",
+  "candidate_id": "v15_v7_v5_signal_fixed_60pct_exposure",
+  "classification": "PREREGISTERED_PROSPECTIVE_PAPER_SHADOW_NOT_PRODUCTION",
+  "created_at_utc": "2026-09-14T00:00:00+00:00",
+  "heritage": {
+    "v5_model_contract_sha256": "0d594194a1f98bf5ebe534f1b546030c520bb68751df813f418bc8af96004c98",
+    "v5_disposition_sha256": "21d9a0cc1ab9efc3cd68ff442b0252ae5dd6a77854184ce9804d748ae628e67f",
+    "v5_observed_result_sha256": "f758339035337ef05283199f0d5f9fd1c4abb896311a4e9e21a7dee95b7c55bb",
+    "backward_robustness_disposition_sha256": "279211f35099b778ab1d3b927e8d27a3ce859bb94bb66aabbdc8a6a5f9f4cd33",
+    "backward_robustness_result_sha256": "1edfcc94a1ba743e6acfdf02806821db5e4433c093f7320da99f218d7602fb7a",
+    "historical_results_are_design_context_not_v7_evidence": true,
+    "v6_logic_used": false
+  },
+  "evidence_boundary": {
+    "first_eligible_session": "2026-09-15",
+    "journal_path": "data/research/v15/prospective_v7/journal.jsonl",
+    "historical_rows_count_as_v7_evidence": false,
+    "missed_decisions_may_be_backfilled": false,
+    "only_events_journaled_after_contract_freeze_count": true,
+    "evidence_is_prospective_paper_only": true
+  },
+  "frozen_mechanics": {
+    "signal_source": "UNCHANGED_V15_V5_RIDGE_SIGNAL_AND_NESTED_SELECTION",
+    "feature_source": "V11_COMPLETED_5MIN_BARS_PLUS_PRIOR_CLOSE_V14_CONTEXT",
+    "decision_time_eastern": "10:00",
+    "decision_bar_index": 5,
+    "entry_bar_index": 6,
+    "entry": "10:00_EASTERN_NEXT_5MIN_BAR_OPEN",
+    "holding_minutes": 120,
+    "scheduled_exit_bar_index": 29,
+    "scheduled_exit": "12:00_EASTERN_BAR_CLOSE",
+    "protective_stop_loss_fraction": 0.02,
+    "protective_stop_gap_aware": true,
+    "modeled_total_cost_bps_round_trip": 10,
+    "maximum_invested_fraction": 0.6,
+    "required_cash_fraction": 0.4,
+    "selected_positions_weighting": "EQUAL_WITHIN_60_PERCENT_RISK_BUDGET",
+    "uninvested_capital_return": 0,
+    "short_sales": false,
+    "leverage": false
+  },
+  "lifecycle": {
+    "timezone": "America/New_York",
+    "scheduler_interval_seconds": 300,
+    "decision_checkpoint": [
+      "09:58",
+      "10:03"
+    ],
+    "entry_checkpoint": [
+      "10:03",
+      "10:08"
+    ],
+    "exit_checkpoint": [
+      "11:58",
+      "12:08"
+    ],
+    "decision_must_precede_entry_event": true,
+    "entry_must_precede_exit_event": true,
+    "source_bars_after_decision_bar_prohibited_for_signal": true
+  },
+  "review": {
+    "block_sessions": 20,
+    "minimum_completed_trades": 30,
+    "minimum_active_blocks": 6,
+    "gates": {
+      "positive_net_return_after_cost": true,
+      "positive_relative_to_matched_v11": true,
+      "positive_relative_to_v14_context": true,
+      "positive_relative_to_matched_spy": true,
+      "profitable_trade_rate_at_least": 0.5,
+      "positive_active_block_share_at_least": 0.6,
+      "non_losing_all_block_share_at_least": 0.8,
+      "maximum_drawdown_at_most": 0.1,
+      "worst_portfolio_trade_at_least": -0.02,
+      "operational_integrity_required": true
+    },
+    "automatic_promotion": false,
+    "human_review_required": true
+  },
+  "authority": {
+    "candidate_mechanics_frozen_for_v7_evidence": true,
+    "paper_shadow_collection_allowed": true,
+    "model_frozen_for_production": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "automatic_promotion": false,
+    "scheduler_installation_requires_separate_review": true,
+    "dashboard_may_invoke_runner": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  }
+}
