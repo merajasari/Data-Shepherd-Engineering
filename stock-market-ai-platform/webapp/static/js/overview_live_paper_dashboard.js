@@ -31,7 +31,7 @@
   const day = value => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '\u2014' : date.toLocaleDateString(undefined, {
-      month:'short', day:'numeric', year:'numeric', timeZone:'America/Los_Angeles',
+      month:'short', day:'numeric', year:'numeric', timeZone:'UTC',
     });
   };
   const finite = value => Number.isFinite(Number(value));
