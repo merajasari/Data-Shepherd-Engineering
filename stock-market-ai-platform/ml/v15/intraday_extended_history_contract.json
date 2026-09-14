@@ -1,0 +1,48 @@
+{
+  "contract_id": "V15_ISOLATED_EXTENDED_INTRADAY_HISTORY_BOUNDARY_V1",
+  "classification": "PREREGISTERED_DATA_ACQUISITION_ONLY",
+  "created_date_utc": "2026-09-14",
+  "boundary": {
+    "start_date": "2022-01-03",
+    "end_date": "2025-06-17",
+    "previously_observed_v15_window_starts": "2025-06-18",
+    "overlaps_v15_v1_through_v6_evaluation_window": false,
+    "dates_may_not_be_changed_after_data_inspection": true
+  },
+  "storage": {
+    "output_root": "data/research/v15/extended_intraday_backfills",
+    "v11_latest_manifest_path": "data/research/v11/intraday/backfills/latest_complete_manifest.json",
+    "v11_latest_manifest_must_remain_byte_identical": true,
+    "partial_downloads_are_not_eligible": true
+  },
+  "data": {
+    "source": "tiingo_iex_historical_5min",
+    "required_universe_symbols": 101,
+    "required_candidate_symbols": 100,
+    "spy_required": true,
+    "bar_interval_minutes": 5,
+    "minimum_common_sessions": 750,
+    "regular_session_only": true
+  },
+  "purpose": {
+    "use": "BACKWARD_ROBUSTNESS_ONLY",
+    "fresh_forward_evidence": false,
+    "model_selection_allowed": false,
+    "gate_changes_allowed": false
+  },
+  "authority": {
+    "data_acquisition_only": true,
+    "model_execution_allowed": false,
+    "model_frozen": false,
+    "paper_forward_allowed": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false,
+    "scheduler_installation_allowed": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  }
+}

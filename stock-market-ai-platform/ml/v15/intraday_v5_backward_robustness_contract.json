@@ -1,0 +1,45 @@
+{
+  "contract_id": "V15_V5_PREWINDOW_BACKWARD_ROBUSTNESS_STUDY_V1",
+  "classification": "PREREGISTERED_BACKWARD_ROBUSTNESS_NOT_FRESH_FORWARD_EVIDENCE",
+  "created_date_utc": "2026-09-14",
+  "candidate": {
+    "candidate_id": "v15_v5_risk_managed_adaptive_120m_topk",
+    "v5_contract_sha256": "0d594194a1f98bf5ebe534f1b546030c520bb68751df813f418bc8af96004c98",
+    "v5_disposition_sha256": "21d9a0cc1ab9efc3cd68ff442b0252ae5dd6a77854184ce9804d748ae628e67f",
+    "v5_observed_result_sha256": "f758339035337ef05283199f0d5f9fd1c4abb896311a4e9e21a7dee95b7c55bb",
+    "mechanics_modified": false,
+    "gates_modified": false
+  },
+  "evidence_boundary": {
+    "history_contract_sha256": "e157e37717e0443348bbbde9fc8306acec185316896560c1958c913998d41485",
+    "manifest_path": "data/research/v15/extended_intraday_backfills/latest_complete_manifest.json",
+    "required_start_date": "2022-01-03",
+    "required_end_date": "2025-06-17",
+    "minimum_common_sessions": 750,
+    "previous_v15_evaluation_overlap_prohibited": true
+  },
+  "evaluation": {
+    "evaluator": "V15_V5_UNCHANGED_WALK_FORWARD",
+    "selection_on_outer_test_data": false,
+    "results_are_backward_robustness_only": true,
+    "fresh_paper_boundary_still_required": true,
+    "success_requires_all_original_v5_gates": true,
+    "automatic_advancement": false
+  },
+  "authority": {
+    "development_only": true,
+    "model_frozen": false,
+    "paper_forward_allowed": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false,
+    "human_review_required": true,
+    "scheduler_installation_allowed": false,
+    "dashboard_active_model_label_allowed": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v11": false,
+    "modify_v13": false,
+    "modify_v14": false
+  }
+}
