@@ -212,12 +212,17 @@ def run_scheduled(
         model_ready = False
 
     broad_state = schedule_state(now)
-    if broad_state in {"WAITING_FOR_PROSPECTIVE_BOUNDARY", "MARKET_CLOSED"}:
+    inactive_state = broad_state in {
+        "WAITING_FOR_PROSPECTIVE_BOUNDARY",
+        "MARKET_CLOSED",
+    }
+    if inactive_state:
         stage, minimum_bars = broad_state, None
-        status = broad_state
     else:
         stage, minimum_bars = _stage(now, lifecycle)
 
+    if inactive_state:
+        status = broad_state
     elif not model_ready:
         status = "WAITING_FOR_VERIFIED_MODEL_PREPARATION"
     elif stage.startswith("MISSED_"):
