@@ -221,6 +221,7 @@ def _assert_scheduler_boundaries() -> None:
             runner_fn=runner,
         )
         assert before["status"] == "WAITING_FOR_PROSPECTIVE_BOUNDARY"
+        assert before["lifecycle_stage"] == "WAITING_FOR_PROSPECTIVE_BOUNDARY"
         assert before["collector_invoked"] is False
         assert calls == []
 
