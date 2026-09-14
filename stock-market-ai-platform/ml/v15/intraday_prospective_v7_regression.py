@@ -30,7 +30,10 @@ def main() -> None:
     assert contract["classification"] == (
         "PREREGISTERED_PROSPECTIVE_PAPER_SHADOW_NOT_PRODUCTION"
     )
-    assert contract["evidence_boundary"]["first_eligible_session"] == "2026-09-15"
+    assert contract["evidence_boundary"]["first_eligible_session"] == "2026-09-21"
+    assert contract["evidence_boundary"][
+        "activation_requires_verified_runner"
+    ] is True
     assert contract["evidence_boundary"][
         "historical_rows_count_as_v7_evidence"
     ] is False
@@ -74,20 +77,20 @@ def main() -> None:
         journal = V7EvidenceJournal(path)
         decision = build_event(
             event_type="DECISION",
-            session_date="2026-09-15",
-            occurred_at_utc=datetime(2026, 9, 15, 14, 1, tzinfo=timezone.utc),
+            session_date="2026-09-21",
+            occurred_at_utc=datetime(2026, 9, 21, 14, 1, tzinfo=timezone.utc),
             payload={"selected_symbols": ["AAPL"], "expected_net_return": 0.001},
         )
         entry = build_event(
             event_type="ENTRY",
-            session_date="2026-09-15",
-            occurred_at_utc=datetime(2026, 9, 15, 14, 4, tzinfo=timezone.utc),
+            session_date="2026-09-21",
+            occurred_at_utc=datetime(2026, 9, 21, 14, 4, tzinfo=timezone.utc),
             payload={"entry_prices": {"AAPL": 100.0}, "invested_fraction": 0.6},
         )
         exit_event = build_event(
             event_type="EXIT",
-            session_date="2026-09-15",
-            occurred_at_utc=datetime(2026, 9, 15, 16, 2, tzinfo=timezone.utc),
+            session_date="2026-09-21",
+            occurred_at_utc=datetime(2026, 9, 21, 16, 2, tzinfo=timezone.utc),
             payload={"net_return": 0.006},
         )
         assert journal.append(decision) is True
@@ -112,9 +115,9 @@ def main() -> None:
             journal.append(
                 build_event(
                     event_type="ENTRY",
-                    session_date="2026-09-16",
+                    session_date="2026-09-22",
                     occurred_at_utc=datetime(
-                        2026, 9, 16, 14, 4, tzinfo=timezone.utc
+                        2026, 9, 22, 14, 4, tzinfo=timezone.utc
                     ),
                     payload={"entry_prices": {"AAPL": 100.0}},
                 )
@@ -131,9 +134,9 @@ def main() -> None:
         journal.append(
             build_event(
                 event_type="DECISION",
-                session_date="2026-09-17",
+                session_date="2026-09-23",
                 occurred_at_utc=datetime(
-                    2026, 9, 17, 14, 1, tzinfo=timezone.utc
+                    2026, 9, 23, 14, 1, tzinfo=timezone.utc
                 ),
                 payload={"selected_symbols": ["AAPL"]},
             )

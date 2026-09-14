@@ -11,7 +11,7 @@ from ml.v15.intraday_logistic import canonical_sha256
 
 CONTRACT_PATH = Path(__file__).with_name("intraday_prospective_v7_contract.json")
 EXPECTED_CONTRACT_SHA256 = (
-    "14f868d40c84dc514507d1444917cb3904835626a7012c386c0529e1ecef2b8b"
+    "221a9763e5ab239e2489de97230c214524e5cb9825d45bb3d5d95a9dcf9760b7"
 )
 
 
@@ -36,8 +36,10 @@ def load_contract(path: Path = CONTRACT_PATH) -> dict[str, object]:
         failures.append("V15_V7_HISTORICAL_EVIDENCE_BOUNDARY_MISSING")
     if heritage.get("v6_logic_used") is not False:
         failures.append("V15_V7_V6_REUSE_INVALID")
-    if boundary.get("first_eligible_session") != "2026-09-15":
+    if boundary.get("first_eligible_session") != "2026-09-21":
         failures.append("V15_V7_FIRST_SESSION_INVALID")
+    if boundary.get("activation_requires_verified_runner") is not True:
+        failures.append("V15_V7_VERIFIED_RUNNER_REQUIREMENT_MISSING")
     if boundary.get("historical_rows_count_as_v7_evidence") is not False:
         failures.append("V15_V7_HISTORICAL_ROWS_PROHIBITION_MISSING")
     if boundary.get("missed_decisions_may_be_backfilled") is not False:
