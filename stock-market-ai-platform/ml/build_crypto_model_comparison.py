@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -31,15 +32,17 @@ class StrategySpec:
     equity_column: str
     cost_bps: float = 25.0
     status: str = "historical reconstruction"
+    model_filter: Optional[str] = None
+    split_filter: Optional[str] = None
 
 
 STRATEGIES = (
-    StrategySpec("CRYPTO_V1", "Crypto V1", Path("data/model/crypto_v1/phase3/portfolio_daily.csv"), "top_5_equal_weight", "timestamp_utc", "equity"),
-    StrategySpec("CRYPTO_V2", "Crypto V2", Path("data/model/crypto_v2/phase3/portfolio_daily.csv"), "top_5_equal_weight", "timestamp_utc", "equity"),
-    StrategySpec("CRYPTO_V3", "Crypto V3", Path("data/model/crypto_v3/phase3/portfolio_daily.csv"), "top_5_equal_weight", "timestamp_utc", "equity"),
+    StrategySpec("CRYPTO_V1", "Crypto V1", Path("data/model/crypto_v1/phase4/portfolio_daily.csv"), "top_5_equal_weight", "timestamp_utc", "equity", model_filter="momentum", split_filter="development"),
+    StrategySpec("CRYPTO_V2", "Crypto V2", Path("data/model/crypto_v2/phase4/portfolio_daily.csv"), "top_5_equal_weight", "timestamp_utc", "equity", model_filter="hist_gradient_boosting", split_filter="development"),
+    StrategySpec("CRYPTO_V3", "Crypto V3", Path("data/model/crypto_v3/phase3/portfolio_daily.csv"), "gated_top_5", "timestamp_utc", "equity"),
     StrategySpec("CRYPTO_V4", "Crypto V4 allocator", Path("data/model/crypto_v4/phase3/portfolio_periods.csv"), "v4_hgb_allocator", "timestamp_utc", "ending_equity"),
-    StrategySpec("BTC", "Bitcoin buy and hold", Path("data/model/crypto_v4/phase3/portfolio_periods.csv"), "btc_benchmark", "timestamp_utc", "ending_equity", status="benchmark"),
-    StrategySpec("ETH", "Ethereum buy and hold", Path("data/model/crypto_v2/phase3/portfolio_daily.csv"), "eth_buy_and_hold", "timestamp_utc", "equity", status="benchmark"),
+    StrategySpec("BTC", "Bitcoin buy and hold", Path("data/model/crypto_v1/phase4/portfolio_daily.csv"), "btc_benchmark", "timestamp_utc", "equity", status="benchmark", model_filter="momentum", split_filter="development"),
+    StrategySpec("ETH", "Ethereum buy and hold", Path("data/model/crypto_v2/phase4/portfolio_daily.csv"), "eth_buy_and_hold", "timestamp_utc", "equity", status="benchmark", model_filter="hist_gradient_boosting", split_filter="development"),
 )
 
 
@@ -56,6 +59,14 @@ def _select_frame(spec: StrategySpec) -> pd.DataFrame:
     if missing:
         raise ValueError("missing columns: " + ", ".join(missing))
     frame = frame[frame["variant"].astype(str) == spec.variant].copy()
+    if spec.model_filter is not None:
+        if "model_id" not in frame:
+            raise ValueError("missing model_id required by strategy contract")
+        frame = frame[frame["model_id"].astype(str) == spec.model_filter].copy()
+    if spec.split_filter is not None:
+        if "split" not in frame:
+            raise ValueError("missing split required by strategy contract")
+        frame = frame[frame["split"].astype(str) == spec.split_filter].copy()
     if "cost_bps_round_trip" in frame.columns:
         costs = pd.to_numeric(frame["cost_bps_round_trip"], errors="coerce")
         frame = frame[np.isclose(costs, spec.cost_bps, equal_nan=False)].copy()
