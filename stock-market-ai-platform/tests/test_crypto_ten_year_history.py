@@ -4,10 +4,23 @@ from pathlib import Path
 
 import pandas as pd
 
-from ml.crypto_ten_year_history import coverage_report, stage_existing_coinbase, validate_canonical
+from ml.crypto_ten_year_history import (
+    clip_canonical_window, coverage_report, stage_existing_coinbase, validate_canonical,
+)
 
 
 class TenYearHistoryTest(unittest.TestCase):
+    def test_clips_combined_provider_rows_to_registered_clock(self):
+        frame = pd.DataFrame({
+            "product_id": ["BTC-USD"] * 3,
+            "timestamp_utc": pd.to_datetime(
+                ["2016-09-14", "2016-09-15", "2026-09-16"], utc=True),
+            "source_provider": ["kraken_exchange", "kraken_exchange", "coinbase_exchange"],
+        })
+        clipped = clip_canonical_window(frame, "2016-09-15", "2026-09-16")
+        self.assertEqual(len(clipped), 1)
+        self.assertEqual(str(clipped.iloc[0]["timestamp_utc"]), "2016-09-15 00:00:00+00:00")
+
     def test_stages_existing_coinbase_without_touching_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
