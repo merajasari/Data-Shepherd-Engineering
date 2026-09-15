@@ -207,8 +207,15 @@ def run_phase4(
         "common_clock_comparison": comparison,
         "input_hashes": input_hashes,
         "artifact_hashes": artifact_hashes,
-        "prohibited": ["holdout tuning", "automatic promotion", "V4 mutation", "brokerage order",
-                       "leverage", "shorting", "derivatives"],
+        "current_phase_prohibited": ["holdout tuning", "automatic promotion", "V4 mutation",
+                                     "brokerage order during forward paper evaluation",
+                                     "leverage", "shorting", "derivatives"],
+        "future_live_path": {
+            "allowed_after_separate_explicit_approval": True,
+            "requires": ["sufficient forward paper evidence", "independent readiness review",
+                         "new live-execution contract", "broker connection and order-limit tests",
+                         "manual activation"],
+        },
     }
     contract_path = output_root / "selected_contract.json"
     contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
