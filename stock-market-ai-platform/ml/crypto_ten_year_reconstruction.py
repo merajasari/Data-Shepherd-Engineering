@@ -88,6 +88,22 @@ def reconstruction_specs(root: Path):
     )
 
 
+def refresh_comparison(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
+    """Refresh benchmarks/comparison from completed isolated model artifacts."""
+    history_root, comparison_output = Path(history_root), Path(comparison_output)
+    output_root = history_root / "reconstruction"
+    benchmark_manifest = build_observed_benchmarks(
+        history_root / "canonical" / "canonical_history.parquet",
+        output_root / "benchmarks" / "portfolio_daily.csv")
+    payload = build_payload(reconstruction_specs(output_root))
+    comparison_output.parent.mkdir(parents=True, exist_ok=True)
+    comparison_output.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    return {"comparison_output": str(comparison_output),
+            "comparison_series": [row["model_id"] for row in payload["series"]],
+            "unavailable_series": payload["unavailable_series"],
+            "benchmarks": benchmark_manifest}
+
+
 def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
     history_root, comparison_output = Path(history_root), Path(comparison_output)
     canonical_root = history_root / "canonical"
@@ -125,11 +141,9 @@ def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
         v4_p1 / "market_allocation_dataset.parquet", v4_p1 / "manifest.json",
         v4_p2 / "predictions.parquet", v4_p2 / "manifest.json", v4_p3)[0]
 
-    benchmark_manifest = build_observed_benchmarks(
-        canonical_path, output_root / "benchmarks" / "portfolio_daily.csv")
+    comparison = refresh_comparison(history_root, comparison_output)
     payload = build_payload(reconstruction_specs(output_root))
-    comparison_output.parent.mkdir(parents=True, exist_ok=True)
-    comparison_output.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    benchmark_manifest = comparison["benchmarks"]
     manifest = {
         "stage": "crypto_ten_year_causal_reconstruction",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -162,8 +176,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--history-root", type=Path, default=DEFAULT_HISTORY_ROOT)
     parser.add_argument("--comparison-output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--comparison-only", action="store_true",
+                        help="Reuse completed model artifacts and refresh BTC/ETH comparison")
     args = parser.parse_args(argv)
-    print(json.dumps(run(args.history_root, args.comparison_output), indent=2))
+    result = (refresh_comparison(args.history_root, args.comparison_output)
+              if args.comparison_only else run(args.history_root, args.comparison_output))
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
