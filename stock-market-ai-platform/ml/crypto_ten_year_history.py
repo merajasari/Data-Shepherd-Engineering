@@ -11,6 +11,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import shutil
 
 import pandas as pd
 
@@ -22,6 +23,17 @@ from ml.crypto_v2.kraken_archive import download_archive, import_archive
 DEFAULT_START = "2016-09-15"
 DEFAULT_END = "2026-09-16"  # exclusive; includes the 2026-09-15 daily row if available
 DEFAULT_ROOT = Path("data/research/crypto_ten_year")
+DEFAULT_EXISTING_BRONZE_ROOT = Path("data/bronze/crypto")
+
+
+def stage_existing_coinbase(source_root: Path, destination_root: Path) -> int:
+    """Copy validated Coinbase Bronze into the isolated reconstruction workspace."""
+    source = Path(source_root) / "coinbase_exchange"
+    destination = Path(destination_root) / "coinbase_exchange"
+    if not source.exists():
+        return 0
+    shutil.copytree(source, destination, dirs_exist_ok=True, copy_function=shutil.copy2)
+    return len(list(destination.glob("daily/*/candles.csv")))
 
 
 def coverage_report(canonical: pd.DataFrame, universe=CRYPTO_UNIVERSE) -> pd.DataFrame:
@@ -57,7 +69,7 @@ def validate_canonical(canonical: pd.DataFrame, start: str, end: str) -> None:
 
 
 def run(root=DEFAULT_ROOT, start=DEFAULT_START, end=DEFAULT_END, archive=None,
-        force_download=False):
+        force_download=False, existing_bronze_root=DEFAULT_EXISTING_BRONZE_ROOT):
     root = Path(root)
     source_root, bronze_root, model_root = root / "source", root / "bronze", root / "canonical"
     archive_path = Path(archive) if archive else source_root / "Kraken_OHLCVT.zip"
@@ -65,6 +77,7 @@ def run(root=DEFAULT_ROOT, start=DEFAULT_START, end=DEFAULT_END, archive=None,
     if force_download or not archive_path.exists():
         download_archive(archive_path)
 
+    staged_coinbase_series = stage_existing_coinbase(existing_bronze_root, bronze_root)
     ingest = import_archive(archive_path, start, end, CRYPTO_UNIVERSE, bronze_root)
     inventory, _, _ = run_inventory(bronze_root=bronze_root, output_root=model_root)
     canonical_manifest, canonical, _ = run_canonical_history(
@@ -83,6 +96,7 @@ def run(root=DEFAULT_ROOT, start=DEFAULT_START, end=DEFAULT_END, archive=None,
         "configured_universe": list(CRYPTO_UNIVERSE),
         "archive_reused": bool(archive_existed and not force_download),
         "imported_asset_count": ingest["imported_asset_count"],
+        "staged_coinbase_series_count": staged_coinbase_series,
         "unavailable_products": ingest["unavailable_products"],
         "canonical_row_count": int(len(canonical)),
         "canonical_product_count": int(canonical["product_id"].nunique()),
@@ -104,9 +118,12 @@ def main(argv=None):
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END, help="Exclusive UTC end date")
     parser.add_argument("--archive", type=Path, help="Use an existing official Kraken ZIP")
+    parser.add_argument("--existing-bronze-root", type=Path,
+                        default=DEFAULT_EXISTING_BRONZE_ROOT)
     parser.add_argument("--force-download", action="store_true")
     args = parser.parse_args(argv)
-    print(json.dumps(run(args.root, args.start, args.end, args.archive, args.force_download), indent=2))
+    print(json.dumps(run(args.root, args.start, args.end, args.archive,
+                         args.force_download, args.existing_bronze_root), indent=2))
 
 
 if __name__ == "__main__":
