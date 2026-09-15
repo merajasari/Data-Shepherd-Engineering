@@ -68,6 +68,42 @@ def validate_canonical(canonical: pd.DataFrame, start: str, end: str) -> None:
         raise ValueError("Canonical history contains invalid OHLCV values")
 
 
+def clip_canonical_window(canonical: pd.DataFrame, start: str, end: str) -> pd.DataFrame:
+    """Restrict combined providers to the registered reconstruction clock."""
+    result = canonical.copy()
+    timestamps = pd.to_datetime(result["timestamp_utc"], utc=True)
+    mask = ((timestamps >= pd.Timestamp(start, tz="UTC")) &
+            (timestamps < pd.Timestamp(end, tz="UTC")))
+    return result.loc[mask].sort_values(
+        ["product_id", "timestamp_utc"], kind="stable").reset_index(drop=True)
+
+
+def rewrite_clipped_canonical(model_root: Path, manifest: dict,
+                              canonical: pd.DataFrame, start: str, end: str) -> None:
+    """Persist clipped history and keep canonical provenance/manifest consistent."""
+    history_path = Path(manifest["outputs"]["canonical_history"])
+    provenance_path = Path(manifest["outputs"]["canonical_provenance"])
+    canonical.to_parquet(history_path, index=False)
+    counts = canonical.groupby(["product_id", "source_provider"], sort=True).agg(
+        selected_row_count=("timestamp_utc", "size"),
+        first_selected_utc=("timestamp_utc", "min"),
+        last_selected_utc=("timestamp_utc", "max"),
+    ).reset_index()
+    totals = canonical.groupby("product_id")["timestamp_utc"].size()
+    counts["selected_fraction"] = counts.apply(
+        lambda row: float(row["selected_row_count"] / totals.loc[row["product_id"]]), axis=1)
+    counts[["product_id", "source_provider", "selected_row_count", "selected_fraction",
+            "first_selected_utc", "last_selected_utc"]].to_csv(provenance_path, index=False)
+    manifest["canonical_row_count"] = int(len(canonical))
+    manifest["product_count"] = int(canonical["product_id"].nunique())
+    manifest["selected_rows_by_provider"] = {
+        str(k): int(v) for k, v in canonical.groupby("source_provider").size().items()}
+    manifest["requested_start_utc"] = pd.Timestamp(start, tz="UTC").isoformat()
+    manifest["requested_end_utc_exclusive"] = pd.Timestamp(end, tz="UTC").isoformat()
+    (Path(model_root) / "canonical_manifest.json").write_text(
+        json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8")
+
+
 def run(root=DEFAULT_ROOT, start=DEFAULT_START, end=DEFAULT_END, archive=None,
         force_download=False, existing_bronze_root=DEFAULT_EXISTING_BRONZE_ROOT):
     root = Path(root)
@@ -82,6 +118,8 @@ def run(root=DEFAULT_ROOT, start=DEFAULT_START, end=DEFAULT_END, archive=None,
     inventory, _, _ = run_inventory(bronze_root=bronze_root, output_root=model_root)
     canonical_manifest, canonical, _ = run_canonical_history(
         bronze_root=bronze_root, output_root=model_root)
+    canonical = clip_canonical_window(canonical, start, end)
+    rewrite_clipped_canonical(model_root, canonical_manifest, canonical, start, end)
     validate_canonical(canonical, start, end)
     coverage = coverage_report(canonical)
     coverage_path = root / "asset_coverage.csv"
