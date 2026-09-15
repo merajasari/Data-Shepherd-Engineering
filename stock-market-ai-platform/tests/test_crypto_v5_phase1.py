@@ -16,7 +16,7 @@ class CryptoV5Phase1Test(unittest.TestCase):
                 row.update({f:0.01+i/1000 for f in REQUIRED_FEATURES})
                 for h in (1,3,7):
                     row[f"forward_return_{h}d"]=0.01*i
-                    row[f"target_endpoint_utc_{h}d"]=day+pd.Timedelta(days=h)
+                    row[f"target_endpoint_utc_{h}d"]=day+pd.Timedelta(h, unit="D")
                 rows.append(row)
         allocation,ranking=build_datasets(pd.DataFrame(rows))
         self.assertEqual(len(allocation),2)
