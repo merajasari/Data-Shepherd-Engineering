@@ -1,11 +1,25 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 import pandas as pd
 
-from ml.crypto_ten_year_history import coverage_report, validate_canonical
+from ml.crypto_ten_year_history import coverage_report, stage_existing_coinbase, validate_canonical
 
 
 class TenYearHistoryTest(unittest.TestCase):
+    def test_stages_existing_coinbase_without_touching_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "existing" / "coinbase_exchange" / "daily" / "BTC-USD"
+            source.mkdir(parents=True)
+            (source / "candles.csv").write_text("observed\n", encoding="utf-8")
+            count = stage_existing_coinbase(root / "existing", root / "isolated")
+            self.assertEqual(count, 1)
+            self.assertEqual((source / "candles.csv").read_text(), "observed\n")
+            self.assertEqual((root / "isolated" / "coinbase_exchange" / "daily" /
+                              "BTC-USD" / "candles.csv").read_text(), "observed\n")
+
     def test_coverage_preserves_real_asset_start_dates(self):
         frame = pd.DataFrame({
             "product_id": ["BTC-USD", "BTC-USD", "NEW-USD"],
