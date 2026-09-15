@@ -44,8 +44,31 @@ def build_v3_complete_source(source_path: Path, output_path: Path) -> dict:
             "imputed_rows": 0, "output": str(output_path)}
 
 
+def build_observed_benchmarks(canonical_path: Path, output_path: Path) -> dict:
+    """Build full-clock BTC/ETH buy-and-hold curves from observed closes only."""
+    canonical = pd.read_parquet(canonical_path)
+    canonical["timestamp_utc"] = pd.to_datetime(canonical["timestamp_utc"], utc=True)
+    rows = []
+    for product_id, variant in (("BTC-USD", "btc_buy_and_hold"),
+                                ("ETH-USD", "eth_buy_and_hold")):
+        asset = canonical.loc[canonical["product_id"] == product_id,
+                              ["timestamp_utc", "close"]].dropna().sort_values("timestamp_utc")
+        if asset.empty or (asset["close"] <= 0).any():
+            raise ValueError(f"No valid observed canonical benchmark history for {product_id}")
+        first = float(asset.iloc[0]["close"])
+        asset = asset.assign(variant=variant, equity=asset["close"].astype(float) / first)
+        rows.append(asset[["timestamp_utc", "variant", "equity"]])
+    result = pd.concat(rows, ignore_index=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(output_path, index=False)
+    return {"output": str(output_path), "rows": int(len(result)),
+            "variants": ["btc_buy_and_hold", "eth_buy_and_hold"],
+            "synthetic_rows": 0}
+
+
 def reconstruction_specs(root: Path):
     v2_daily = root / "crypto_v2" / "phase4" / "portfolio_daily.csv"
+    benchmarks = root / "benchmarks" / "portfolio_daily.csv"
     return (
         StrategySpec("CRYPTO_V1", "Crypto V1", v2_daily, "top_5_equal_weight",
                      "timestamp_utc", "equity", model_filter="momentum",
@@ -58,24 +81,23 @@ def reconstruction_specs(root: Path):
         StrategySpec("CRYPTO_V4", "Crypto V4 allocator", root / "crypto_v4" /
                      "phase3" / "portfolio_periods.csv", "v4_hgb_allocator",
                      "timestamp_utc", "ending_equity"),
-        StrategySpec("BTC", "Bitcoin buy and hold", v2_daily, "btc_benchmark",
-                     "timestamp_utc", "equity", status="benchmark",
-                     model_filter="hist_gradient_boosting", split_filter="development"),
-        StrategySpec("ETH", "Ethereum buy and hold", v2_daily, "eth_buy_and_hold",
-                     "timestamp_utc", "equity", status="benchmark",
-                     model_filter="hist_gradient_boosting", split_filter="development"),
+        StrategySpec("BTC", "Bitcoin buy and hold", benchmarks, "btc_buy_and_hold",
+                     "timestamp_utc", "equity", status="benchmark"),
+        StrategySpec("ETH", "Ethereum buy and hold", benchmarks, "eth_buy_and_hold",
+                     "timestamp_utc", "equity", status="benchmark"),
     )
 
 
 def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
     history_root, comparison_output = Path(history_root), Path(comparison_output)
     canonical_root = history_root / "canonical"
+    canonical_path = canonical_root / "canonical_history.parquet"
     output_root = history_root / "reconstruction"
     v2_root = output_root / "crypto_v2"
     v2_p3, v2_p4 = v2_root / "phase3", v2_root / "phase4"
 
     dataset_manifest = build_all(
-        canonical_root / "canonical_history.parquet",
+        canonical_path,
         canonical_root / "canonical_manifest.json",
         v2_root,
         COMPLETED_BEFORE_UTC,
@@ -103,6 +125,8 @@ def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
         v4_p1 / "market_allocation_dataset.parquet", v4_p1 / "manifest.json",
         v4_p2 / "predictions.parquet", v4_p2 / "manifest.json", v4_p3)[0]
 
+    benchmark_manifest = build_observed_benchmarks(
+        canonical_path, output_root / "benchmarks" / "portfolio_daily.csv")
     payload = build_payload(reconstruction_specs(output_root))
     comparison_output.parent.mkdir(parents=True, exist_ok=True)
     comparison_output.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
@@ -110,7 +134,7 @@ def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
         "stage": "crypto_ten_year_causal_reconstruction",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "completed_before_utc": COMPLETED_BEFORE_UTC,
-        "canonical_history": str(canonical_root / "canonical_history.parquet"),
+        "canonical_history": str(canonical_path),
         "output_root": str(output_root),
         "comparison_output": str(comparison_output),
         "comparison_series": [row["model_id"] for row in payload["series"]],
@@ -126,6 +150,7 @@ def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
             "v3_source_filter": v3_source_filter,
             "v4": [v4_phase1_manifest.get("phase"), v4_phase2_manifest.get("phase"),
                    v4_phase3_manifest.get("phase")],
+            "benchmarks": benchmark_manifest,
         },
     }
     (output_root / "manifest.json").write_text(
