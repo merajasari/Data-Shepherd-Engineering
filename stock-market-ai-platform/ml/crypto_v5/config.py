@@ -5,7 +5,7 @@ RESEARCH_VERSION = "crypto_v5"
 SOURCE_PANEL = Path("data/research/crypto_ten_year/reconstruction/crypto_v2/labeled_panel.parquet")
 MODEL_ROOT = Path("data/research/crypto_ten_year/reconstruction/crypto_v5")
 PHASE1_ROOT = MODEL_ROOT / "phase1"
-FUTURE_HOLDOUT_START_UTC = pd.Timestamp("2026-12-01T00:00:00Z")
+FUTURE_HOLDOUT_START_UTC = pd.Timestamp("2026-09-16T00:00:00Z")
 PRIMARY_HORIZON_DAYS = 3
 CONTROL_HORIZONS_DAYS = (1, 7)
 ALL_HORIZONS_DAYS = (1, 3, 7)
@@ -21,4 +21,3 @@ ALLOCATION_TEMPLATES = {
     "DEFENSIVE": {"BTC": 0.40, "ALT": 0.10, "CASH": 0.50},
     "CASH": {"BTC": 0.00, "ALT": 0.00, "CASH": 1.00},
 }
-
