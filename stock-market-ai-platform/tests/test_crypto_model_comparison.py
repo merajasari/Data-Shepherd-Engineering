@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from crypto_model_comparison import STARTING_CAPITAL, StrategySpec, build_payload
+from ml.build_crypto_model_comparison import STARTING_CAPITAL, StrategySpec, build_payload
 
 
 def test_rebases_and_calculates_metrics(tmp_path):
