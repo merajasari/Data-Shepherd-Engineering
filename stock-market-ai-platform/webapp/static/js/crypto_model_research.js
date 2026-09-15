@@ -11,9 +11,8 @@
   function points(series, drawdown=false){
     const raw=(series.history||[]).map(p=>({t:Date.parse(p.timestamp),v:+p.equity})).filter(p=>Number.isFinite(p.t)&&Number.isFinite(p.v));
     const latest=Math.max(...(payload.series||[]).flatMap(s=>(s.history||[]).map(p=>Date.parse(p.timestamp)).filter(Number.isFinite)));
-    const rows=raw.filter(p=>p.t>=cutoff(latest));
-    if(!drawdown)return rows;
-    let peak=0;return rows.map(p=>{peak=Math.max(peak,p.v);return {t:p.t,v:(p.v/peak-1)*100}});
+    if(!drawdown)return raw.filter(p=>p.t>=cutoff(latest));
+    let peak=0;return raw.map(p=>{peak=Math.max(peak,p.v);return {t:p.t,v:(p.v/peak-1)*100}}).filter(p=>p.t>=cutoff(latest));
   }
   function chart(id, drawdown=false){
     const svg=document.getElementById(id);if(!svg)return;svg.innerHTML='';
