@@ -13,6 +13,7 @@ load_dotenv(); sys.path.append("data-ingestion")
 from v5_symbols import get_v5_company_name, get_v5_sector, get_v5_symbol_options, get_v5_symbols  # noqa: E402
 from webapp.services.account_service import authenticate_account, begin_signup, change_password, complete_account_setup, get_account_setup_context, initialize_account_store, send_verification_email, verify_email_token  # noqa: E402
 from webapp.services.crypto_dashboard_service import get_crypto_dashboard_payload  # noqa: E402
+from webapp.services.crypto_model_comparison_service import get_crypto_model_comparison  # noqa: E402
 from webapp.services.live_market_service import get_all_live_quotes, get_live_quote  # noqa: E402
 from webapp.services.stock_stream_health_service import get_stock_stream_health  # noqa: E402
 from webapp.services.crypto_live_market_service import get_all_crypto_live_tickers  # noqa: E402
@@ -143,12 +144,20 @@ def dashboard():
 @app.route("/crypto")
 @login_required
 def crypto_dashboard():return render_template("crypto.html",crypto=get_crypto_dashboard_payload())
+@app.route("/crypto-model-research")
+@login_required
+def crypto_model_research():return render_template("crypto_model_research.html")
 @app.route("/crypto-visual")
 @login_required
 def crypto_visual_dashboard():return render_template("crypto_visual.html",crypto=get_crypto_dashboard_payload())
 @app.route("/api/crypto-v1")
 @login_required
 def api_crypto_v1():return jsonify(get_crypto_dashboard_payload())
+@app.route("/api/crypto-model-comparison")
+@login_required
+def api_crypto_model_comparison():
+    payload=get_crypto_model_comparison()
+    return jsonify(payload),200 if payload.get("available") else 503
 @app.route("/api/v8-rankings")
 @login_required
 def api_v8_rankings():
