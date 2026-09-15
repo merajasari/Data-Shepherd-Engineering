@@ -9,7 +9,7 @@ class CryptoV5Phase2Test(unittest.TestCase):
         folds=make_folds(dates)
         self.assertGreater(len(folds),1)
         for fold in folds:
-            self.assertLess(fold.train_end_utc,fold.validation_start_utc-pd.Timedelta(days=PURGE_DAYS))
+            self.assertLess(fold.train_end_utc,fold.validation_start_utc-pd.Timedelta(PURGE_DAYS,unit="D"))
             self.assertLess(fold.validation_end_utc,FUTURE_HOLDOUT_START_UTC)
         self.assertTrue(all(a.validation_end_utc < b.validation_start_utc for a,b in zip(folds,folds[1:])))
 
