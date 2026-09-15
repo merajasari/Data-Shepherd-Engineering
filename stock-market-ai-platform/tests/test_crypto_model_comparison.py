@@ -33,3 +33,21 @@ def test_missing_models_are_explicitly_unavailable(tmp_path):
     assert payload["series"] == []
     assert payload["unavailable_series"][0]["model_id"] == "MISSING"
     assert payload["research_safety"]["brokerage_orders"] is False
+
+
+def test_v5_parquet_contract_filters_selected_ridge_candidate(tmp_path):
+    path = tmp_path / "v5_periods.parquet"
+    pd.DataFrame({
+        "timestamp_utc": ["2023-01-01T00:00:00Z", "2023-01-04T00:00:00Z",
+                          "2023-01-01T00:00:00Z", "2023-01-04T00:00:00Z"],
+        "model_id": ["ridge", "ridge", "hist_gradient_boosting", "hist_gradient_boosting"],
+        "horizon_days": [3, 3, 3, 3], "top_n": [3, 3, 3, 3],
+        "cost_bps_round_trip": [25.0] * 4,
+        "ending_equity": [1.0, 1.1, 1.0, 1.5],
+    }).to_parquet(path, index=False)
+    spec = StrategySpec("CRYPTO_V5", "Crypto V5", path, "", "timestamp_utc",
+                        "ending_equity", model_filter="ridge", horizon_days=3,
+                        top_n=3, observation_interval_days=3.0)
+    payload = build_payload((spec,))
+    assert [row["model_id"] for row in payload["series"]] == ["CRYPTO_V5"]
+    assert payload["series"][0]["ending_equity"] == 110000.0

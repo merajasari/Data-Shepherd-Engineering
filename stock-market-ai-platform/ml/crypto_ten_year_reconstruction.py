@@ -81,6 +81,12 @@ def reconstruction_specs(root: Path):
         StrategySpec("CRYPTO_V4", "Crypto V4 allocator", root / "crypto_v4" /
                      "phase3" / "portfolio_periods.csv", "v4_hgb_allocator",
                      "timestamp_utc", "ending_equity"),
+        StrategySpec("CRYPTO_V5", "Crypto V5 Ridge Top-3", root / "crypto_v5" /
+                     "phase3" / "portfolio_periods.parquet", "",
+                     "timestamp_utc", "ending_equity",
+                     status="selected for forward paper evaluation",
+                     model_filter="ridge", horizon_days=3, top_n=3,
+                     observation_interval_days=3.0),
         StrategySpec("BTC", "Bitcoin buy and hold", benchmarks, "btc_buy_and_hold",
                      "timestamp_utc", "equity", status="benchmark"),
         StrategySpec("ETH", "Ethereum buy and hold", benchmarks, "eth_buy_and_hold",

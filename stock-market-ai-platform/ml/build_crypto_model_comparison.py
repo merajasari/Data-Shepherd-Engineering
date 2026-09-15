@@ -34,6 +34,9 @@ class StrategySpec:
     status: str = "historical reconstruction"
     model_filter: Optional[str] = None
     split_filter: Optional[str] = None
+    horizon_days: Optional[int] = None
+    top_n: Optional[int] = None
+    observation_interval_days: float = 1.0
 
 
 STRATEGIES = (
@@ -41,6 +44,7 @@ STRATEGIES = (
     StrategySpec("CRYPTO_V2", "Crypto V2", Path("data/model/crypto_v2/phase4/portfolio_daily.csv"), "top_5_equal_weight", "timestamp_utc", "equity", model_filter="hist_gradient_boosting", split_filter="development"),
     StrategySpec("CRYPTO_V3", "Crypto V3", Path("data/model/crypto_v3/phase3/portfolio_daily.csv"), "gated_top_5", "timestamp_utc", "equity"),
     StrategySpec("CRYPTO_V4", "Crypto V4 allocator", Path("data/model/crypto_v4/phase3/portfolio_periods.csv"), "v4_hgb_allocator", "timestamp_utc", "ending_equity"),
+    StrategySpec("CRYPTO_V5", "Crypto V5 Ridge Top-3", Path("data/research/crypto_ten_year/reconstruction/crypto_v5/phase3/portfolio_periods.parquet"), "", "timestamp_utc", "ending_equity", status="selected for forward paper evaluation", model_filter="ridge", horizon_days=3, top_n=3, observation_interval_days=3.0),
     StrategySpec("BTC", "Bitcoin buy and hold", Path("data/model/crypto_v1/phase4/portfolio_daily.csv"), "btc_benchmark", "timestamp_utc", "equity", status="benchmark", model_filter="momentum", split_filter="development"),
     StrategySpec("ETH", "Ethereum buy and hold", Path("data/model/crypto_v2/phase4/portfolio_daily.csv"), "eth_buy_and_hold", "timestamp_utc", "equity", status="benchmark", model_filter="hist_gradient_boosting", split_filter="development"),
 )
@@ -53,12 +57,15 @@ def _finite(value):
 def _select_frame(spec: StrategySpec) -> pd.DataFrame:
     if not spec.path.exists():
         raise FileNotFoundError(spec.path)
-    frame = pd.read_csv(spec.path)
-    required = {spec.timestamp_column, spec.equity_column, "variant"}
+    frame = pd.read_parquet(spec.path) if spec.path.suffix == ".parquet" else pd.read_csv(spec.path)
+    required = {spec.timestamp_column, spec.equity_column}
+    if spec.variant:
+        required.add("variant")
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError("missing columns: " + ", ".join(missing))
-    frame = frame[frame["variant"].astype(str) == spec.variant].copy()
+    if spec.variant:
+        frame = frame[frame["variant"].astype(str) == spec.variant].copy()
     if spec.model_filter is not None:
         if "model_id" not in frame:
             raise ValueError("missing model_id required by strategy contract")
@@ -67,6 +74,14 @@ def _select_frame(spec: StrategySpec) -> pd.DataFrame:
         if "split" not in frame:
             raise ValueError("missing split required by strategy contract")
         frame = frame[frame["split"].astype(str) == spec.split_filter].copy()
+    if spec.horizon_days is not None:
+        if "horizon_days" not in frame:
+            raise ValueError("missing horizon_days required by strategy contract")
+        frame = frame[pd.to_numeric(frame["horizon_days"], errors="coerce") == spec.horizon_days].copy()
+    if spec.top_n is not None:
+        if "top_n" not in frame:
+            raise ValueError("missing top_n required by strategy contract")
+        frame = frame[pd.to_numeric(frame["top_n"], errors="coerce") == spec.top_n].copy()
     if "cost_bps_round_trip" in frame.columns:
         costs = pd.to_numeric(frame["cost_bps_round_trip"], errors="coerce")
         frame = frame[np.isclose(costs, spec.cost_bps, equal_nan=False)].copy()
@@ -90,8 +105,9 @@ def _series(spec: StrategySpec) -> dict:
     years = max((frame.iloc[-1]["timestamp"] - frame.iloc[0]["timestamp"]).total_seconds() / (365.25 * 86400), 0.0)
     ending = float(frame.iloc[-1]["equity"])
     cagr = (ending / STARTING_CAPITAL) ** (1 / years) - 1 if years > 0 else np.nan
-    annual_vol = returns.std(ddof=1) * np.sqrt(TRADING_DAYS_PER_YEAR) if len(returns) > 1 else np.nan
-    sharpe = returns.mean() / returns.std(ddof=1) * np.sqrt(TRADING_DAYS_PER_YEAR) if len(returns) > 1 and returns.std(ddof=1) > 0 else np.nan
+    periods_per_year = TRADING_DAYS_PER_YEAR / spec.observation_interval_days
+    annual_vol = returns.std(ddof=1) * np.sqrt(periods_per_year) if len(returns) > 1 else np.nan
+    sharpe = returns.mean() / returns.std(ddof=1) * np.sqrt(periods_per_year) if len(returns) > 1 and returns.std(ddof=1) > 0 else np.nan
     drawdown = frame["equity"] / frame["equity"].cummax() - 1
     turnover = pd.to_numeric(frame.get("turnover"), errors="coerce") if "turnover" in frame else pd.Series(dtype=float)
     costs = pd.to_numeric(frame.get("transaction_cost"), errors="coerce") if "transaction_cost" in frame else pd.Series(dtype=float)

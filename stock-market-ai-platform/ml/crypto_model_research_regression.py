@@ -28,15 +28,23 @@ def main():
     require(b'V15 Intraday' in stock.data, "Existing V15 tab remains present")
 
     crypto = client.get("/crypto")
-    require(crypto.status_code == 200, "Existing Crypto Overview still renders")
-    require(b'COINBASE REAL-TIME MARKET' in crypto.data, "Existing Crypto Overview content is unchanged")
-    require(b'/static/js/crypto_research_nav.js' in crypto.data, "Additive Crypto section navigation is loaded")
+    require(crypto.status_code == 200, "Combined Crypto Model Research page renders")
+    require(b'COINBASE REAL-TIME MARKET' in crypto.data, "Existing Crypto Overview content remains present")
+    require(b'CRYPTO MODEL RESEARCH' in crypto.data and b'CRYPTO VISUAL' in crypto.data,
+            "Crypto section navigation is present")
+    require(b'MODEL COMPARISON' in crypto.data and b'CRYPTO V5' in crypto.data,
+            "Comparison and V5 model tabs are present")
 
     research = client.get("/crypto/model-research")
     require(research.status_code == 200, "Crypto Model Research page renders")
-    for label in (b'OVERVIEW', b'CRYPTO V1', b'CRYPTO V2', b'CRYPTO V3', b'CRYPTO V4', b'15M V2', b'XRP V1'):
+    for label in (b'OVERVIEW', b'MODEL COMPARISON', b'CRYPTO V1', b'CRYPTO V2', b'CRYPTO V3', b'CRYPTO V4', b'CRYPTO V5', b'15M V2', b'XRP V1'):
         require(label in research.data, f"Crypto research tab is present: {label.decode()}")
     require(b'HISTORICAL RECONSTRUCTION' in research.data and b'$100,000' in research.data, "Ten-year comparison disclosure is present")
+
+    visual = client.get("/crypto-visual")
+    require(visual.status_code == 200, "Crypto Visual page still renders")
+    require(b'aria-label="Crypto sections"' in visual.data,
+            "Crypto Visual is presented as a Crypto subtab")
 
     api = client.get("/api/crypto-model-comparison")
     require(api.status_code in (200, 503), "Comparison API is read-only and actionable with or without artifact")
