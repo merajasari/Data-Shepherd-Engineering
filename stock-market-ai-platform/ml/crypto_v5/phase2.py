@@ -73,12 +73,12 @@ def _sha256(path):
 def make_folds(timestamps):
     dates=pd.DatetimeIndex(pd.to_datetime(pd.Series(timestamps).unique(),utc=True)).sort_values()
     if dates.empty: raise ValueError("No Crypto V5 timestamps")
-    development_end=min(dates.max(),FUTURE_HOLDOUT_START_UTC-pd.Timedelta(days=1))
-    start=INITIAL_TRAIN_END_UTC+pd.Timedelta(days=1);folds=[];number=1
+    development_end=min(dates.max(),FUTURE_HOLDOUT_START_UTC-pd.Timedelta(1,unit="D"))
+    start=INITIAL_TRAIN_END_UTC+pd.Timedelta(1,unit="D");folds=[];number=1
     while start<=development_end:
-        end=min(start+pd.DateOffset(months=VALIDATION_MONTHS)-pd.Timedelta(days=1),development_end)
-        folds.append(Fold(f"dev_{number:02d}",dates.min(),start-pd.Timedelta(days=PURGE_DAYS+1),start,end,PURGE_DAYS))
-        start=end+pd.Timedelta(days=1);number+=1
+        end=min(start+pd.DateOffset(months=VALIDATION_MONTHS)-pd.Timedelta(1,unit="D"),development_end)
+        folds.append(Fold(f"dev_{number:02d}",dates.min(),start-pd.Timedelta(PURGE_DAYS+1,unit="D"),start,end,PURGE_DAYS))
+        start=end+pd.Timedelta(1,unit="D");number+=1
     if not folds: raise ValueError("No Crypto V5 development folds")
     return folds
 
@@ -119,7 +119,7 @@ def run_phase2(allocation_path=ALLOCATION_PATH,ranking_path=RANKING_PATH,
         rtrain=ranking[ranking["timestamp_utc"].between(fold.train_start_utc,fold.train_end_utc)]
         rval=ranking[ranking["timestamp_utc"].between(fold.validation_start_utc,fold.validation_end_utc)]
         if any(x.empty for x in (atrain,aval,rtrain,rval)):raise ValueError(f"Empty V5 fold {fold.fold_id}")
-        if atrain["timestamp_utc"].max()>=aval["timestamp_utc"].min()-pd.Timedelta(days=PURGE_DAYS):raise RuntimeError("Allocation purge violation")
+        if atrain["timestamp_utc"].max()>=aval["timestamp_utc"].min()-pd.Timedelta(PURGE_DAYS,unit="D"):raise RuntimeError("Allocation purge violation")
         for model_id,template in models.items():
             for horizon in ALL_HORIZONS_DAYS:
                 predicted={}
