@@ -10,11 +10,15 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 from ml.build_crypto_model_comparison import StrategySpec, build_payload
 from ml.crypto_v2.prepare_dataset import build_all
 from ml.crypto_v2.phase3 import run_phase3 as run_v2_phase3
 from ml.crypto_v2.phase4 import run_phase4 as run_v2_phase4
 from ml.crypto_v3.phase1 import run_phase1 as run_v3_phase1
+from ml.crypto_v3.phase1 import MODEL_FEATURES as V3_MODEL_FEATURES
 from ml.crypto_v3.phase2 import run_phase2 as run_v3_phase2
 from ml.crypto_v3.phase3 import run_phase3 as run_v3_phase3
 from ml.crypto_v4.phase1 import run_phase1 as run_v4_phase1
@@ -24,6 +28,20 @@ from ml.crypto_v4.phase3 import run_phase3 as run_v4_phase3
 DEFAULT_HISTORY_ROOT = Path("data/research/crypto_ten_year")
 DEFAULT_OUTPUT = Path("webapp/static/generated/crypto_model_comparison.json")
 COMPLETED_BEFORE_UTC = "2026-09-15T00:00:00Z"
+
+
+def build_v3_complete_source(source_path: Path, output_path: Path) -> dict:
+    """Exclude incomplete feature rows for V3; never impute or synthesize them."""
+    source = pd.read_parquet(source_path)
+    feature_frame = source[list(V3_MODEL_FEATURES)].replace([np.inf, -np.inf], np.nan)
+    complete = source.loc[feature_frame.notna().all(axis=1)].copy()
+    if complete.empty:
+        raise ValueError("No complete Crypto V3 source rows remain after eligibility filtering")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    complete.to_parquet(output_path, index=False)
+    return {"source_rows": int(len(source)), "complete_rows": int(len(complete)),
+            "excluded_incomplete_rows": int(len(source) - len(complete)),
+            "imputed_rows": 0, "output": str(output_path)}
 
 
 def reconstruction_specs(root: Path):
@@ -68,11 +86,13 @@ def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
     source_panel = v2_root / "labeled_panel.parquet"
     v3_root = output_root / "crypto_v3"
     v3_p1, v3_p2, v3_p3 = v3_root / "phase1", v3_root / "phase2", v3_root / "phase3"
+    v3_source = v3_root / "complete_source_panel_7d.parquet"
+    v3_source_filter = build_v3_complete_source(source_panel, v3_source)
     v3_dataset = v3_p1 / "research_panel_7d.parquet"
-    v3_phase1_manifest = run_v3_phase1(source_panel, v3_p1)
+    v3_phase1_manifest = run_v3_phase1(v3_source, v3_p1)
     v3_phase2_manifest = run_v3_phase2(v3_dataset, v3_p2)
     v3_phase3_manifest = run_v3_phase3(
-        v3_p2, v3_dataset, source_panel, v3_p3)
+        v3_p2, v3_dataset, v3_source, v3_p3)
 
     v4_root = output_root / "crypto_v4"
     v4_p1, v4_p2, v4_p3 = v4_root / "phase1", v4_root / "phase2", v4_root / "phase3"
@@ -103,6 +123,7 @@ def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
             "v2_portfolios": v2_portfolio_manifest.get("phase"),
             "v3": [v3_phase1_manifest.get("phase"), v3_phase2_manifest.get("phase"),
                    v3_phase3_manifest.get("phase")],
+            "v3_source_filter": v3_source_filter,
             "v4": [v4_phase1_manifest.get("phase"), v4_phase2_manifest.get("phase"),
                    v4_phase3_manifest.get("phase")],
         },
