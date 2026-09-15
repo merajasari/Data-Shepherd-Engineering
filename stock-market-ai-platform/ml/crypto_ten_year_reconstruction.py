@@ -1,0 +1,124 @@
+"""Run isolated causal Crypto V1-V4 reconstructions on ten-year canonical data.
+
+All outputs live below data/research/crypto_ten_year/reconstruction. Existing
+model, paper, journal, monitoring, holdout, and brokerage artifacts are read-only.
+"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+
+from ml.build_crypto_model_comparison import StrategySpec, build_payload
+from ml.crypto_v2.prepare_dataset import build_all
+from ml.crypto_v2.phase3 import run_phase3 as run_v2_phase3
+from ml.crypto_v2.phase4 import run_phase4 as run_v2_phase4
+from ml.crypto_v3.phase1 import run_phase1 as run_v3_phase1
+from ml.crypto_v3.phase2 import run_phase2 as run_v3_phase2
+from ml.crypto_v3.phase3 import run_phase3 as run_v3_phase3
+from ml.crypto_v4.phase1 import run_phase1 as run_v4_phase1
+from ml.crypto_v4.phase2 import run_phase2 as run_v4_phase2
+from ml.crypto_v4.phase3 import run_phase3 as run_v4_phase3
+
+DEFAULT_HISTORY_ROOT = Path("data/research/crypto_ten_year")
+DEFAULT_OUTPUT = Path("webapp/static/generated/crypto_model_comparison.json")
+COMPLETED_BEFORE_UTC = "2026-09-15T00:00:00Z"
+
+
+def reconstruction_specs(root: Path):
+    v2_daily = root / "crypto_v2" / "phase4" / "portfolio_daily.csv"
+    return (
+        StrategySpec("CRYPTO_V1", "Crypto V1", v2_daily, "top_5_equal_weight",
+                     "timestamp_utc", "equity", model_filter="momentum",
+                     split_filter="development"),
+        StrategySpec("CRYPTO_V2", "Crypto V2", v2_daily, "top_5_equal_weight",
+                     "timestamp_utc", "equity", model_filter="hist_gradient_boosting",
+                     split_filter="development"),
+        StrategySpec("CRYPTO_V3", "Crypto V3", root / "crypto_v3" / "phase3" /
+                     "portfolio_daily.csv", "gated_top_5", "timestamp_utc", "equity"),
+        StrategySpec("CRYPTO_V4", "Crypto V4 allocator", root / "crypto_v4" /
+                     "phase3" / "portfolio_periods.csv", "v4_hgb_allocator",
+                     "timestamp_utc", "ending_equity"),
+        StrategySpec("BTC", "Bitcoin buy and hold", v2_daily, "btc_benchmark",
+                     "timestamp_utc", "equity", status="benchmark",
+                     model_filter="hist_gradient_boosting", split_filter="development"),
+        StrategySpec("ETH", "Ethereum buy and hold", v2_daily, "eth_buy_and_hold",
+                     "timestamp_utc", "equity", status="benchmark",
+                     model_filter="hist_gradient_boosting", split_filter="development"),
+    )
+
+
+def run(history_root=DEFAULT_HISTORY_ROOT, comparison_output=DEFAULT_OUTPUT):
+    history_root, comparison_output = Path(history_root), Path(comparison_output)
+    canonical_root = history_root / "canonical"
+    output_root = history_root / "reconstruction"
+    v2_root = output_root / "crypto_v2"
+    v2_p3, v2_p4 = v2_root / "phase3", v2_root / "phase4"
+
+    dataset_manifest = build_all(
+        canonical_root / "canonical_history.parquet",
+        canonical_root / "canonical_manifest.json",
+        v2_root,
+        COMPLETED_BEFORE_UTC,
+    )
+    v2_manifest, _, _, _ = run_v2_phase3(v2_root, v2_p3)
+    v2_portfolio_manifest = run_v2_phase4(v2_p3, v2_root, v2_p4)[0]
+
+    source_panel = v2_root / "labeled_panel.parquet"
+    v3_root = output_root / "crypto_v3"
+    v3_p1, v3_p2, v3_p3 = v3_root / "phase1", v3_root / "phase2", v3_root / "phase3"
+    v3_dataset = v3_p1 / "research_panel_7d.parquet"
+    v3_phase1_manifest = run_v3_phase1(source_panel, v3_p1)
+    v3_phase2_manifest = run_v3_phase2(v3_dataset, v3_p2)
+    v3_phase3_manifest = run_v3_phase3(
+        v3_p2, v3_dataset, source_panel, v3_p3)
+
+    v4_root = output_root / "crypto_v4"
+    v4_p1, v4_p2, v4_p3 = v4_root / "phase1", v4_root / "phase2", v4_root / "phase3"
+    v4_phase1_manifest = run_v4_phase1(source_panel, v4_p1)
+    v4_phase2_manifest = run_v4_phase2(
+        v4_p1 / "market_allocation_dataset.parquet", v4_p1 / "manifest.json", v4_p2)[0]
+    v4_phase3_manifest = run_v4_phase3(
+        v4_p1 / "market_allocation_dataset.parquet", v4_p1 / "manifest.json",
+        v4_p2 / "predictions.parquet", v4_p2 / "manifest.json", v4_p3)[0]
+
+    payload = build_payload(reconstruction_specs(output_root))
+    comparison_output.parent.mkdir(parents=True, exist_ok=True)
+    comparison_output.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    manifest = {
+        "stage": "crypto_ten_year_causal_reconstruction",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "completed_before_utc": COMPLETED_BEFORE_UTC,
+        "canonical_history": str(canonical_root / "canonical_history.parquet"),
+        "output_root": str(output_root),
+        "comparison_output": str(comparison_output),
+        "comparison_series": [row["model_id"] for row in payload["series"]],
+        "unavailable_series": payload["unavailable_series"],
+        "safety": {"existing_model_roots_modified": False, "paper_state_modified": False,
+                   "future_holdout_scored": False, "brokerage_orders": False},
+        "stages": {
+            "v2_dataset": dataset_manifest.get("stage", "dataset"),
+            "v2_models": v2_manifest.get("phase"),
+            "v2_portfolios": v2_portfolio_manifest.get("phase"),
+            "v3": [v3_phase1_manifest.get("phase"), v3_phase2_manifest.get("phase"),
+                   v3_phase3_manifest.get("phase")],
+            "v4": [v4_phase1_manifest.get("phase"), v4_phase2_manifest.get("phase"),
+                   v4_phase3_manifest.get("phase")],
+        },
+    }
+    (output_root / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8")
+    return manifest
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--history-root", type=Path, default=DEFAULT_HISTORY_ROOT)
+    parser.add_argument("--comparison-output", type=Path, default=DEFAULT_OUTPUT)
+    args = parser.parse_args(argv)
+    print(json.dumps(run(args.history_root, args.comparison_output), indent=2))
+
+
+if __name__ == "__main__":
+    main()
