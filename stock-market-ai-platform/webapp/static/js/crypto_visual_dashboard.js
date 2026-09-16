@@ -4,6 +4,10 @@
   const histories = new Map();
   let selected = 'BTC-USD';
   let latestQuotes = {};
+  let refreshTimer = null;
+  let refreshInFlight = false;
+  let lastSuccessAt = null;
+  let consecutiveFailures = 0;
   const assetNames = {
     'AAVE-USD':'Aave','ADA-USD':'Cardano','ARB-USD':'Arbitrum','ATOM-USD':'Cosmos','AVAX-USD':'Avalanche','BCH-USD':'Bitcoin Cash','BTC-USD':'Bitcoin','DOGE-USD':'Dogecoin','DOT-USD':'Polkadot','ETC-USD':'Ethereum Classic','ETH-USD':'Ethereum','FIL-USD':'Filecoin','HBAR-USD':'Hedera','ICP-USD':'Internet Computer','INJ-USD':'Injective','LINK-USD':'Chainlink','LTC-USD':'Litecoin','NEAR-USD':'NEAR Protocol','OP-USD':'Optimism','SHIB-USD':'Shiba Inu','SOL-USD':'Solana','SUI-USD':'Sui','UNI-USD':'Uniswap','XLM-USD':'Stellar','XRP-USD':'XRP'
   };
@@ -168,14 +172,23 @@
     const note=document.getElementById('visual-chart-note');if(note){note.textContent=list.length<2?'Waiting for a second live observation…':`${list.length} live observations · ${(pollMs/1000).toFixed(0)}-second page sampling · display only`;}
   }
 
+  function scheduleRefresh(delay = pollMs) {
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(refresh, delay);
+  }
+
   async function refresh() {
+    if (document.hidden) { scheduleRefresh(); return; }
+    if (refreshInFlight) return;
+    refreshInFlight = true;
+    const detail=document.getElementById('visual-live-detail');
     try {
       const r=await fetch('/api/crypto-live',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
       const data=await r.json();
       latestQuotes=data.quotes||{};
       const symbols=Object.keys(latestQuotes).sort();
-      if(!symbols.length)return;
+      if(!symbols.length)throw new Error(data.error || 'No live quotes are available in the cache');
       if(!latestQuotes[selected])selected=symbols.includes('BTC-USD')?'BTC-USD':symbols[0];
       symbols.forEach(s=>pushPoint(s,latestQuotes[s]));
       populateSelect(symbols);
@@ -183,9 +196,20 @@
       renderPulse(latestQuotes,data.updated_at);
       renderMovers(latestQuotes);
       renderSelected();
+      lastSuccessAt = new Date();
+      consecutiveFailures = 0;
+      if(detail)detail.textContent=`Read-only cache connected · last successful page refresh ${lastSuccessAt.toLocaleTimeString()}`;
     } catch(err) {
-      const stamp=document.getElementById('visual-live-stamp');if(stamp){stamp.textContent='RETRYING';stamp.className='negative';}
+      consecutiveFailures += 1;
+      const stamp=document.getElementById('visual-live-stamp');
+      if(stamp){stamp.textContent=lastSuccessAt?'STALE · RETRYING':'UNAVAILABLE · RETRYING';stamp.className='negative';}
+      if(detail)detail.textContent=`${err.message || 'Live cache request failed'} · retry ${consecutiveFailures} · next attempt in ${pollMs/1000}s`;
+      const note=document.getElementById('visual-chart-note');
+      if(note&&!lastSuccessAt)note.textContent='Live observations are unavailable. The page will retry automatically; no zero values are substituted.';
       console.warn('[CRYPTO VISUAL]',err);
+    } finally {
+      refreshInFlight = false;
+      scheduleRefresh();
     }
   }
 
@@ -205,6 +229,8 @@
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.crypto-search-wrap')) searchResults?.classList.remove('open');
   });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refresh();
+  });
   refresh();
-  window.setInterval(refresh,pollMs);
 })();

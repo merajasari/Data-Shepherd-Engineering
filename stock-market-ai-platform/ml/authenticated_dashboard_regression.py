@@ -347,6 +347,16 @@ def main() -> None:
     crypto_live_template = (
         project_root / "webapp/templates/crypto_visual.html"
     ).read_text()
+    crypto_live_js = (
+        project_root / "webapp/static/js/crypto_visual_dashboard.js"
+    ).read_text()
+    crypto_history_js = (
+        project_root / "webapp/static/js/crypto_history_chart.js"
+    ).read_text()
+    crypto_relationship_js = (
+        project_root / "webapp/static/js/crypto_relationship_explorer.js"
+    ).read_text()
+    app_source = (project_root / "webapp/app.py").read_text()
     readiness_template = (
         project_root / "webapp/templates/trading_readiness.html"
     ).read_text()
@@ -424,6 +434,26 @@ def main() -> None:
         and "MODEL RESEARCH" not in readiness_template
         and "LIVE STOCK VIEWER" not in readiness_template,
         "Server-rendered navigation mirrors the new hierarchy without legacy peers",
+    )
+    require(
+        "COINBASE 15-MINUTE ARCHIVE" in crypto_live_template
+        and "live.decision_available" in crypto_live_template
+        and "Missing runtime values are never converted to zero" in crypto_live_template
+        and "ready.failures" in crypto_live_template
+        and "track.assessment_ready" in crypto_live_template
+        and "service.detail" in crypto_live_template
+        and "OPEN MODEL RESEARCH" in crypto_live_template,
+        "Crypto Live exposes honest availability, failures, assessments, and evidence routing",
+    )
+    require(
+        "computed-read-only-fallback" in app_source
+        and "syncRangeAvailability" in crypto_history_js
+        and "archive_global_start_utc" in crypto_history_js
+        and "columnIndex<rowIndex" in crypto_relationship_js
+        and "rows.slice(0,8)" in crypto_relationship_js
+        and "UNAVAILABLE · RETRYING" in crypto_live_js
+        and "document.hidden" in crypto_live_js,
+        "Crypto Live repairs history fallback and keeps dense or stale views legible",
     )
     require(
         all(label in research_tabs for label in (

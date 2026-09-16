@@ -317,9 +317,14 @@ def api_crypto_history():return jsonify(get_crypto_history_payload(normalize_his
 @app.route("/api/crypto-history-file")
 @login_required
 def api_crypto_history_file():
-    history_range=normalize_history_range(request.args.get("range","ALL"));path=get_crypto_history_cache_path(history_range)
-    if not path.exists():get_crypto_history_payload(history_range)
-    return send_file(path,mimetype="application/json",conditional=True,max_age=30)
+    history_range = normalize_history_range(request.args.get("range", "ALL"))
+    path = get_crypto_history_cache_path(history_range)
+    if path.exists():
+        return send_file(path, mimetype="application/json", conditional=True, max_age=30)
+    response = jsonify(get_crypto_history_payload(history_range))
+    response.headers["Cache-Control"] = "private, max-age=30"
+    response.headers["X-Crypto-History-Source"] = "computed-read-only-fallback"
+    return response
 @app.route("/health")
 def health():return jsonify({"status":"ok","service":"data-shepherd-web","timestamp_utc":datetime.now(timezone.utc).isoformat()})
 

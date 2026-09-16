@@ -132,9 +132,22 @@
     const symbols=activeSymbols();
     const set=(id,v)=>{const n=document.getElementById(id);if(n)n.textContent=v;};
     set('history-series-count',`${symbols.length} / ${Object.keys(historical.series||{}).length}`);
-    set('history-start',historical.global_start_utc?new Date(historical.global_start_utc).toLocaleDateString():'—');
-    set('history-points',historical.total_chart_points?.toLocaleString()||'0');
+    set('history-start',historical.archive_global_start_utc?new Date(historical.archive_global_start_utc).toLocaleDateString():'—');
+    set('history-points',historical.archive_total_chart_points?.toLocaleString()||'0');
     set('history-resolution','DAILY + LIVE');
+  }
+
+  function syncRangeAvailability() {
+    const start=Date.parse(historical?.archive_global_start_utc||'');
+    const end=Date.parse(historical?.archive_global_end_utc||'');
+    const availableDays=Number.isFinite(start)&&Number.isFinite(end)?Math.max(0,(end-start)/86400000):0;
+    const required={'30D':30,'90D':90,'1Y':365,'3Y':1095,'5Y':1825};
+    document.querySelectorAll('[data-history-range]').forEach(button=>{
+      const need=required[button.dataset.historyRange];
+      const unavailable=Number.isFinite(need)&&availableDays+2<need;
+      button.disabled=unavailable;
+      button.title=unavailable?`Requires ${need} archive days; ${Math.floor(availableDays)} are available.`:'';
+    });
   }
 
   function applyLineEmphasis(symbol=hoverSymbol) {
@@ -271,7 +284,7 @@
   }
 
   function renderAll(){
-    renderSummary();renderLegend();syncHistorySelectionUI();renderChart();
+    renderSummary();renderLegend();syncHistorySelectionUI();syncRangeAvailability();renderChart();
     document.querySelectorAll('[data-history-range]').forEach(b=>b.classList.toggle('active',b.dataset.historyRange===range));
     document.querySelectorAll('[data-history-mode]').forEach(b=>b.classList.toggle('active',b.dataset.historyMode===mode));
     const all=document.getElementById('history-show-all');if(all){all.textContent=showAll?'SHOWING ALL 25':'SHOW ALL 25';all.classList.toggle('active',showAll);}

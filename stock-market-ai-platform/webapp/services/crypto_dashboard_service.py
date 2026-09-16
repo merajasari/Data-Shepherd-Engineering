@@ -341,7 +341,28 @@ def _v2_live():
     reconcile = _read_json(RECONCILE_STATUS_PATH)
     if not status:
         return {"available": False, "message": "Frozen Crypto 15m V2 forward service status is not available yet."}
-    probs = status.get("probabilities", {})
+    probs = status.get("probabilities") or {}
+
+    def probability(label):
+        try:
+            value = float(probs.get(label))
+        except (TypeError, ValueError):
+            return None
+        return value if 0.0 <= value <= 1.0 else None
+
+    probability_values = {
+        "BTC": probability("BTC"),
+        "ALT": probability("ALT"),
+        "CASH": probability("CASH"),
+    }
+    probability_sum = sum(value for value in probability_values.values() if value is not None)
+    decision_available = (
+        all(value is not None for value in probability_values.values())
+        and abs(probability_sum - 1.0) <= 0.01
+        and bool(status.get("decision_timestamp_utc"))
+        and bool(status.get("raw_predicted_label"))
+        and bool(status.get("current_executed_label"))
+    )
     journal = _read_csv(V2_JOURNAL_PATH)
     realized = (
         journal[journal.get("status", pd.Series(dtype=str)).eq("REALIZED")]
@@ -356,15 +377,21 @@ def _v2_live():
     )
     return {
         "available": True,
+        "decision_available": decision_available,
+        "message": (
+            "Latest frozen Shared V2 decision is available."
+            if decision_available
+            else "The runtime status exists, but no complete decision payload is available. Probabilities are intentionally withheld rather than shown as zero."
+        ),
         "mode": status.get("mode", "UNKNOWN"),
         "action": status.get("action"),
         "decision_timestamp_utc": status.get("decision_timestamp_utc"),
         "generated_at_utc": status.get("generated_at_utc"),
         "raw_predicted_label": status.get("raw_predicted_label"),
         "current_executed_label": status.get("current_executed_label"),
-        "prob_btc": float(probs.get("BTC", 0)),
-        "prob_alt": float(probs.get("ALT", 0)),
-        "prob_cash": float(probs.get("CASH", 0)),
+        "prob_btc": probability_values["BTC"],
+        "prob_alt": probability_values["ALT"],
+        "prob_cash": probability_values["CASH"],
         "alt_asset_count": int(status.get("alt_asset_count", 0)),
         "missing_alts": status.get("missing_decision_candle_alts", []),
         "ineligible_alts": status.get("feature_ineligible_alts", []),

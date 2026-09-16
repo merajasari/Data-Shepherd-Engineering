@@ -116,12 +116,27 @@ def get_crypto_history_payload(
     series = {}
     global_start = None
     global_end = None
+    archive_global_start = None
+    archive_global_end = None
     archive_total_points = 0
     loaded_total_points = 0
 
     for product_id in requested:
         full_daily = _daily_product(product_id)
         archive_total_points += len(full_daily)
+        if not full_daily.empty:
+            archive_start = full_daily.iloc[0]["timestamp_utc"]
+            archive_end = full_daily.iloc[-1]["timestamp_utc"]
+            archive_global_start = (
+                archive_start
+                if archive_global_start is None
+                else min(archive_global_start, archive_start)
+            )
+            archive_global_end = (
+                archive_end
+                if archive_global_end is None
+                else max(archive_global_end, archive_end)
+            )
         daily = _slice_daily_for_range(full_daily, range_key)
         if daily.empty:
             series[product_id] = {
@@ -167,6 +182,16 @@ def get_crypto_history_payload(
         "total_chart_points": loaded_total_points,
         "loaded_chart_points": loaded_total_points,
         "archive_total_chart_points": archive_total_points,
+        "archive_global_start_utc": (
+            archive_global_start.isoformat()
+            if archive_global_start is not None
+            else None
+        ),
+        "archive_global_end_utc": (
+            archive_global_end.isoformat()
+            if archive_global_end is not None
+            else None
+        ),
         "global_start_utc": global_start.isoformat() if global_start is not None else None,
         "global_end_utc": global_end.isoformat() if global_end is not None else None,
         "series": series,

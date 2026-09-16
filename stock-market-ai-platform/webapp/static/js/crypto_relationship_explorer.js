@@ -6,6 +6,7 @@
   let payload = null;
   let windowDays = 90;
   let selected = new Set(defaultSymbols);
+  let showAllRelative = false;
 
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const short = s => s.replace('-USD','');
@@ -126,9 +127,10 @@
     if(!syms.length){root.innerHTML='<div class="relationship-empty">Select at least one crypto to build the heatmap.</div>';return;}
     const maps=Object.fromEntries(syms.map(s=>[s,returnsMap(s)]));
     let html='<table><thead><tr><th></th>'+syms.map(s=>`<th title="${esc(assetNames[s]||'')}">${esc(short(s))}</th>`).join('')+'</tr></thead><tbody>';
-    syms.forEach(a=>{
+    syms.forEach((a,rowIndex)=>{
       html+=`<tr><th title="${esc(assetNames[a]||'')}">${esc(short(a))}</th>`;
-      syms.forEach(b=>{
+      syms.forEach((b,columnIndex)=>{
+        if(columnIndex<rowIndex){html+='<td aria-hidden="true" style="background:rgba(145,166,194,.025)"></td>';return;}
         const result=a===b?{r:1,n:maps[a].size}:pearson(maps[a],maps[b]);
         const label=Number.isFinite(result.r)?result.r.toFixed(2):'—';
         html+=`<td style="${cellStyle(result.r)}" title="${esc(short(a))} vs ${esc(short(b))} · correlation ${label} · ${result.n} overlapping daily returns"><strong>${label}</strong></td>`;
@@ -146,11 +148,17 @@
     const rows=syms.map(s=>({symbol:s,ret:periodReturn(s)})).filter(r=>Number.isFinite(r.ret)).map(r=>({...r,excess:Number.isFinite(btc)?r.ret-btc:null})).sort((a,b)=>(b.excess??-Infinity)-(a.excess??-Infinity));
     if(!rows.length){root.innerHTML='<div class="relationship-empty">Select assets to see BTC-relative performance.</div>';return;}
     const maxAbs=Math.max(.000001,...rows.map(r=>Math.abs(r.excess||0)));
-    root.innerHTML=rows.map((r,i)=>{
+    const visibleRows=showAllRelative?rows:rows.slice(0,8);
+    root.innerHTML=visibleRows.map((r,i)=>{
       const w=Math.max(2,Math.abs(r.excess||0)/maxAbs*48);
       const right=(r.excess||0)>=0;
       return `<div class="relationship-bar-row"><div class="relationship-rank">${i+1}</div><div class="relationship-symbol"><strong>${esc(short(r.symbol))}</strong><span>${esc(assetNames[r.symbol]||'')}</span></div><div class="relationship-bar-track"><i class="${right?'up':'down'}" style="width:${w}%;${right?'left:50%':'right:50%'}"></i><b></b></div><div class="relationship-values"><strong class="${right?'positive':'negative'}">${pct(r.excess)}</strong><small>asset ${pct(r.ret)}</small></div></div>`;
     }).join('');
+    const toggle=document.getElementById('relationship-relative-toggle');
+    if(toggle){
+      toggle.hidden=rows.length<=8;
+      toggle.textContent=showAllRelative?'SHOW TOP 8':'SHOW ALL SELECTED';
+    }
   }
 
   function renderAll(){renderSummary();renderChips();renderPairHighlights();renderHeatmap();renderRelative();}
@@ -164,6 +172,7 @@
     document.getElementById('relationship-select-default')?.addEventListener('click',()=>{selected=new Set(defaultSymbols);renderAll();});
     document.getElementById('relationship-select-all')?.addEventListener('click',()=>{selected=new Set(Object.keys(payload?.series||{}).filter(s=>payload.series[s]?.available));renderAll();});
     document.getElementById('relationship-clear')?.addEventListener('click',()=>{selected.clear();renderAll();});
+    document.getElementById('relationship-relative-toggle')?.addEventListener('click',()=>{showAllRelative=!showAllRelative;renderRelative();});
     const input=document.getElementById('relationship-search');
     input?.addEventListener('input',()=>{
       const q=input.value.trim().toLowerCase();
