@@ -414,6 +414,8 @@ def main() -> None:
         "{% include 'crypto_overview_content.html' %}" in crypto_template
         and "COINBASE REAL-TIME MARKET" in crypto_overview
         and "UNTOUCHED FORWARD PERFORMANCE" in crypto_overview
+        and "live.decision_available" in crypto_overview
+        and "Missing runtime values are never converted to zero" in crypto_overview
         and "CRYPTO V1 HISTORICAL RESEARCH" in crypto_overview,
         "Crypto Overview restores all prior operational, forward, and research content",
     )

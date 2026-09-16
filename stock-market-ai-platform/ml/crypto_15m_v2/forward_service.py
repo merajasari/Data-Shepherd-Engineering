@@ -105,7 +105,7 @@ def _latest_available_timestamp(product_id: str) -> pd.Timestamp | None:
 
 
 def _read_recent(product_id: str, end: pd.Timestamp) -> pd.DataFrame:
-    start = end - pd.Timedelta(days=LOOKBACK_DAYS)
+    start = end - pd.Timedelta(f"{LOOKBACK_DAYS}d")
     months = pd.period_range(start.tz_localize(None).to_period("M"), end.tz_localize(None).to_period("M"), freq="M")
     frames = []
     for period in months:
@@ -263,12 +263,16 @@ def _read_journal() -> pd.DataFrame:
     if "realized_through_utc" in df.columns:
         df["realized_through_utc"] = df["realized_through_utc"].astype("object")
     if len(df):
-        df["decision_timestamp_utc"] = pd.to_datetime(df["decision_timestamp_utc"], utc=True)
+        df["decision_timestamp_utc"] = pd.to_datetime(
+            df["decision_timestamp_utc"],
+            utc=True,
+            format="mixed",
+        )
     return df
 
 
 def _hourly_realized(decision_ts: pd.Timestamp) -> tuple[float, float] | None:
-    end_ts = decision_ts + pd.Timedelta(hours=1)
+    end_ts = decision_ts + pd.Timedelta("1h")
     latest = _latest_available_timestamp(BTC)
     if latest is None or latest < end_ts:
         return None
@@ -320,7 +324,7 @@ def _finalize_pending_rows(state: dict) -> int:
         journal.loc[idx, "transaction_cost"] = cost
         journal.loc[idx, "net_selected_return_1h"] = net
         journal.loc[idx, "equity"] = equity
-        journal.loc[idx, "realized_through_utc"] = (ts + pd.Timedelta(hours=1)).isoformat()
+        journal.loc[idx, "realized_through_utc"] = (ts + pd.Timedelta("1h")).isoformat()
         journal.loc[idx, "status"] = "REALIZED"
         changed += 1
         state["last_realized_timestamp_utc"] = ts.isoformat()
@@ -389,7 +393,7 @@ def run_once() -> dict:
         if last is not None and decision_ts <= last:
             result["action"] = "already_processed"
         else:
-            if last is not None and decision_ts > last + pd.Timedelta(hours=1):
+            if last is not None and decision_ts > last + pd.Timedelta("1h"):
                 result["action"] = "gap_detected_no_backfill"
                 result["note"] = "A forward decision hour was missed. Frozen policy forbids historical backfill into the forward journal."
             else:
