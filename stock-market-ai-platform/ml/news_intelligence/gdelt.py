@@ -12,6 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 from urllib.parse import urlparse
 
 import numpy as np
@@ -95,6 +96,36 @@ def write_monthly_queries(start, end, output_dir, aliases=CRYPTO_ALIASES):
     return paths
 
 
+def estimate_queries(sql_dir, project_id=None, runner=subprocess.run):
+    """Dry-run every generated query and return exact BigQuery byte estimates."""
+    paths = sorted(Path(sql_dir).glob("gdelt_gkg_*.sql"))
+    if not paths:
+        raise FileNotFoundError(f"No GDELT SQL files found under {sql_dir}")
+    rows = []
+    for path in paths:
+        command = ["bq", "query", "--use_legacy_sql=false", "--dry_run"]
+        if project_id:
+            command.insert(2, f"--project_id={project_id}")
+        completed = runner(command, input=path.read_text(encoding="utf-8"), text=True,
+                           capture_output=True, check=False)
+        output = f"{completed.stdout}\n{completed.stderr}"
+        if completed.returncode:
+            raise RuntimeError(f"Dry run failed for {path.name}: {output.strip()}")
+        match = re.search(r"process\s+(\d+)\s+bytes", output)
+        if not match:
+            raise ValueError(f"Could not parse dry-run bytes for {path.name}: {output.strip()}")
+        rows.append({"query_file": path.name, "estimated_bytes": int(match.group(1))})
+    estimates = pd.DataFrame(rows)
+    return estimates, {
+        "query_count": int(len(estimates)),
+        "total_estimated_bytes": int(estimates["estimated_bytes"].sum()),
+        "total_estimated_gib": float(estimates["estimated_bytes"].sum() / (1024 ** 3)),
+        "one_tib_free_tier_fraction": float(estimates["estimated_bytes"].sum() / (1024 ** 4)),
+        "queries_executed": False,
+        "billable_data_processed": 0,
+    }
+
+
 def _tone(value):
     try:
         return float(str(value).split(",", 1)[0]) / 100.0
@@ -151,11 +182,20 @@ def main(argv=None):
     parser.add_argument("--end", default="2026-09-16T00:00:00Z")
     parser.add_argument("--sql-output", type=Path,
                         default=Path("data/research/news/gdelt/sql"))
+    parser.add_argument("--estimate", action="store_true",
+                        help="Dry-run all generated SQL and aggregate bytes; executes no query")
+    parser.add_argument("--project-id")
     args = parser.parse_args(argv)
     paths = write_monthly_queries(args.start, args.end, args.sql_output)
-    print(json.dumps({"provider":"gdelt_gkg_2_1", "queries":len(paths),
-                      "first":str(paths[0]), "last":str(paths[-1]),
-                      "queries_executed":False, "billable_action":False}, indent=2))
+    result = {"provider":"gdelt_gkg_2_1", "queries":len(paths),
+              "first":str(paths[0]), "last":str(paths[-1]),
+              "queries_executed":False, "billable_action":False}
+    if args.estimate:
+        estimates, summary = estimate_queries(args.sql_output, args.project_id)
+        estimate_path = args.sql_output.parent / "dry_run_estimates.csv"
+        estimates.to_csv(estimate_path, index=False)
+        result["dry_run"] = {**summary, "output": str(estimate_path)}
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
