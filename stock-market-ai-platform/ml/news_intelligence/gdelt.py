@@ -54,7 +54,13 @@ def build_query(start, end, aliases=CRYPTO_ALIASES):
         raise ValueError("end must be after start")
     structs = []
     for asset_id, names in sorted(aliases.items()):
-        pattern = r"(^|[^a-z0-9])(" + "|".join(re.escape(name.lower()) for name in names) + r")([^a-z0-9]|$)"
+        normalized = []
+        for name in names:
+            lowered = name.lower()
+            if not re.fullmatch(r"[a-z0-9 ]+", lowered):
+                raise ValueError(f"Unsupported alias characters for {asset_id}: {name}")
+            normalized.append(lowered)
+        pattern = r"(^|[^a-z0-9])(" + "|".join(normalized) + r")([^a-z0-9]|$)"
         structs.append(f"STRUCT('{_sql(asset_id)}' AS asset_id, r'{_sql(pattern)}' AS pattern)")
     alias_sql = ",\n    ".join(structs)
     start_sql, end_sql = start.strftime("%Y-%m-%d %H:%M:%S%z"), end.strftime("%Y-%m-%d %H:%M:%S%z")
@@ -74,7 +80,8 @@ WITH aliases AS (
                  a.pattern)) AS asset_ids
   FROM source s
 )
-SELECT * FROM matched WHERE ARRAY_LENGTH(asset_ids) > 0
+SELECT * EXCEPT(asset_ids), TO_JSON_STRING(asset_ids) AS asset_ids
+FROM matched WHERE ARRAY_LENGTH(asset_ids) > 0
 """
 
 
