@@ -44,14 +44,15 @@ def build_asset_news_features(news, decisions, lookback_days=30):
     exploded = news.explode("asset_ids").rename(columns={"asset_ids": "asset_id"})
     rows = []
     for decision in decision_frame[["timestamp_utc", "asset_id"]].drop_duplicates().itertuples(index=False):
+        decision_ts = pd.Timestamp(decision.timestamp_utc)
         available = exploded[(exploded["asset_id"] == decision.asset_id) &
-                             (exploded["available_at_utc"] <= decision.timestamp_utc)]
-        start_72 = decision.timestamp_utc - pd.Timedelta(hours=72)
-        start_24 = decision.timestamp_utc - pd.Timedelta(hours=24)
+                             (exploded["available_at_utc"] <= decision_ts)]
+        start_72 = decision_ts - pd.Timedelta(hours=72)
+        start_24 = decision_ts - pd.Timedelta(hours=24)
         current72 = available[available["available_at_utc"] > start_72]
         current24 = available[available["available_at_utc"] > start_24]
         prior = available[(available["available_at_utc"] <= start_24) &
-                          (available["available_at_utc"] > decision.timestamp_utc - pd.Timedelta(days=lookback_days))]
+                          (available["available_at_utc"] > decision_ts - pd.Timedelta(days=lookback_days))]
         values = _features_for_window(current24, prior)
         values["news_count_24h"] = float(len(current24))
         values["news_count_72h"] = float(len(current72))
@@ -60,6 +61,5 @@ def build_asset_news_features(news, decisions, lookback_days=30):
             float(np.average(current72["sentiment"], weights=weights72))
             if len(current72) and weights72.sum() else 0.0)
         values["news_velocity_24h_vs_72h"] = float(len(current24) / max(len(current72) / 3, 1))
-        rows.append({"timestamp_utc": decision.timestamp_utc, "asset_id": decision.asset_id, **values})
+        rows.append({"timestamp_utc": decision_ts, "asset_id": decision.asset_id, **values})
     return pd.DataFrame(rows, columns=["timestamp_utc", "asset_id", *FEATURE_COLUMNS])
-
