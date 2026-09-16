@@ -47,9 +47,10 @@
     panels.appendChild(pane);
   });
 
+  const sectionTabs = shell.querySelector(':scope > .ds-section-tabs');
   const primaryTabs = shell.querySelector(':scope > .ds-dashboard-tabs');
   const header = shell.querySelector(':scope > header');
-  const anchor = primaryTabs || header;
+  const anchor = sectionTabs || primaryTabs || header;
   anchor?.insertAdjacentElement('afterend', nav);
   nav.insertAdjacentElement('afterend', panels);
 

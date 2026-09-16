@@ -370,7 +370,9 @@ def main() -> None:
         ))
         and "Primary platform areas" in site_navigation
         and "Stock areas" in site_navigation
-        and "Crypto areas" in site_navigation,
+        and "Crypto areas" in site_navigation
+        and "const anchor = sectionTabs || primaryTabs || header"
+        in research_tabs,
         "Site navigation exposes three primary areas and nested stock/crypto choices",
     )
     require(
