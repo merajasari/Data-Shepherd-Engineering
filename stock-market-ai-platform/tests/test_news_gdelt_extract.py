@@ -36,12 +36,13 @@ class GdeltExtractionTest(unittest.TestCase):
             def runner(command, **kwargs):
                 calls.append(command)
                 return subprocess.CompletedProcess(command, 0, stdout=CSV, stderr="")
-            first = execute("project", sql, estimates, raw, 2048, runner, lambda _: None)
-            second = execute("project", sql, estimates, raw, 2048, runner, lambda _: None)
+            budget = 2 * 1024 ** 2
+            first = execute("project", sql, estimates, raw, budget, runner, lambda _: None)
+            second = execute("project", sql, estimates, raw, budget, runner, lambda _: None)
             self.assertEqual(first["downloaded_queries"], 1)
             self.assertEqual(second["reused_queries"], 1)
             self.assertEqual(len(calls), 1)
-            self.assertIn("--maximum_bytes_billed=1024", calls[0])
+            self.assertIn("--maximum_bytes_billed=1048576", calls[0])
             self.assertTrue(Path(root, "extraction_manifest.json").exists())
 
     def test_failure_includes_stdout_diagnostic(self):
@@ -51,7 +52,7 @@ class GdeltExtractionTest(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 1,
                     stdout="BigQuery rejected the request", stderr="")
             with self.assertRaisesRegex(RuntimeError, "BigQuery rejected the request"):
-                execute("project", sql, estimates, Path(root, "raw"), 2048,
+                execute("project", sql, estimates, Path(root, "raw"), 2 * 1024 ** 2,
                         runner, lambda _: None)
 
 
