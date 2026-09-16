@@ -44,6 +44,16 @@ class GdeltExtractionTest(unittest.TestCase):
             self.assertIn("--maximum_bytes_billed=1024", calls[0])
             self.assertTrue(Path(root, "extraction_manifest.json").exists())
 
+    def test_failure_includes_stdout_diagnostic(self):
+        with tempfile.TemporaryDirectory() as root:
+            sql, estimates = self._inputs(root)
+            def runner(command, **kwargs):
+                return subprocess.CompletedProcess(command, 1,
+                    stdout="BigQuery rejected the request", stderr="")
+            with self.assertRaisesRegex(RuntimeError, "BigQuery rejected the request"):
+                execute("project", sql, estimates, Path(root, "raw"), 2048,
+                        runner, lambda _: None)
+
 
 if __name__ == "__main__":
     unittest.main()
