@@ -22,6 +22,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import signal
 import time
@@ -364,6 +365,7 @@ def run_once() -> dict:
     mode = "FORWARD" if decision_ts >= HOLDOUT else "SHADOW"
     result = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "ok",
         "mode": mode,
         "decision_timestamp_utc": decision_ts.isoformat(),
         "raw_predicted_label": raw_label,
@@ -373,6 +375,8 @@ def run_once() -> dict:
         "missing_decision_candle_alts": diagnostics["missing_decision_candle_alts"],
         "feature_ineligible_alts": diagnostics["feature_ineligible_alts"],
         "pending_rows_finalized": finalized,
+        "model_sha256_verified": True,
+        "service_pid": os.getpid(),
         "brokerage_orders": False,
     }
     if mode == "SHADOW":
@@ -400,18 +404,75 @@ def run_once() -> dict:
     return result
 
 
-def _acquire_lock() -> None:
+def _process_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _write_lock_exclusively() -> None:
+    with LOCK_PATH.open("x", encoding="utf-8") as f:
+        f.write(str(os.getpid()))
+
+
+def _acquire_lock() -> bool:
+    """Acquire the service lock and safely recover a dead owner's stale lock."""
     PHASE5_ROOT.mkdir(parents=True, exist_ok=True)
     try:
-        with LOCK_PATH.open("x", encoding="utf-8") as f:
-            f.write(str(__import__("os").getpid()))
+        _write_lock_exclusively()
+        return False
     except FileExistsError:
-        raise SystemExit("[SKIP] Crypto V2 forward service already running")
+        try:
+            existing_pid = int(LOCK_PATH.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            existing_pid = None
+        if existing_pid is not None and _process_is_alive(existing_pid):
+            raise SystemExit(
+                f"[SKIP] Crypto V2 forward service already running as PID {existing_pid}"
+            )
+
+    try:
+        LOCK_PATH.unlink()
+    except FileNotFoundError:
+        pass
+    try:
+        _write_lock_exclusively()
+    except FileExistsError:
+        raise SystemExit("[SKIP] Crypto V2 forward service lock was claimed during recovery")
+    return True
+
+
+def _publish_starting_status(stale_lock_recovered: bool) -> dict:
+    payload = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "running",
+        "mode": "STARTING",
+        "action": "service_starting",
+        "service_pid": os.getpid(),
+        "stale_lock_recovered": bool(stale_lock_recovered),
+        "model_sha256_verified": None,
+        "brokerage_orders": False,
+    }
+    _atomic_json(SERVICE_STATUS_PATH, payload)
+    return payload
 
 
 def _release_lock() -> None:
-    try: LOCK_PATH.unlink()
-    except FileNotFoundError: pass
+    try:
+        owner_pid = int(LOCK_PATH.read_text(encoding="utf-8").strip())
+    except (FileNotFoundError, OSError, ValueError):
+        return
+    if owner_pid == os.getpid():
+        try:
+            LOCK_PATH.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def main(argv=None):
@@ -423,15 +484,27 @@ def main(argv=None):
     def request_stop(*_args):
         nonlocal stop; stop = True
     signal.signal(signal.SIGINT, request_stop); signal.signal(signal.SIGTERM, request_stop)
-    _acquire_lock()
+    stale_lock_recovered = _acquire_lock()
     try:
+        _publish_starting_status(stale_lock_recovered)
+        if stale_lock_recovered:
+            print("[FORWARD] Recovered stale service lock from a dead or invalid PID", flush=True)
         while True:
             try:
                 result = run_once()
                 print(f"[FORWARD] {result['generated_at_utc']} mode={result['mode']} decision={result['decision_timestamp_utc']} raw={result['raw_predicted_label']} executed={result['current_executed_label']} alts={result['alt_asset_count']} action={result['action']}", flush=True)
             except Exception as exc:
-                payload={"generated_at_utc":datetime.now(timezone.utc).isoformat(),"status":"error","error":f"{type(exc).__name__}: {exc}","brokerage_orders":False}
-                _atomic_json(SERVICE_STATUS_PATH,payload); print(f"[FORWARD ERROR] {payload['error']}",flush=True)
+                payload = {
+                    "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "status": "error",
+                    "mode": "ERROR",
+                    "action": "run_failed",
+                    "service_pid": os.getpid(),
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "brokerage_orders": False,
+                }
+                _atomic_json(SERVICE_STATUS_PATH, payload)
+                print(f"[FORWARD ERROR] {payload['error']}", flush=True)
             if args.once or stop: break
             for _ in range(max(15,args.poll_seconds)):
                 if stop: break

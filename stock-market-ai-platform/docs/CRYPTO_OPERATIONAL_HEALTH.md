@@ -142,6 +142,17 @@ The dashboard health panel and `launchctl` answer different questions:
 - dashboard heartbeat monitoring: **Is the runtime producing fresh readable state?**
 - `launchctl`: **Is the configured macOS process currently loaded/running, and what was its last exit code?**
 
+## Shared V2 stale-lock recovery
+
+The Shared V2 service owns `forward_service.lock` with its process ID. At startup it now:
+
+1. preserves the lock and exits when that PID is still alive
+2. reclaims the lock when the PID is dead or the lock content is invalid
+3. publishes a `STARTING` heartbeat before loading data or running inference
+4. replaces that heartbeat with an explicit `status: ok` result after successful frozen-model verification
+
+This lets the `KeepAlive` LaunchAgent recover after an unclean service stop without deleting a live service's lock. It does not backfill a missed decision or change the append-only forward evidence boundary.
+
 ## Safety boundary
 
 Operational monitoring is presentation/observability only.

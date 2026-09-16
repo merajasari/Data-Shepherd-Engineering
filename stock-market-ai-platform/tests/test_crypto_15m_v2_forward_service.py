@@ -7,6 +7,7 @@ status files.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -93,6 +94,31 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
 
     def read_journal(self) -> pd.DataFrame:
         return pd.read_csv(self.journal)
+
+    def test_stale_lock_is_recovered_without_touching_live_owner(self):
+        self.lock.write_text("424242", encoding="utf-8")
+        with patch.object(fs, "_process_is_alive", return_value=False):
+            recovered = fs._acquire_lock()
+        self.assertTrue(recovered)
+        self.assertEqual(self.lock.read_text(encoding="utf-8"), str(os.getpid()))
+        fs._release_lock()
+        self.assertFalse(self.lock.exists())
+
+    def test_live_lock_is_preserved_and_second_service_exits(self):
+        self.lock.write_text("424242", encoding="utf-8")
+        with patch.object(fs, "_process_is_alive", return_value=True):
+            with self.assertRaises(SystemExit):
+                fs._acquire_lock()
+        self.assertEqual(self.lock.read_text(encoding="utf-8"), "424242")
+
+    def test_startup_heartbeat_is_published_before_inference(self):
+        payload = fs._publish_starting_status(stale_lock_recovered=True)
+        persisted = json.loads(self.status.read_text(encoding="utf-8"))
+        self.assertEqual(persisted, payload)
+        self.assertEqual(payload["status"], "running")
+        self.assertEqual(payload["mode"], "STARTING")
+        self.assertTrue(payload["stale_lock_recovered"])
+        self.assertFalse(payload["brokerage_orders"])
 
     def test_confirm2_requires_two_consecutive_noncurrent_predictions(self):
         state = base_state()
@@ -241,6 +267,8 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
              patch.object(fs, "_build_hourly_feature_row", return_value=(pd.DataFrame({"x": [1.0]}), {"alt_asset_count": 20, "missing_decision_candle_alts": [], "feature_ineligible_alts": []})), \
              patch.object(fs, "_predict", return_value=("CASH", probabilities("CASH"))):
             result = fs.run_once()
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["model_sha256_verified"])
         self.assertEqual(result["mode"], "SHADOW")
         self.assertEqual(result["action"], "shadow_snapshot")
         self.assertEqual(before_journal, self.journal.read_bytes())
