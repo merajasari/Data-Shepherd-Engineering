@@ -14,6 +14,7 @@ DEFAULT_SQL_ROOT = Path("data/research/news/gdelt/sql")
 DEFAULT_ESTIMATES = Path("data/research/news/gdelt/dry_run_estimates.csv")
 DEFAULT_RAW_ROOT = Path("data/research/news/gdelt/raw")
 DEFAULT_MAX_TOTAL_BYTES = int(0.80 * 1024 ** 4)
+BILLING_INCREMENT_BYTES = 1024 ** 2
 REQUIRED_EXPORT_COLUMNS = {
     "DATE", "SourceCommonName", "DocumentIdentifier", "V2Organizations", "V2Tone", "asset_ids"
 }
@@ -49,7 +50,10 @@ def load_approved_plan(sql_root=DEFAULT_SQL_ROOT, estimates_path=DEFAULT_ESTIMAT
         raise ValueError("Dry-run estimates are missing required columns")
     if estimates["query_file"].duplicated().any() or (estimates["estimated_bytes"] <= 0).any():
         raise ValueError("Dry-run estimates contain duplicate queries or invalid bytes")
-    total = int(estimates["estimated_bytes"].sum())
+    estimates["billing_cap_bytes"] = (
+        ((estimates["estimated_bytes"].astype(int) + BILLING_INCREMENT_BYTES - 1)
+         // BILLING_INCREMENT_BYTES) * BILLING_INCREMENT_BYTES)
+    total = int(estimates["billing_cap_bytes"].sum())
     if total > int(max_total_bytes):
         raise ValueError(f"Estimated {total} bytes exceeds safety budget {int(max_total_bytes)}")
     rows = []
@@ -58,7 +62,9 @@ def load_approved_plan(sql_root=DEFAULT_SQL_ROOT, estimates_path=DEFAULT_ESTIMAT
         if not sql_path.exists():
             raise FileNotFoundError(sql_path)
         rows.append({"query_file": item.query_file, "sql_path": sql_path,
-                     "estimated_bytes": int(item.estimated_bytes), "sql_sha256": _sha256(sql_path)})
+                     "estimated_bytes": int(item.estimated_bytes),
+                     "billing_cap_bytes": int(item.billing_cap_bytes),
+                     "sql_sha256": _sha256(sql_path)})
     return rows, total
 
 
@@ -82,7 +88,7 @@ def execute(project_id, sql_root=DEFAULT_SQL_ROOT, estimates_path=DEFAULT_ESTIMA
         progress(f"[{number}/{len(plan)}] {output_path.name}: executing guarded query")
         command = ["bq", "query", f"--project_id={project_id}", "--use_legacy_sql=false",
                    "--format=csv", "--max_rows=10000000",
-                   f"--maximum_bytes_billed={item['estimated_bytes']}"]
+                   f"--maximum_bytes_billed={item['billing_cap_bytes']}"]
         result = runner(command, input=item["sql_path"].read_text(encoding="utf-8"),
                         text=True, capture_output=True, check=False)
         if result.returncode:
