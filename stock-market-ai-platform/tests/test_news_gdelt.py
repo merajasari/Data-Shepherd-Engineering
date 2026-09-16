@@ -19,7 +19,7 @@ class GdeltAcquisitionTest(unittest.TestCase):
             "DATE": 20250101123000, "SourceCommonName": "example.com",
             "DocumentIdentifier": "https://example.com/bitcoin-story",
             "V2Organizations": "Bitcoin Foundation",
-            "V2Themes": "ECON_CRYPTOCURRENCY", "V2Tone": "-5.0,1,2,3",
+            "V2Tone": "-5.0,1,2,3",
             "asset_ids": '["BTC-USD"]',
         }])
         result = canonicalize_export(raw, "2025-01-02T00:00:00Z")
