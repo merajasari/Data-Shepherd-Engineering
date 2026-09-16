@@ -28,44 +28,66 @@
 
   const shell = document.querySelector('.shell');
   const header = shell && shell.querySelector('header');
-  const existingTabs = shell && shell.querySelector('.tabs');
   const params = new URLSearchParams(window.location.search);
-  const liveStockView = window.location.pathname === '/dashboard' && params.get('view') === 'live';
-  const modelResearchView = window.location.pathname === '/dashboard' && !liveStockView;
+  const path = window.location.pathname;
+  const liveStockView = path === '/dashboard' && params.get('view') === 'live';
+  const modelResearchView = path === '/dashboard' && !liveStockView;
+  const stockArea = path === '/dashboard';
+  const cryptoArea = path === '/crypto' || path === '/crypto-visual';
+  const readinessArea = path === '/trading-readiness';
 
-  if (shell && header && !existingTabs && ['/dashboard', '/crypto', '/crypto-visual'].includes(window.location.pathname)) {
-    const style = document.createElement('style');
-    style.textContent = `
-      .ds-dashboard-tabs{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap}
-      .ds-dashboard-tab{padding:12px 18px;border:1px solid #244261;border-radius:999px;text-decoration:none;color:#91a6c2;font-weight:900;letter-spacing:.04em;background:rgba(13,28,49,.85)}
-      .ds-dashboard-tab.active{color:#06151d;background:linear-gradient(90deg,#36d8ff,#39e3a1);border-color:transparent}
-      .ds-dashboard-tab:hover{border-color:rgba(54,216,255,.55);color:#f2f6ff}
-      body.ds-model-research-view .ds-primary-stock-section{display:none!important}
-      body.ds-model-research-view .ds-market-card{display:none!important}
-      body.ds-model-research-view .ds-market-section{grid-template-columns:1fr!important}
-      body.ds-model-research-view .market-history-card{display:none!important}
-      body.ds-model-research-view .ds-recent-market-data{display:none!important}
-      body.ds-live-stock-view .shell>section:not(.ds-live-stock-keep):not(.market-history-card){display:none!important}
-      body.ds-live-stock-view .ds-market-section{grid-template-columns:1fr!important}
-      body.ds-live-stock-view .ds-model-signal-card{display:none!important}
-      body.ds-live-stock-view .market-history-card{display:block!important}
-      body.ds-live-stock-view #v8-holdout-monitor,
-      body.ds-live-stock-view .v8-holdout-monitor,
-      body.ds-live-stock-view [data-v8-holdout-monitor]{display:none!important}
-      body.ds-live-stock-view footer{margin-top:24px}
-    `;
-    document.head.appendChild(style);
+  if (shell && header && ['/dashboard', '/crypto', '/crypto-visual', '/trading-readiness'].includes(path)) {
+    shell.querySelectorAll(':scope > nav.tabs, :scope > .ds-dashboard-tabs, :scope > .ds-section-tabs').forEach(nav => nav.remove());
 
-    const nav = document.createElement('nav');
-    nav.className = 'ds-dashboard-tabs';
-    nav.setAttribute('aria-label', 'Dashboard sections');
-    nav.innerHTML = `
-      <a class="ds-dashboard-tab ${modelResearchView ? 'active' : ''}" href="/dashboard">MODEL RESEARCH</a>
-      <a class="ds-dashboard-tab ${liveStockView ? 'active' : ''}" href="/dashboard?view=live">LIVE STOCK VIEWER</a>
-      <a class="ds-dashboard-tab ${window.location.pathname === '/crypto' ? 'active' : ''}" href="/crypto">CRYPTO</a>
-      <a class="ds-dashboard-tab ${window.location.pathname === '/crypto-visual' ? 'active' : ''}" href="/crypto-visual">CRYPTO VISUAL</a>
+    if (!document.getElementById('ds-navigation-style')) {
+      const style = document.createElement('style');
+      style.id = 'ds-navigation-style';
+      style.textContent = `
+        .ds-dashboard-tabs,.ds-section-tabs{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+        .ds-section-tabs{margin-bottom:22px;padding-left:10px;border-left:3px solid rgba(54,216,255,.35)}
+        .ds-dashboard-tab,.ds-section-tab{padding:12px 18px;border:1px solid #244261;border-radius:999px;text-decoration:none;color:#91a6c2;font-weight:900;letter-spacing:.04em;background:rgba(13,28,49,.85)}
+        .ds-section-tab{padding:10px 16px;font-size:.82rem}
+        .ds-dashboard-tab.active,.ds-section-tab.active{color:#06151d;background:linear-gradient(90deg,#36d8ff,#39e3a1);border-color:transparent}
+        .ds-dashboard-tab:hover,.ds-section-tab:hover{border-color:rgba(54,216,255,.55);color:#f2f6ff}
+        body.ds-model-research-view .ds-primary-stock-section{display:none!important}
+        body.ds-model-research-view .ds-market-card{display:none!important}
+        body.ds-model-research-view .ds-market-section{grid-template-columns:1fr!important}
+        body.ds-model-research-view .market-history-card{display:none!important}
+        body.ds-model-research-view .ds-recent-market-data{display:none!important}
+        body.ds-live-stock-view .shell>section:not(.ds-live-stock-keep):not(.market-history-card){display:none!important}
+        body.ds-live-stock-view .ds-market-section{grid-template-columns:1fr!important}
+        body.ds-live-stock-view .ds-model-signal-card{display:none!important}
+        body.ds-live-stock-view .market-history-card{display:block!important}
+        body.ds-live-stock-view #v8-holdout-monitor,
+        body.ds-live-stock-view .v8-holdout-monitor,
+        body.ds-live-stock-view [data-v8-holdout-monitor]{display:none!important}
+        body.ds-live-stock-view footer{margin-top:24px}
+        @media(max-width:650px){.ds-dashboard-tab,.ds-section-tab{flex:1 1 auto;text-align:center}.ds-section-tabs{padding-left:0;border-left:0}}
+      `;
+      document.head.appendChild(style);
+    }
+
+    const primary = document.createElement('nav');
+    primary.className = 'ds-dashboard-tabs ds-primary-tabs';
+    primary.setAttribute('aria-label', 'Primary platform areas');
+    primary.innerHTML = `
+      <a class="ds-dashboard-tab ${stockArea ? 'active' : ''}" href="/dashboard" ${stockArea ? 'aria-current="page"' : ''}>STOCKS</a>
+      <a class="ds-dashboard-tab ${cryptoArea ? 'active' : ''}" href="/crypto" ${cryptoArea ? 'aria-current="page"' : ''}>CRYPTO</a>
+      <a class="ds-dashboard-tab ${readinessArea ? 'active' : ''}" href="/trading-readiness" ${readinessArea ? 'aria-current="page"' : ''}>TRADING READINESS</a>
     `;
-    header.insertAdjacentElement('afterend', nav);
+    header.insertAdjacentElement('afterend', primary);
+
+    if (stockArea || cryptoArea) {
+      const secondary = document.createElement('nav');
+      secondary.className = 'ds-section-tabs';
+      secondary.setAttribute('aria-label', stockArea ? 'Stock areas' : 'Crypto areas');
+      secondary.innerHTML = stockArea
+        ? `<a class="ds-section-tab ${modelResearchView ? 'active' : ''}" href="/dashboard" ${modelResearchView ? 'aria-current="page"' : ''}>MODEL RESEARCH</a>
+           <a class="ds-section-tab ${liveStockView ? 'active' : ''}" href="/dashboard?view=live" ${liveStockView ? 'aria-current="page"' : ''}>LIVE STOCK VIEWER</a>`
+        : `<a class="ds-section-tab ${path === '/crypto' ? 'active' : ''}" href="/crypto" ${path === '/crypto' ? 'aria-current="page"' : ''}>CRYPTO MODEL RESEARCH</a>
+           <a class="ds-section-tab ${path === '/crypto-visual' ? 'active' : ''}" href="/crypto-visual" ${path === '/crypto-visual' ? 'aria-current="page"' : ''}>CRYPTO LIVE</a>`;
+      primary.insertAdjacentElement('afterend', secondary);
+    }
   }
 
   if (window.location.pathname === '/dashboard') {

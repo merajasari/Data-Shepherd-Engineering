@@ -66,13 +66,13 @@
       prompts: ['How do I read this chart?', 'What does a V8 rank mean?', 'Why is live data provisional?']
     },
     crypto: {
-      label: 'Crypto dashboard guide',
-      welcome: 'Hi! I can explain the crypto dashboard, data freshness, monitoring states, and research terminology.',
-      prompts: ['Explain this crypto dashboard', 'What does data freshness mean?', 'Are these live trading signals?']
+      label: 'Crypto Model Research guide',
+      welcome: 'Hi! I can explain the crypto model tabs, evidence boundaries, monitoring states, and research terminology.',
+      prompts: ['Explain these crypto models', 'What does data freshness mean?', 'Are these live trading signals?']
     },
     crypto_visual: {
-      label: 'Crypto Visual guide',
-      welcome: 'Hi! I can explain the crypto visualizations, ranges, comparisons, and evidence labels.',
+      label: 'Crypto Live guide',
+      welcome: 'Hi! I can explain Crypto Live prices, history ranges, market relationships, and evidence labels.',
       prompts: ['How do I read this visual?', 'What do the ranges change?', 'What evidence is forward-only?']
     },
     platform: {

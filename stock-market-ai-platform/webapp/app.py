@@ -70,6 +70,7 @@ def inject_dashboard_modules(response):
         if request.path in {"/dashboard","/crypto","/crypto-visual","/trading-readiness"}:
             scripts.extend(['<script src="/static/js/session_idle_timeout.js" defer></script>','<script src="/static/js/trading_readiness_nav.js" defer></script>'])
         if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
+        if request.path=="/crypto": scripts.append('<script src="/static/js/crypto_model_research_tabs.js" defer></script>')
         if request.path=="/dashboard":
             shared=['<script src="/static/js/v8_holdout_snapshot.js" defer></script>','<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
             scripts.extend(shared)
@@ -172,7 +173,7 @@ def api_session_activity():
     session["last_activity_utc"]=datetime.now(timezone.utc).isoformat()
     return jsonify({"status":"active","idle_timeout_seconds":IDLE_TIMEOUT_SECONDS})
 
-CUSTOMER_CHAT_PAGES={"landing":"landing page","research":"Model Research","live":"Live Stock Viewer","crypto":"Crypto dashboard","crypto_visual":"Crypto Visual","platform":"platform"}
+CUSTOMER_CHAT_PAGES={"landing":"landing page","research":"Model Research","live":"Live Stock Viewer","crypto":"Crypto Model Research","crypto_visual":"Crypto Live","platform":"platform"}
 CUSTOMER_CHAT_ADVICE_PHRASES=("should i buy","should i sell","what should i buy","what stock should","recommend a stock","recommend stocks","good investment","price target","guaranteed return","tell me what to trade","invest my money")
 
 def _customer_chat_page(raw):

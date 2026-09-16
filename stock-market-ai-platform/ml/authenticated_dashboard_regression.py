@@ -78,6 +78,25 @@ def main() -> None:
         and b'/static/js/v10_cycle3_holdout_monitor.js' in research.data,
         "Model Research loads all three classified V10 sections",
     )
+    crypto_research = client.get("/crypto")
+    require(
+        crypto_research.status_code == 200
+        and b"Crypto Model Research" in crypto_research.data
+        and b"/static/js/crypto_model_research_tabs.js" in crypto_research.data,
+        "Crypto defaults to Model Research and loads model-specific tabs",
+    )
+    crypto_live = client.get("/crypto-visual")
+    require(
+        crypto_live.status_code == 200
+        and b"Crypto Live" in crypto_live.data
+        and b"/static/js/crypto_model_research_tabs.js" not in crypto_live.data,
+        "Crypto Live retains the visual viewer under its renamed section",
+    )
+    readiness_page = client.get("/trading-readiness")
+    require(
+        readiness_page.status_code == 200,
+        "Trading Readiness remains a dedicated primary area",
+    )
     v8_api = client.get("/api/v8/holdout")
     require(v8_api.status_code == 200, "V8 synchronized dashboard API responds")
     require(
@@ -302,6 +321,21 @@ def main() -> None:
 
     project_root = Path(__file__).resolve().parents[1]
     dashboard_template = (project_root / "webapp/templates/index.html").read_text()
+    site_navigation = (
+        project_root / "webapp/static/js/signup_button.js"
+    ).read_text()
+    crypto_research_tabs = (
+        project_root / "webapp/static/js/crypto_model_research_tabs.js"
+    ).read_text()
+    crypto_template = (
+        project_root / "webapp/templates/crypto.html"
+    ).read_text()
+    crypto_live_template = (
+        project_root / "webapp/templates/crypto_visual.html"
+    ).read_text()
+    readiness_template = (
+        project_root / "webapp/templates/trading_readiness.html"
+    ).read_text()
     layout = (project_root / "webapp/static/js/dashboard_layout.js").read_text()
     operations = (project_root / "webapp/static/js/stock_operations_health.js").read_text()
     comparison = (project_root / "webapp/static/js/v4_equity_chart.js").read_text()
@@ -327,6 +361,36 @@ def main() -> None:
     require(
         "{#" not in dashboard_template,
         "Dashboard CSS contains no accidental Jinja comment opener",
+    )
+    require(
+        all(label in site_navigation for label in (
+            "STOCKS", "CRYPTO", "TRADING READINESS",
+            "MODEL RESEARCH", "LIVE STOCK VIEWER",
+            "CRYPTO MODEL RESEARCH", "CRYPTO LIVE",
+        ))
+        and "Primary platform areas" in site_navigation
+        and "Stock areas" in site_navigation
+        and "Crypto areas" in site_navigation,
+        "Site navigation exposes three primary areas and nested stock/crypto choices",
+    )
+    require(
+        all(label in crypto_research_tabs for label in (
+            "Overview", "Shared Crypto V2", "XRP V1", "Crypto V1",
+            "Shared Crypto V3", "XRP V2", "XRP V3",
+        ))
+        and 'role="tablist"' in crypto_research_tabs
+        and "setAttribute('role', 'tabpanel')" in crypto_research_tabs
+        and "ArrowLeft" in crypto_research_tabs,
+        "Crypto Model Research preserves every classified model in accessible tabs",
+    )
+    require(
+        "CRYPTO MODEL RESEARCH" in crypto_template
+        and "CRYPTO LIVE" in crypto_template
+        and "Crypto Live" in crypto_live_template
+        and "CRYPTO VISUAL" not in readiness_template
+        and "MODEL RESEARCH" not in readiness_template
+        and "LIVE STOCK VIEWER" not in readiness_template,
+        "Server-rendered navigation mirrors the new hierarchy without legacy peers",
     )
     require(
         all(label in research_tabs for label in (
