@@ -1,6 +1,8 @@
 """Leakage-safe vector and event features available at each decision timestamp."""
 from __future__ import annotations
 
+from datetime import timedelta
+
 import numpy as np
 import pandas as pd
 
@@ -47,12 +49,12 @@ def build_asset_news_features(news, decisions, lookback_days=30):
         decision_ts = pd.Timestamp(decision.timestamp_utc)
         available = exploded[(exploded["asset_id"] == decision.asset_id) &
                              (exploded["available_at_utc"] <= decision_ts)]
-        start_72 = decision_ts - pd.Timedelta(hours=72)
-        start_24 = decision_ts - pd.Timedelta(hours=24)
+        start_72 = decision_ts - timedelta(hours=72)
+        start_24 = decision_ts - timedelta(hours=24)
         current72 = available[available["available_at_utc"] > start_72]
         current24 = available[available["available_at_utc"] > start_24]
         prior = available[(available["available_at_utc"] <= start_24) &
-                          (available["available_at_utc"] > decision_ts - pd.Timedelta(days=lookback_days))]
+                          (available["available_at_utc"] > decision_ts - timedelta(days=int(lookback_days)))]
         values = _features_for_window(current24, prior)
         values["news_count_24h"] = float(len(current24))
         values["news_count_72h"] = float(len(current72))
