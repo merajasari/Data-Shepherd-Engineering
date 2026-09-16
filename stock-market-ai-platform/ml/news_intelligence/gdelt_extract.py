@@ -86,7 +86,11 @@ def execute(project_id, sql_root=DEFAULT_SQL_ROOT, estimates_path=DEFAULT_ESTIMA
         result = runner(command, input=item["sql_path"].read_text(encoding="utf-8"),
                         text=True, capture_output=True, check=False)
         if result.returncode:
-            raise RuntimeError(f"Extraction failed for {item['query_file']}: {result.stderr.strip()}")
+            details = "\n".join(part.strip() for part in (result.stdout, result.stderr)
+                                if part and part.strip())
+            raise RuntimeError(
+                f"Extraction failed for {item['query_file']} "
+                f"(bq exit {result.returncode}): {details or 'no diagnostic output'}")
         part_path = output_path.with_suffix(".csv.part")
         part_path.write_text(result.stdout, encoding="utf-8")
         rows = _validate_csv(part_path)
