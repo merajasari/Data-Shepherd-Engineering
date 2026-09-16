@@ -61,8 +61,7 @@ def build_query(start, end, aliases=CRYPTO_ALIASES):
 WITH aliases AS (
   SELECT * FROM UNNEST([\n    {alias_sql}\n  ])
 ), source AS (
-  SELECT DATE, SourceCommonName, DocumentIdentifier, V2Organizations,
-         V2Themes, V2Tone
+  SELECT DATE, SourceCommonName, DocumentIdentifier, V2Organizations, V2Tone
   FROM `{GDELT_TABLE}`
   WHERE _PARTITIONTIME >= TIMESTAMP('{start_sql}')
     AND _PARTITIONTIME < TIMESTAMP('{end_sql}')
@@ -70,8 +69,8 @@ WITH aliases AS (
   SELECT s.*,
          ARRAY(SELECT a.asset_id FROM aliases a
                WHERE REGEXP_CONTAINS(LOWER(CONCAT(
-                 COALESCE(s.DocumentIdentifier,''), ' ', COALESCE(s.V2Organizations,''), ' ',
-                 COALESCE(s.V2Themes,''))), a.pattern)) AS asset_ids
+                 COALESCE(s.DocumentIdentifier,''), ' ', COALESCE(s.V2Organizations,''))),
+                 a.pattern)) AS asset_ids
   FROM source s
 )
 SELECT * FROM matched WHERE ARRAY_LENGTH(asset_ids) > 0
@@ -117,7 +116,7 @@ def _embedding(text, dimensions=256):
 
 def canonicalize_export(frame, retrieved_at_utc=None):
     required = {"DATE", "SourceCommonName", "DocumentIdentifier", "V2Organizations",
-                "V2Themes", "V2Tone", "asset_ids"}
+                "V2Tone", "asset_ids"}
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError("GDELT export missing columns: " + ", ".join(missing))
@@ -131,8 +130,7 @@ def canonicalize_export(frame, retrieved_at_utc=None):
         if isinstance(assets, str):
             assets = json.loads(assets)
         url = str(row["DocumentIdentifier"])
-        metadata = " ".join(str(row.get(column, "")) for column in
-                            ("V2Organizations", "V2Themes"))
+        metadata = " ".join((url, str(row.get("V2Organizations", ""))))
         article_id = hashlib.sha256(f"{row['DATE']}|{url}".encode()).hexdigest()
         rows.append({
             "article_id": article_id, "source": str(row["SourceCommonName"] or urlparse(url).netloc),
