@@ -82,15 +82,26 @@ def main() -> None:
     require(
         crypto_research.status_code == 200
         and b"Crypto Model Research" in crypto_research.data
-        and b"/static/js/crypto_model_research_tabs.js" in crypto_research.data,
-        "Crypto defaults to Model Research and loads model-specific tabs",
+        and b"/static/js/crypto_model_research.js" in crypto_research.data
+        and b"COINBASE REAL-TIME MARKET" in crypto_research.data
+        and b"MODEL COMPARISON" in crypto_research.data
+        and b"CRYPTO V5" in crypto_research.data,
+        "Crypto defaults to restored Overview, comparisons, and model tabs",
     )
     crypto_live = client.get("/crypto-visual")
     require(
         crypto_live.status_code == 200
         and b"Crypto Live" in crypto_live.data
-        and b"/static/js/crypto_model_research_tabs.js" not in crypto_live.data,
+        and b"/static/js/crypto_model_research.js" not in crypto_live.data,
         "Crypto Live retains the visual viewer under its renamed section",
+    )
+    crypto_comparison = client.get("/api/crypto-model-comparison")
+    require(
+        crypto_comparison.status_code in (200, 503)
+        and (crypto_comparison.get_json().get("research_safety", {}).get("brokerage_orders") is False
+             if crypto_comparison.status_code == 200
+             else crypto_comparison.get_json().get("available") is False),
+        "Crypto comparison API is read-only and actionable",
     )
     readiness_page = client.get("/trading-readiness")
     require(
@@ -325,10 +336,13 @@ def main() -> None:
         project_root / "webapp/static/js/signup_button.js"
     ).read_text()
     crypto_research_tabs = (
-        project_root / "webapp/static/js/crypto_model_research_tabs.js"
+        project_root / "webapp/static/js/crypto_model_research.js"
     ).read_text()
     crypto_template = (
-        project_root / "webapp/templates/crypto.html"
+        project_root / "webapp/templates/crypto_model_research.html"
+    ).read_text()
+    crypto_overview = (
+        project_root / "webapp/templates/crypto_overview_content.html"
     ).read_text()
     crypto_live_template = (
         project_root / "webapp/templates/crypto_visual.html"
@@ -376,17 +390,34 @@ def main() -> None:
         "Site navigation exposes three primary areas and nested stock/crypto choices",
     )
     require(
-        all(label in crypto_research_tabs for label in (
-            "Overview", "Shared Crypto V2", "XRP V1", "Crypto V1",
-            "Shared Crypto V3", "XRP V2", "XRP V3",
+        all(label in crypto_template for label in (
+            "OVERVIEW", "MODEL COMPARISON", "CRYPTO V1", "CRYPTO V2",
+            "CRYPTO V3", "CRYPTO V4", "CRYPTO V5", "SHARED CRYPTO V2",
+            "XRP V1", "SHARED CRYPTO V3", "XRP V2", "XRP V3",
         ))
-        and 'role="tablist"' in crypto_research_tabs
-        and "setAttribute('role', 'tabpanel')" in crypto_research_tabs
-        and "ArrowLeft" in crypto_research_tabs,
-        "Crypto Model Research preserves every classified model in accessible tabs",
+        and "setupTabs" in crypto_research_tabs
+        and "ArrowLeft" in crypto_research_tabs
+        and "data-crypto-panel" in crypto_template,
+        "Crypto Model Research preserves comparison and every classified model tab",
     )
     require(
-        "CRYPTO MODEL RESEARCH" in crypto_template
+        "{% include 'crypto_overview_content.html' %}" in crypto_template
+        and "COINBASE REAL-TIME MARKET" in crypto_overview
+        and "UNTOUCHED FORWARD PERFORMANCE" in crypto_overview
+        and "CRYPTO V1 HISTORICAL RESEARCH" in crypto_overview,
+        "Crypto Overview restores all prior operational, forward, and research content",
+    )
+    require(
+        "STARTING VALUE" in crypto_research_tabs
+        and "ENDING VALUE" in crypto_research_tabs
+        and "MAX DRAWDOWN" in crypto_research_tabs
+        and "data-model-chart=\"CRYPTO_V5\"" in crypto_template
+        and "SELECTED FOR FORWARD PAPER EVALUATION" in crypto_template,
+        "Crypto comparison and V5 tab expose supporting metrics and evidence boundaries",
+    )
+    require(
+        "STOCKS" in crypto_template
+        and "CRYPTO MODEL RESEARCH" in crypto_template
         and "CRYPTO LIVE" in crypto_template
         and "Crypto Live" in crypto_live_template
         and "CRYPTO VISUAL" not in readiness_template

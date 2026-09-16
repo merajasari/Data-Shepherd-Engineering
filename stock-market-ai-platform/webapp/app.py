@@ -25,6 +25,7 @@ def _lazy(module,name,*args,**kwargs):
     return getattr(import_module(module),name)(*args,**kwargs)
 
 def get_crypto_dashboard_payload(*a,**k):return _lazy("webapp.services.crypto_dashboard_service","get_crypto_dashboard_payload",*a,**k)
+def get_crypto_model_comparison(*a,**k):return _lazy("webapp.services.crypto_model_comparison_service","get_crypto_model_comparison",*a,**k)
 def get_all_live_quotes(*a,**k):return _lazy("webapp.services.live_market_service","get_all_live_quotes",*a,**k)
 def get_live_quote(*a,**k):return _lazy("webapp.services.live_market_service","get_live_quote",*a,**k)
 def get_stock_stream_health(*a,**k):return _lazy("webapp.services.stock_stream_health_service","get_stock_stream_health",*a,**k)
@@ -70,7 +71,6 @@ def inject_dashboard_modules(response):
         if request.path in {"/dashboard","/crypto","/crypto-visual","/trading-readiness"}:
             scripts.extend(['<script src="/static/js/session_idle_timeout.js" defer></script>','<script src="/static/js/trading_readiness_nav.js" defer></script>'])
         if request.path in {"/dashboard","/crypto"}: scripts.append('<script src="/static/js/realtime_market_refresh.js" defer></script>')
-        if request.path=="/crypto": scripts.append('<script src="/static/js/crypto_model_research_tabs.js" defer></script>')
         if request.path=="/dashboard":
             shared=['<script src="/static/js/v8_holdout_snapshot.js" defer></script>','<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
             scripts.extend(shared)
@@ -242,13 +242,18 @@ def trading_readiness():
 
 @app.route("/crypto")
 @login_required
-def crypto_dashboard():return render_template("crypto.html",crypto=get_crypto_dashboard_payload())
+def crypto_dashboard():return render_template("crypto_model_research.html",crypto=get_crypto_dashboard_payload())
 @app.route("/crypto-visual")
 @login_required
 def crypto_visual_dashboard():return render_template("crypto_visual.html",crypto=get_crypto_dashboard_payload())
 @app.route("/api/crypto-v1")
 @login_required
 def api_crypto_v1():return jsonify(get_crypto_dashboard_payload())
+@app.route("/api/crypto-model-comparison")
+@login_required
+def api_crypto_model_comparison():
+    payload=get_crypto_model_comparison()
+    return (jsonify(payload),200) if payload.get("available") else (jsonify(payload),503)
 @app.route("/api/v8-rankings")
 @login_required
 def api_v8_rankings():
