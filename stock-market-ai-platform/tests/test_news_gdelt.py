@@ -18,7 +18,7 @@ class GdeltAcquisitionTest(unittest.TestCase):
         raw = pd.DataFrame([{
             "DATE": 20250101123000, "SourceCommonName": "example.com",
             "DocumentIdentifier": "https://example.com/bitcoin-story",
-            "V2Organizations": "Bitcoin Foundation", "V2Persons": "",
+            "V2Organizations": "Bitcoin Foundation",
             "V2Themes": "ECON_CRYPTOCURRENCY", "V2Tone": "-5.0,1,2,3",
             "asset_ids": '["BTC-USD"]',
         }])
