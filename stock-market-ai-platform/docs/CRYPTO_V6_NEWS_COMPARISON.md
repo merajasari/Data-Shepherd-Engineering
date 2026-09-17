@@ -46,12 +46,31 @@ The final `v6_vs_v5_comparison.json` checks primary-cost return, Sharpe,
 drawdown, and 50-bps stress performance. A passing report remains
 `NOT_VALIDATED_REQUIRES_HUMAN_REVIEW`.
 
+## Reusable stock or crypto joins
+
+The provider-neutral join command accepts either stock or crypto decision data.
+The canonical news `asset_ids` must use the same symbol convention as the
+decision file. For example:
+
+```bash
+python -m ml.news_intelligence.point_in_time_join \
+  --news data/research/news/canonical_stock_news.parquet \
+  --decisions data/research/stock_decisions.parquet \
+  --asset-column symbol \
+  --prefix stock_news_ \
+  --output data/research/stock_decisions_with_news.parquet
+```
+
+The present GDELT acquisition contract tags crypto assets. A stock join should
+therefore use a stock-tagged canonical news archive, not relabel crypto news.
+
 ## Verification
 
 ```bash
 python -m py_compile \
   ml/news_intelligence/gdelt_consolidate.py \
   ml/news_intelligence/vector_features.py \
+  ml/news_intelligence/point_in_time_join.py \
   ml/crypto_v6/phase1.py \
   ml/crypto_v6/phase2.py \
   ml/crypto_v6/phase3.py

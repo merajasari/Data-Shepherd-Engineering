@@ -10,6 +10,7 @@ from ml.crypto_v6.phase2 import (
 )
 from ml.crypto_v6.phase3 import compare_candidates
 from ml.news_intelligence.schema import validate_news_frame
+from ml.news_intelligence.point_in_time_join import build_joined_dataset
 from ml.news_intelligence.vector_features import (
     build_asset_news_features,
     join_point_in_time_features,
@@ -93,6 +94,25 @@ class CryptoV6NewsPipelineTest(unittest.TestCase):
         self.assertEqual(augmented_allocation["market_feature"].tolist(), [1.0, 2.0])
         eth = augmented_ranking[augmented_ranking["product_id"] == "ETH-USD"]
         self.assertTrue((eth["asset_news_news_count_72h"] == 0.0).all())
+
+    def test_provider_neutral_join_supports_stock_symbols(self):
+        stock_news = self._news().iloc[[0]].copy()
+        stock_news["asset_ids"] = [["AAPL"]]
+        decisions = pd.DataFrame([{
+            "timestamp_utc": "2025-01-01T09:00:00Z",
+            "symbol": "AAPL",
+            "signal": 1,
+        }])
+        joined = build_joined_dataset(
+            stock_news,
+            decisions,
+            scope="asset",
+            asset_column="symbol",
+            prefix="stock_news_",
+        )
+        self.assertEqual(len(joined), 1)
+        self.assertEqual(joined.iloc[0]["stock_news_news_count_24h"], 1.0)
+        self.assertEqual(joined.iloc[0]["signal"], 1)
 
     def test_paired_prediction_clock_mismatch_fails_closed(self):
         base = {
