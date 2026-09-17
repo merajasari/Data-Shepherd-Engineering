@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ml.crypto_pre_holdout_readiness import HOLDOUT, run_audit
+from ml.crypto_pre_holdout_readiness import CLEAN_START, HOLDOUT, run_audit
 
 OUTPUT = Path("data/live/crypto_readiness/readiness_status.json")
 
@@ -33,13 +33,15 @@ def publish() -> dict:
         "status": "READY_FOR_FORWARD_EVALUATION" if audit.passed else "NOT_READY_FOR_FORWARD_EVALUATION",
         "ready": bool(audit.passed),
         "holdout_start_utc": HOLDOUT.isoformat(),
+        "clean_forward_start_utc": CLEAN_START.isoformat(),
         "pre_holdout": bool(now < HOLDOUT),
+        "pre_clean_forward_boundary": bool(now < CLEAN_START),
         "total_checks": len(audit.rows),
         "passed_checks": sum(1 for row in audit.rows if row["passed"]),
         "failed_checks": len(failed),
         "failures": failed,
         "brokerage_orders": False,
-        "note": "Read-only readiness snapshot generated from the canonical pre-holdout audit.",
+        "note": "Read-only readiness snapshot for the preserved Sep 1 lanes and the separately preregistered Shared V2 Sep 18 clean lane.",
     }
     _atomic_json(OUTPUT, payload)
     return payload
@@ -52,6 +54,7 @@ def main() -> None:
     print(f"Status:     {payload['status']}")
     print(f"Checks:     {payload['passed_checks']}/{payload['total_checks']} passed")
     print(f"Boundary:   {payload['holdout_start_utc']}")
+    print(f"Shared V2 clean boundary: {payload['clean_forward_start_utc']}")
     print(f"Real orders: {'YES' if payload['brokerage_orders'] else 'NO'}")
     if payload["failures"]:
         for row in payload["failures"]:

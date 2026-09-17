@@ -9,6 +9,7 @@ UID_VALUE="$(id -u)"
 DOMAIN="gui/$UID_VALUE"
 LOGDIR="$PROJECT/logs"
 PHASE5="$PROJECT/data/model/crypto_15m_v2/phase5"
+CLEAN="$PHASE5/clean_forward_v2"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOGDIR"
 
@@ -65,7 +66,8 @@ plutil -lint "$PLIST"
 chmod 600 "$PLIST"
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
 launchctl bootout "$DOMAIN" "$PLIST" 2>/dev/null || true
-rm -f "$PHASE5/forward_service.lock"
+mkdir -p "$CLEAN"
+rm -f "$PHASE5/forward_service.lock" "$CLEAN/forward_service.lock"
 launchctl enable "$DOMAIN/$LABEL"
 if ! launchctl bootstrap "$DOMAIN" "$PLIST"; then
   echo "launchctl bootstrap failed; retrying with the macOS legacy user-agent loader." >&2
@@ -80,12 +82,17 @@ if ! launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
 fi
 
 echo "Installed $LABEL"
-echo "Mode before 2026-09-01 UTC: SHADOW (no forward journal rows)"
-echo "Mode at/after 2026-09-01 UTC: FORWARD paper evaluation"
+echo "Lane: Shared Crypto V2 Clean Forward V2"
+echo "Mode before 2026-09-18 00:00 UTC: WAITING_CLEAN_BOUNDARY (no evidence rows)"
+echo "Mode at/after the exact boundary: CLEAN_FORWARD paper evaluation"
+echo "If the first boundary is missed: FAIL CLOSED (no late start or backfill)"
 echo "Frozen model: $PHASE5/frozen_hgb.joblib"
-echo "State: $PHASE5/forward_state.json"
-echo "Journal: $PHASE5/forward_journal.csv"
-echo "Status: $PHASE5/forward_service_status.json"
-echo "Shadow snapshot: $PHASE5/shadow_latest.json"
+echo "Preserved interrupted state: $PHASE5/forward_state.json"
+echo "Preserved interrupted journal: $PHASE5/forward_journal.csv"
+echo "Clean state: $CLEAN/forward_state.json"
+echo "Clean journal: $CLEAN/forward_journal.csv"
+echo "Clean status: $CLEAN/forward_service_status.json"
+echo "Clean contract: $CLEAN/clean_lane_manifest.json"
+echo "Waiting snapshot: $CLEAN/waiting_latest.json"
 echo "Logs: $LOGDIR/crypto_v2_forward.out.log / $LOGDIR/crypto_v2_forward.err.log"
 echo "No brokerage orders are placed."

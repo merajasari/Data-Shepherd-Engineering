@@ -18,8 +18,11 @@ PHASE3_ROOT = MODEL_ROOT / "phase3"
 PHASE4_ROOT = MODEL_ROOT / "phase4"
 V2_PHASE4_ROOT = Path("data/model/crypto_15m_v2/phase4")
 V2_PHASE5_ROOT = Path("data/model/crypto_15m_v2/phase5")
-V2_STATUS_PATH = V2_PHASE5_ROOT / "forward_service_status.json"
-V2_JOURNAL_PATH = V2_PHASE5_ROOT / "forward_journal.csv"
+V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"
+V2_STATUS_PATH = V2_CLEAN_ROOT / "forward_service_status.json"
+V2_JOURNAL_PATH = V2_CLEAN_ROOT / "forward_journal.csv"
+V2_CLEAN_MANIFEST_PATH = V2_CLEAN_ROOT / "clean_lane_manifest.json"
+V2_INTERRUPTED_JOURNAL_PATH = V2_PHASE5_ROOT / "forward_journal.csv"
 V2_POLICY_SUMMARY_PATH = V2_PHASE4_ROOT / "policy_summary.csv"
 V2_PHASE4_MANIFEST_PATH = V2_PHASE4_ROOT / "manifest.json"
 RECONCILE_STATUS_PATH = Path("data/live/crypto_rt/reconcile_status.json")
@@ -145,6 +148,8 @@ def _operational_health():
     v2_error = None
     if v2 and v2.get("model_sha256_verified") is False:
         v2_error = "Frozen Shared V2 model hash verification failed."
+    elif v2 and v2.get("action") in {"clean_boundary_missed_no_start", "gap_detected_no_backfill"}:
+        v2_error = "Shared V2 clean evidence lane is fail-closed after a missed required hour."
 
     xrp_error = None
     if xrp and xrp.get("model_sha256_verified") is False:
@@ -172,7 +177,7 @@ def _operational_health():
 
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
-        _service_health("Shared V2 Forward", V2_STATUS_PATH, v2, 90, v2_error),
+        _service_health("Shared V2 Clean Forward V2", V2_STATUS_PATH, v2, 90, v2_error),
         _service_health("XRP V1 Forward", XRP_STATUS_PATH, xrp, 90, xrp_error),
         _service_health(
             "XRP Phase 7 Evaluator",
@@ -229,6 +234,7 @@ def _forward_evaluation_readiness():
         "age_minutes": round(age_minutes, 1) if age_minutes is not None else None,
         "stale_after_minutes": 30,
         "holdout_start_utc": payload.get("holdout_start_utc"),
+        "clean_forward_start_utc": payload.get("clean_forward_start_utc"),
         "pre_holdout": payload.get("pre_holdout"),
         "passed_checks": int(payload.get("passed_checks", 0) or 0),
         "total_checks": int(payload.get("total_checks", 0) or 0),
@@ -338,6 +344,7 @@ def _equity_history(primary, btc):
 
 def _v2_live():
     status = _read_json(V2_STATUS_PATH)
+    lane = _read_json(V2_CLEAN_MANIFEST_PATH)
     reconcile = _read_json(RECONCILE_STATUS_PATH)
     if not status:
         return {"available": False, "message": "Frozen Crypto 15m V2 forward service status is not available yet."}
@@ -396,6 +403,14 @@ def _v2_live():
         "missing_alts": status.get("missing_decision_candle_alts", []),
         "ineligible_alts": status.get("feature_ineligible_alts", []),
         "brokerage_orders": bool(status.get("brokerage_orders", False)),
+        "lane_id": status.get("lane_id") or lane.get("lane_id"),
+        "lane_name": status.get("lane_name") or lane.get("display_name"),
+        "clean_start_utc": status.get("clean_start_utc") or lane.get("preregistered_start_utc"),
+        "interrupted_lane_classification": status.get("interrupted_lane_classification") or lane.get("interrupted_lane", {}).get("classification"),
+        "interrupted_journal_rows": int(lane.get("interrupted_lane", {}).get("journal_rows", 0) or 0),
+        "interrupted_last_decision_utc": lane.get("interrupted_lane", {}).get("last_decision_timestamp_utc"),
+        "automatic_promotion": bool(status.get("automatic_promotion", False)),
+        "human_review_required": bool(status.get("human_review_required", True)),
         "reconcile_boundary": reconcile.get("latest_expected_bar_start_utc"),
         "reconcile_product_count": reconcile.get("product_count"),
         "journal_rows": max(0, len(journal)),
@@ -480,11 +495,11 @@ def _equity_drawdown(values):
 
 
 def _shared_v2_forward_performance():
-    holdout = pd.Timestamp("2026-09-01T00:00:00Z")
+    holdout = pd.Timestamp("2026-09-18T00:00:00Z")
     now = pd.Timestamp.now(tz="UTC")
     journal = _read_csv(V2_JOURNAL_PATH)
     base = {
-        "name": "Shared Crypto V2",
+        "name": "Shared Crypto V2 Clean Forward V2",
         "holdout_start_utc": holdout.isoformat(),
         "cost_bps": 5.0,
         "brokerage_orders": False,
@@ -532,9 +547,10 @@ def _xrp_phase7_forward_performance():
 def _future_forward_performance():
     return {
         "holdout_start_utc": "2026-09-01T00:00:00+00:00",
+        "shared_v2_clean_start_utc": "2026-09-18T00:00:00+00:00",
         "shared_v2": _shared_v2_forward_performance(),
         "xrp_phase7": _xrp_phase7_forward_performance(),
-        "note": "Untouched Sep 1+ paper-evaluation evidence only. No historical backfill, no tuning, and no real brokerage orders.",
+        "note": "XRP retains its Sep 1 evidence boundary. Shared V2 uses the separately preregistered Sep 18 clean lane; the interrupted Sep 1 journal is preserved and excluded. No backfill, tuning, automatic promotion, or real brokerage orders.",
     }
 
 
@@ -606,7 +622,7 @@ def _forward_validation_summary(forward_performance):
         "minimum_realizations": FORWARD_VALIDATION_MIN_REALIZATIONS,
         "shared_v2": _forward_validation_track(forward_performance["shared_v2"]),
         "xrp_phase7": _forward_validation_track(forward_performance["xrp_phase7"]),
-        "note": "Fixed 30-realization gate using untouched Sep 1+ evidence only. This is descriptive forward assessment, not model selection, threshold tuning, or a promotion decision.",
+        "note": "Fixed 30-realization gate applied independently to XRP's Sep 1 lane and Shared V2's Sep 18 clean lane. This is descriptive assessment, not model selection, threshold tuning, or promotion authority.",
     }
 
 

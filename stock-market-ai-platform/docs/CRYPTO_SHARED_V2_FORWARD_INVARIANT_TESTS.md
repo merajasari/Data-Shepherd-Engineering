@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This test suite protects the frozen Shared Crypto V2 forward-evaluation service before the untouched future boundary at `2026-09-01T00:00:00+00:00`.
+This test suite protects the frozen Shared Crypto V2 model and the separately preregistered Clean Forward V2 evidence lane beginning at `2026-09-18T00:00:00+00:00`. The interrupted September 1 lane is retained as immutable historical operational evidence and is never continued or backfilled.
 
 The tests are operational/regression safeguards only. They do not fit models, tune thresholds, change the frozen `confirm_2` policy, inspect future holdout outcomes, or place brokerage orders.
 
@@ -32,9 +32,16 @@ The suite locks down the following behaviors:
 8. A realization is unavailable unless the frozen minimum number of ALT assets has both exact endpoint candles.
 9. The frozen 5 bps transaction cost is charged only when `sleeve_switch == 1`.
 10. Finalizing an already-realized row is idempotent and cannot compound performance twice.
-11. Pre-holdout shadow runs cannot append to the forward journal or advance `confirm_2` execution state.
+11. Pre-boundary waiting runs cannot append to the clean journal or advance `confirm_2` execution state.
 12. A missed future decision hour produces `gap_detected_no_backfill`; the missing hour is never inserted later.
 13. Re-running the same future hour after process restart remains `already_processed` and cannot duplicate a journal row.
+14. Clean-lane initialization resets pending execution state and equity without copying interrupted operational state.
+15. The clean-lane manifest pins the interrupted state and journal hashes and rejects later mutation.
+16. An empty clean journal may append its first row only at the exact preregistered boundary.
+17. Missing the first clean boundary produces `clean_boundary_missed_no_start` and leaves the journal empty.
+18. Stale locks are reclaimed only when their owner PID is dead or invalid.
+19. A running owner lock remains authoritative and blocks a second service.
+20. Startup publishes an immediate heartbeat before inference begins.
 
 ## Filesystem isolation
 
@@ -42,6 +49,10 @@ Every test redirects these module paths to a temporary directory:
 
 ```text
 PHASE5_ROOT
+LEGACY_JOURNAL_PATH
+LEGACY_STATE_PATH
+CLEAN_ROOT
+CLEAN_LANE_MANIFEST_PATH
 JOURNAL_PATH
 STATE_PATH
 SHADOW_PATH
@@ -56,8 +67,7 @@ data/model/crypto_15m_v2/phase5/frozen_hgb.joblib
 data/model/crypto_15m_v2/phase5/freeze_manifest.json
 data/model/crypto_15m_v2/phase5/forward_state.json
 data/model/crypto_15m_v2/phase5/forward_journal.csv
-data/model/crypto_15m_v2/phase5/shadow_latest.json
-data/model/crypto_15m_v2/phase5/forward_service_status.json
+data/model/crypto_15m_v2/phase5/clean_forward_v2/
 ```
 
 The frozen model and manifest are not needed by the unit tests. Contract/model loading is mocked where an end-to-end service cycle is being exercised.
@@ -84,9 +94,9 @@ Therefore:
 
 A raw prediction change by itself does not create a transaction cost. A cost exists only when frozen `confirm_2` changes the executed sleeve.
 
-## Holdout safety
+## Clean-boundary safety
 
-Before September 1, Shared V2 remains in `SHADOW` mode. A shadow cycle may refresh operational metadata and the separate shadow snapshot, but it must not:
+Before September 18 at 00:00 UTC, Shared V2 remains in `WAITING_CLEAN_BOUNDARY`. A waiting cycle may refresh operational metadata and the separate waiting snapshot, but it must not:
 
 - append a forward decision,
 - modify a forward realization,
@@ -106,4 +116,4 @@ and must not synthesize or insert the missing historical decision hour. This kee
 
 ## Scope
 
-These tests establish software invariants. Passing them does not establish investment performance, statistical validity, or promotion eligibility. Untouched future performance remains governed by the September 1 forward-evaluation boundary and the fixed future-sample assessment shown on the dashboard.
+These tests establish software invariants. Passing them does not establish investment performance, statistical validity, or promotion eligibility. Shared V2 clean evidence is governed by the September 18 boundary; XRP retains its separate September 1 boundary. Both remain paper-only and require human review.

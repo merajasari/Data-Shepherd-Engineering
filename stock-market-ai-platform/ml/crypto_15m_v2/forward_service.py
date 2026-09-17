@@ -1,14 +1,14 @@
-"""Frozen Crypto 15m V2 forward inference + paper-evaluation journal service.
+"""Frozen Crypto 15m V2 clean forward paper-evaluation service.
 
 Uses authoritative reconciled Coinbase 15-minute REST candles, reconstructs the
 frozen 44-feature hourly BTC/ALT/CASH row, verifies the Phase 5 model hash,
 produces HGB probabilities, applies frozen confirm_2 execution state, and writes
-paper-evaluation records only for genuinely new hourly decisions at/after the
-2026-09-01 UTC holdout boundary.
+paper-evaluation records only to the separately preregistered clean lane at/after
+2026-09-18 00:00 UTC.
 
-Before the holdout boundary the service runs in shadow mode and writes only a
-separate shadow snapshot. It never backfills missed holdout decisions and never
-places brokerage orders.
+The interrupted September 1 lane remains byte-for-byte preserved. Before the
+clean boundary this service publishes waiting telemetry only. It never backfills
+missed decisions, starts late, or places brokerage orders.
 
 The frozen Phase 1/V2 dataset was built with a minimum-alt-universe rule rather
 than requiring every ALT to have every timestamp. Forward inference therefore
@@ -39,18 +39,28 @@ RAW_ROOT = Path("data/research/crypto_intraday/raw_15m")
 PHASE5_ROOT = Path("data/model/crypto_15m_v2/phase5")
 MODEL_PATH = PHASE5_ROOT / "frozen_hgb.joblib"
 MANIFEST_PATH = PHASE5_ROOT / "freeze_manifest.json"
-STATE_PATH = PHASE5_ROOT / "forward_state.json"
-JOURNAL_PATH = PHASE5_ROOT / "forward_journal.csv"
-SHADOW_PATH = PHASE5_ROOT / "shadow_latest.json"
-SERVICE_STATUS_PATH = PHASE5_ROOT / "forward_service_status.json"
-LOCK_PATH = PHASE5_ROOT / "forward_service.lock"
+LEGACY_STATE_PATH = PHASE5_ROOT / "forward_state.json"
+LEGACY_JOURNAL_PATH = PHASE5_ROOT / "forward_journal.csv"
+LEGACY_STATUS_PATH = PHASE5_ROOT / "forward_service_status.json"
+CLEAN_ROOT = PHASE5_ROOT / "clean_forward_v2"
+STATE_PATH = CLEAN_ROOT / "forward_state.json"
+JOURNAL_PATH = CLEAN_ROOT / "forward_journal.csv"
+SHADOW_PATH = CLEAN_ROOT / "waiting_latest.json"
+SERVICE_STATUS_PATH = CLEAN_ROOT / "forward_service_status.json"
+LOCK_PATH = CLEAN_ROOT / "forward_service.lock"
+CLEAN_LANE_MANIFEST_PATH = CLEAN_ROOT / "clean_lane_manifest.json"
 
 BTC = "BTC-USD"
 XRP = "XRP-USD"
 CORE_PRODUCTS = tuple(p for p in PRODUCTS if p != XRP)
 ALT_PRODUCTS = tuple(p for p in CORE_PRODUCTS if p != BTC)
 LABELS = ("BTC", "ALT", "CASH")
-HOLDOUT = pd.Timestamp("2026-09-01T00:00:00Z")
+ORIGINAL_HOLDOUT = pd.Timestamp("2026-09-01T00:00:00Z")
+CLEAN_START = pd.Timestamp("2026-09-18T00:00:00Z")
+# Compatibility for code that reports the original Phase 5 freeze boundary.
+HOLDOUT = ORIGINAL_HOLDOUT
+CLEAN_LANE_ID = "shared_crypto_v2_clean_forward_v2"
+CLEAN_LANE_NAME = "Shared Crypto V2 Clean Forward V2"
 COST_BPS = 5.0
 CONFIRM_REQUIRED = 2
 DEFAULT_POLL_SECONDS = 60
@@ -72,8 +82,115 @@ def _atomic_json(path: Path, payload: dict) -> None:
     tmp.replace(path)
 
 
+def _clean_lane_manifest() -> dict:
+    if not CLEAN_LANE_MANIFEST_PATH.exists():
+        return {}
+    payload = json.loads(CLEAN_LANE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("Clean-lane manifest is not a JSON object")
+    return payload
+
+
+def _ensure_clean_lane(manifest: dict, model_sha256: str) -> dict:
+    """Create or verify the isolated lane without mutating interrupted evidence."""
+    for path in (LEGACY_STATE_PATH, LEGACY_JOURNAL_PATH):
+        if not path.exists():
+            raise FileNotFoundError(path)
+
+    legacy_state_hash = _sha256(LEGACY_STATE_PATH)
+    legacy_journal_hash = _sha256(LEGACY_JOURNAL_PATH)
+    lane = _clean_lane_manifest()
+    if lane:
+        checks = {
+            "lane id": lane.get("lane_id") == CLEAN_LANE_ID,
+            "clean boundary": pd.Timestamp(lane.get("preregistered_start_utc")) == CLEAN_START,
+            "source model": lane.get("source_model_sha256") == model_sha256,
+            "interrupted state preservation": lane.get("interrupted_lane", {}).get("state_sha256") == legacy_state_hash,
+            "interrupted journal preservation": lane.get("interrupted_lane", {}).get("journal_sha256") == legacy_journal_hash,
+            "brokerage prohibition": lane.get("brokerage_orders") is False,
+        }
+        failed = [name for name, passed in checks.items() if not passed]
+        if failed:
+            raise RuntimeError("Clean-lane contract verification failed: " + ", ".join(failed))
+        for path in (STATE_PATH, JOURNAL_PATH):
+            if not path.exists():
+                raise FileNotFoundError(path)
+        return lane
+
+    if STATE_PATH.exists() or JOURNAL_PATH.exists():
+        raise RuntimeError("Unregistered clean-lane state or journal exists; refusing ambiguous recovery")
+
+    policy = manifest.get("execution_policy", {})
+    initial_label = manifest.get("state", {}).get("initial_current_executed_label")
+    if initial_label not in LABELS:
+        raise RuntimeError("Frozen manifest does not provide a valid initial sleeve")
+    columns = list(manifest.get("forward_journal_contract", {}).get("columns") or [])
+    if not columns:
+        raise RuntimeError("Frozen manifest does not provide the forward journal schema")
+
+    legacy = pd.read_csv(LEGACY_JOURNAL_PATH)
+    legacy_last = None
+    if len(legacy) and "decision_timestamp_utc" in legacy:
+        parsed = pd.to_datetime(legacy["decision_timestamp_utc"], utc=True, errors="coerce", format="mixed").dropna()
+        legacy_last = parsed.max().isoformat() if len(parsed) else None
+
+    CLEAN_ROOT.mkdir(parents=True, exist_ok=True)
+    state = {
+        "lane_id": CLEAN_LANE_ID,
+        "initialized_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source_model_sha256": model_sha256,
+        "current_executed_label": initial_label,
+        "pending_candidate_label": None,
+        "pending_candidate_count": 0,
+        "confirmation_hours_required": CONFIRM_REQUIRED,
+        "minimum_hold_hours": int(policy.get("minimum_hold_hours", 0)),
+        "forward_evaluation_start_utc": CLEAN_START.isoformat(),
+        "starting_equity": 1.0,
+        "current_equity": 1.0,
+        "last_forward_decision_timestamp_utc": None,
+        "last_realized_timestamp_utc": None,
+        "brokerage_orders": False,
+        "research_note": "Fresh confirm_2 operational state for the separately preregistered clean lane; no interrupted-lane state was inherited.",
+    }
+    _atomic_json(STATE_PATH, state)
+    journal_tmp = JOURNAL_PATH.with_suffix(JOURNAL_PATH.suffix + ".tmp")
+    pd.DataFrame(columns=columns).to_csv(journal_tmp, index=False)
+    journal_tmp.replace(JOURNAL_PATH)
+
+    lane = {
+        "schema_version": 1,
+        "lane_id": CLEAN_LANE_ID,
+        "display_name": CLEAN_LANE_NAME,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "preregistered_start_utc": CLEAN_START.isoformat(),
+        "decision_frequency": policy.get("decision_frequency"),
+        "source_model_id": manifest.get("model", {}).get("model_id"),
+        "source_model_sha256": model_sha256,
+        "source_freeze_manifest_sha256": _sha256(MANIFEST_PATH),
+        "execution_policy_id": policy.get("policy_id"),
+        "confirmation_hours": int(policy.get("confirmation_hours", -1)),
+        "initial_current_executed_label": initial_label,
+        "interrupted_lane": {
+            "classification": "PRESERVED_INTERRUPTED_NO_BACKFILL",
+            "state_path": str(LEGACY_STATE_PATH),
+            "state_sha256": legacy_state_hash,
+            "journal_path": str(LEGACY_JOURNAL_PATH),
+            "journal_sha256": legacy_journal_hash,
+            "journal_rows": int(len(legacy)),
+            "last_decision_timestamp_utc": legacy_last,
+        },
+        "late_start_policy": "FAIL_CLOSED_NO_START",
+        "missed_hour_policy": "FAIL_CLOSED_NO_BACKFILL",
+        "automatic_promotion": False,
+        "human_review_required": True,
+        "brokerage_orders": False,
+    }
+    _atomic_json(CLEAN_LANE_MANIFEST_PATH, lane)
+    return lane
+
+
 def _load_contract():
-    for path in (MODEL_PATH, MANIFEST_PATH, STATE_PATH, JOURNAL_PATH):
+    for path in (MODEL_PATH, MANIFEST_PATH, LEGACY_STATE_PATH, LEGACY_JOURNAL_PATH):
         if not path.exists():
             raise FileNotFoundError(path)
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -85,6 +202,7 @@ def _load_contract():
         raise RuntimeError("Frozen execution policy is not confirm_2")
     if int(manifest["execution_policy"]["confirmation_hours"]) != CONFIRM_REQUIRED:
         raise RuntimeError("Frozen confirmation count differs from service contract")
+    _ensure_clean_lane(manifest, actual)
     features = list(manifest["model"]["feature_columns"])
     model = joblib.load(MODEL_PATH)
     state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
@@ -366,7 +484,8 @@ def run_once() -> dict:
     X, diagnostics = _build_hourly_feature_row(decision_ts, frozen_features)
     raw_label, probs = _predict(model, X)
     now = pd.Timestamp.now(tz="UTC")
-    mode = "FORWARD" if decision_ts >= HOLDOUT else "SHADOW"
+    mode = "CLEAN_FORWARD" if decision_ts >= CLEAN_START else "WAITING_CLEAN_BOUNDARY"
+    lane = _clean_lane_manifest()
     result = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "status": "ok",
@@ -382,10 +501,17 @@ def run_once() -> dict:
         "model_sha256_verified": True,
         "service_pid": os.getpid(),
         "brokerage_orders": False,
+        "lane_id": CLEAN_LANE_ID,
+        "lane_name": CLEAN_LANE_NAME,
+        "clean_start_utc": CLEAN_START.isoformat(),
+        "interrupted_lane_classification": lane.get("interrupted_lane", {}).get("classification"),
+        "interrupted_lane_journal_sha256": lane.get("interrupted_lane", {}).get("journal_sha256"),
+        "automatic_promotion": False,
+        "human_review_required": True,
     }
-    if mode == "SHADOW":
-        result["action"] = "shadow_snapshot"
-        result["note"] = "Pre-holdout shadow inference only; execution state and forward journal are unchanged."
+    if mode == "WAITING_CLEAN_BOUNDARY":
+        result["action"] = "waiting_clean_boundary"
+        result["note"] = "Clean evidence collection is locked until the preregistered boundary; no evidence row or execution transition was written."
         _atomic_json(SHADOW_PATH, result)
     else:
         journal = _read_journal()
@@ -393,7 +519,10 @@ def run_once() -> dict:
         if last is not None and decision_ts <= last:
             result["action"] = "already_processed"
         else:
-            if last is not None and decision_ts > last + pd.Timedelta("1h"):
+            if last is None and decision_ts > CLEAN_START:
+                result["action"] = "clean_boundary_missed_no_start"
+                result["note"] = "The first preregistered clean boundary was missed. This lane fails closed and may not start late or backfill."
+            elif last is not None and decision_ts > last + pd.Timedelta("1h"):
                 result["action"] = "gap_detected_no_backfill"
                 result["note"] = "A forward decision hour was missed. Frozen policy forbids historical backfill into the forward journal."
             else:
@@ -427,7 +556,7 @@ def _write_lock_exclusively() -> None:
 
 def _acquire_lock() -> bool:
     """Acquire the service lock and safely recover a dead owner's stale lock."""
-    PHASE5_ROOT.mkdir(parents=True, exist_ok=True)
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     try:
         _write_lock_exclusively()
         return False
@@ -462,6 +591,11 @@ def _publish_starting_status(stale_lock_recovered: bool) -> dict:
         "stale_lock_recovered": bool(stale_lock_recovered),
         "model_sha256_verified": None,
         "brokerage_orders": False,
+        "lane_id": CLEAN_LANE_ID,
+        "lane_name": CLEAN_LANE_NAME,
+        "clean_start_utc": CLEAN_START.isoformat(),
+        "automatic_promotion": False,
+        "human_review_required": True,
     }
     _atomic_json(SERVICE_STATUS_PATH, payload)
     return payload
@@ -506,6 +640,8 @@ def main(argv=None):
                     "service_pid": os.getpid(),
                     "error": f"{type(exc).__name__}: {exc}",
                     "brokerage_orders": False,
+                    "lane_id": CLEAN_LANE_ID,
+                    "clean_start_utc": CLEAN_START.isoformat(),
                 }
                 _atomic_json(SERVICE_STATUS_PATH, payload)
                 print(f"[FORWARD ERROR] {payload['error']}", flush=True)

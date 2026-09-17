@@ -9,7 +9,7 @@ The health layer monitors runtime freshness only. It does **not** fit models, ch
 Monitored components:
 
 1. authoritative Coinbase 15-minute reconciliation
-2. frozen Shared Crypto 15m V2 forward service
+2. frozen Shared Crypto 15m V2 Clean Forward V2 service
 3. frozen XRP V1 Phase 6 shadow-forward service
 4. XRP V1 Phase 7 future evaluator
 5. web dashboard request path
@@ -47,7 +47,7 @@ For XRP Phase 7 it also includes:
 - brokerage orders unexpectedly reported as enabled
 - a Phase 7 journal existing while the evaluator is still in `WAITING_PRE_HOLDOUT`
 
-For Shared V2, an explicit model-hash verification failure is also treated as an error if present in its status payload.
+For Shared V2, an explicit model-hash verification failure, interrupted-lane hash mismatch, missed clean start, or missed later decision hour is treated as an error.
 
 ### UNAVAILABLE
 
@@ -58,7 +58,7 @@ The expected runtime status file is missing/unreadable or has no usable heartbea
 | Component | Stale threshold |
 |---|---:|
 | 15m reconciler | 45 minutes |
-| Shared V2 forward service | 90 minutes |
+| Shared V2 Clean Forward V2 | 90 minutes |
 | XRP V1 forward service | 90 minutes |
 | XRP Phase 7 evaluator | 90 minutes |
 | Web dashboard request path | 5 minutes |
@@ -73,11 +73,16 @@ The dashboard web card is generated during the request itself and therefore repr
 data/live/crypto_rt/reconcile_status.json
 ```
 
-### Shared V2 forward
+### Shared V2 Clean Forward V2
 
 ```text
-data/model/crypto_15m_v2/phase5/forward_service_status.json
+data/model/crypto_15m_v2/phase5/clean_forward_v2/forward_service_status.json
+data/model/crypto_15m_v2/phase5/clean_forward_v2/clean_lane_manifest.json
+data/model/crypto_15m_v2/phase5/clean_forward_v2/forward_state.json
+data/model/crypto_15m_v2/phase5/clean_forward_v2/forward_journal.csv
 ```
+
+The interrupted September 1 state and journal remain at their original paths and are hash-pinned by the clean-lane manifest. The clean service waits until `2026-09-18T00:00:00+00:00`. If that first hour or any later required hour is missed, the lane fails closed and never starts late or backfills.
 
 ### XRP V1 Phase 6 forward
 

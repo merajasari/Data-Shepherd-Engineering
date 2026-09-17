@@ -1,10 +1,10 @@
-"""Pre-holdout readiness audit for frozen crypto forward evaluation.
+"""Readiness audit for frozen crypto forward evaluation lanes.
 
 This audit is intentionally read-mostly. It verifies the frozen Shared Crypto
 15m V2 and XRP V1 Phase 6/7 contracts, runtime freshness, process state,
-pre-holdout journal locks, writable output directories, and the permanent
-absence of brokerage-order capability before the untouched future evaluation
-boundary at 2026-09-01 00:00 UTC.
+evidence-boundary locks, writable output directories, and the permanent absence
+of brokerage-order capability. XRP retains its 2026-09-01 boundary; Shared V2
+uses the separately preregistered 2026-09-18 clean lane.
 
 Exit codes
 ----------
@@ -33,15 +33,21 @@ import pandas as pd
 
 
 HOLDOUT = pd.Timestamp("2026-09-01T00:00:00Z")
+CLEAN_START = pd.Timestamp("2026-09-18T00:00:00Z")
+CLEAN_LANE_ID = "shared_crypto_v2_clean_forward_v2"
 
 RECONCILE_STATUS = Path("data/live/crypto_rt/reconcile_status.json")
 
 V2_ROOT = Path("data/model/crypto_15m_v2/phase5")
 V2_MODEL = V2_ROOT / "frozen_hgb.joblib"
 V2_MANIFEST = V2_ROOT / "freeze_manifest.json"
-V2_STATE = V2_ROOT / "forward_state.json"
-V2_JOURNAL = V2_ROOT / "forward_journal.csv"
-V2_STATUS = V2_ROOT / "forward_service_status.json"
+V2_INTERRUPTED_STATE = V2_ROOT / "forward_state.json"
+V2_INTERRUPTED_JOURNAL = V2_ROOT / "forward_journal.csv"
+V2_CLEAN_ROOT = V2_ROOT / "clean_forward_v2"
+V2_STATE = V2_CLEAN_ROOT / "forward_state.json"
+V2_JOURNAL = V2_CLEAN_ROOT / "forward_journal.csv"
+V2_STATUS = V2_CLEAN_ROOT / "forward_service_status.json"
+V2_CLEAN_MANIFEST = V2_CLEAN_ROOT / "clean_lane_manifest.json"
 
 XRP6_ROOT = Path("data/model/crypto_xrp_v1/phase6")
 XRP6_MODEL = XRP6_ROOT / "frozen_ridge.joblib"
@@ -57,14 +63,14 @@ XRP7_JOURNAL = XRP7_ROOT / "forward_evaluation_events.jsonl"
 
 FRESHNESS_MINUTES = {
     "15m Reconciler": 45,
-    "Shared V2 Forward": 90,
+    "Shared V2 Clean Forward V2": 90,
     "XRP V1 Forward": 90,
     "XRP Phase 7 Evaluator": 90,
 }
 
 LAUNCH_AGENTS = {
     "15m Reconciler": "com.datashepherd.cryptoreconcile",
-    "Shared V2 Forward": "com.datashepherd.cryptov2forward",
+    "Shared V2 Clean Forward V2": "com.datashepherd.cryptov2forward",
     "XRP V1 Forward": "com.datashepherd.xrpforward",
     "XRP Phase 7 Evaluator": "com.datashepherd.xrpphase7",
 }
@@ -197,8 +203,17 @@ def _csv_data_rows(path: Path) -> int:
     return max(0, len(rows) - 1)
 
 
-def _audit_shared_v2(audit: Audit, pre_holdout: bool) -> None:
-    required = [V2_MODEL, V2_MANIFEST, V2_STATE, V2_JOURNAL, V2_STATUS]
+def _audit_shared_v2(audit: Audit, pre_clean_boundary: bool) -> None:
+    required = [
+        V2_MODEL,
+        V2_MANIFEST,
+        V2_INTERRUPTED_STATE,
+        V2_INTERRUPTED_JOURNAL,
+        V2_STATE,
+        V2_JOURNAL,
+        V2_STATUS,
+        V2_CLEAN_MANIFEST,
+    ]
     for path in required:
         audit.check(f"Shared V2 file exists: {path.name}", path.exists(), str(path))
     if not all(path.exists() for path in required):
@@ -206,12 +221,13 @@ def _audit_shared_v2(audit: Audit, pre_holdout: bool) -> None:
 
     try:
         manifest = _read_json(V2_MANIFEST)
+        lane = _read_json(V2_CLEAN_MANIFEST)
         state = _read_json(V2_STATE)
         status = _read_json(V2_STATUS)
     except Exception as exc:
         audit.check("Shared V2 JSON readable", False, str(exc))
         return
-    audit.check("Shared V2 JSON readable", True, "freeze manifest, state, and status parsed")
+    audit.check("Shared V2 JSON readable", True, "freeze manifest, clean-lane manifest, clean state, and clean status parsed")
 
     actual_hash = _sha256(V2_MODEL)
     expected_hash = manifest.get("model", {}).get("artifact_sha256")
@@ -231,6 +247,31 @@ def _audit_shared_v2(audit: Audit, pre_holdout: bool) -> None:
     )
     boundary = pd.Timestamp(manifest.get("future_evaluation_start_utc"))
     audit.check("Shared V2 holdout boundary", boundary == HOLDOUT, f"boundary={boundary.isoformat()}")
+    clean_boundary = pd.Timestamp(lane.get("preregistered_start_utc"))
+    audit.check(
+        "Shared V2 clean boundary",
+        lane.get("lane_id") == CLEAN_LANE_ID and clean_boundary == CLEAN_START,
+        f"lane_id={lane.get('lane_id')}, boundary={clean_boundary.isoformat()}",
+    )
+    interrupted = lane.get("interrupted_lane", {})
+    audit.check(
+        "Shared V2 interrupted state preserved",
+        interrupted.get("state_sha256") == _sha256(V2_INTERRUPTED_STATE),
+        f"recorded={interrupted.get('state_sha256')}, actual={_sha256(V2_INTERRUPTED_STATE)}",
+    )
+    audit.check(
+        "Shared V2 interrupted journal preserved",
+        interrupted.get("journal_sha256") == _sha256(V2_INTERRUPTED_JOURNAL),
+        f"recorded={interrupted.get('journal_sha256')}, actual={_sha256(V2_INTERRUPTED_JOURNAL)}",
+    )
+    audit.check(
+        "Shared V2 clean source pins",
+        lane.get("source_model_sha256") == actual_hash
+        and lane.get("source_freeze_manifest_sha256") == _sha256(V2_MANIFEST)
+        and lane.get("execution_policy_id") == "confirm_2"
+        and int(lane.get("confirmation_hours", -1)) == 2,
+        "clean lane pins the original frozen model, freeze manifest, and confirm_2 policy",
+    )
 
     prohibited = set(manifest.get("prohibited", []))
     audit.check(
@@ -244,30 +285,41 @@ def _audit_shared_v2(audit: Audit, pre_holdout: bool) -> None:
         status.get("model_sha256_verified") is not False,
         f"model_sha256_verified={status.get('model_sha256_verified')}",
     )
-    _status_fresh(audit, "Shared V2 Forward", V2_STATUS, status)
+    _status_fresh(audit, "Shared V2 Clean Forward V2", V2_STATUS, status)
 
     journal_rows = _csv_data_rows(V2_JOURNAL)
-    if pre_holdout:
+    if pre_clean_boundary:
         audit.check(
-            "Shared V2 pre-holdout journal lock",
+            "Shared V2 pre-clean-boundary journal lock",
             journal_rows == 0,
-            f"forward journal data rows={journal_rows}",
+            f"clean journal data rows={journal_rows}",
         )
         audit.check(
-            "Shared V2 pre-holdout runtime mode",
-            str(status.get("mode")) == "SHADOW",
+            "Shared V2 waiting runtime mode",
+            str(status.get("mode")) in {"STARTING", "WAITING_CLEAN_BOUNDARY"},
             f"mode={status.get('mode')}",
         )
     else:
-        audit.check("Shared V2 journal readable", True, f"forward journal data rows={journal_rows}")
+        audit.check("Shared V2 clean journal readable", True, f"clean journal data rows={journal_rows}")
+        clean_journal = pd.read_csv(V2_JOURNAL)
+        timestamps = (
+            pd.to_datetime(clean_journal["decision_timestamp_utc"], utc=True, errors="coerce", format="mixed").dropna()
+            if len(clean_journal) and "decision_timestamp_utc" in clean_journal
+            else pd.Series(dtype="datetime64[ns, UTC]")
+        )
+        audit.check(
+            "Shared V2 clean journal boundary",
+            timestamps.empty or timestamps.min() >= CLEAN_START,
+            f"first_decision={timestamps.min().isoformat() if len(timestamps) else None}",
+        )
 
     state_boundary = pd.Timestamp(state.get("forward_evaluation_start_utc"))
     audit.check(
         "Shared V2 state boundary",
-        state_boundary == HOLDOUT,
+        state_boundary == CLEAN_START,
         f"state boundary={state_boundary.isoformat()}",
     )
-    _write_probe(audit, "Shared V2 output path writable", V2_ROOT)
+    _write_probe(audit, "Shared V2 clean output path writable", V2_CLEAN_ROOT)
 
 
 def _audit_xrp(audit: Audit, pre_holdout: bool) -> None:
@@ -418,14 +470,20 @@ def run_audit() -> Audit:
     audit = Audit()
     now = pd.Timestamp(_utc_now())
     pre_holdout = now < HOLDOUT
+    pre_clean_boundary = now < CLEAN_START
     audit.check(
         "Audit boundary context",
         True,
         f"now={now.isoformat()}, holdout={HOLDOUT.isoformat()}, pre_holdout={pre_holdout}",
     )
+    audit.check(
+        "Shared V2 clean boundary context",
+        True,
+        f"now={now.isoformat()}, clean_start={CLEAN_START.isoformat()}, pre_clean_boundary={pre_clean_boundary}",
+    )
 
     _audit_reconciler(audit)
-    _audit_shared_v2(audit, pre_holdout)
+    _audit_shared_v2(audit, pre_clean_boundary)
     _audit_xrp(audit, pre_holdout)
 
     for name, label in LAUNCH_AGENTS.items():
