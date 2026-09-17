@@ -17,6 +17,7 @@ from ml.crypto_v5.config import FUTURE_HOLDOUT_START_UTC, PHASE1_ROOT as V5_PHAS
 from ml.news_intelligence.schema import frame_sha256, read_news, validate_news_frame
 from ml.news_intelligence.vector_features import (
     FEATURE_COLUMNS,
+    NOVELTY_REFERENCE_LIMIT,
     build_asset_news_features,
     build_market_news_features,
     join_point_in_time_features,
@@ -118,6 +119,7 @@ def run(news_path=DEFAULT_NEWS, allocation_path=DEFAULT_ALLOCATION,
             "ranking": [f"{RANKING_PREFIX}{name}" for name in FEATURE_COLUMNS],
         },
         "timestamp_rule": "available_at_utc <= decision timestamp",
+        "novelty_reference": f"most recent {NOVELTY_REFERENCE_LIMIT} causal prior articles",
         "future_holdout_start_utc": FUTURE_HOLDOUT_START_UTC.isoformat(),
         "outputs": {"allocation": str(allocation_output), "ranking": str(ranking_output)},
         "dashboard_eligibility": False,

@@ -32,7 +32,9 @@ earliest GDELT observation wins; later re-observations never rewrite history.
 
 Phase 1 creates market-wide news features for the allocation layer and
 asset-specific news features for the ranking layer. Decisions with no eligible
-news receive zeros, so the original V5 market universe remains unchanged.
+news receive zeros, so the original V5 market universe remains unchanged. The
+novelty calculation uses at most the 256 most recent eligible prior articles,
+which keeps the ten-year build bounded while remaining deterministic and causal.
 
 Phase 2 trains both feature sets in the same run:
 
