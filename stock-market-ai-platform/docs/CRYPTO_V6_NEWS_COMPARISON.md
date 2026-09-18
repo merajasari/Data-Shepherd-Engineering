@@ -24,6 +24,8 @@ python -m ml.crypto_v6.phase1 \
 python -m ml.crypto_v6.phase2
 
 python -m ml.crypto_v6.phase3
+
+python -m ml.crypto_v6.phase4
 ```
 
 The consolidation stage retains the monthly Parquet partitions and also writes
@@ -45,6 +47,11 @@ Phase 3 applies the V5 portfolio simulator and costs to both prediction sets.
 The final `v6_vs_v5_comparison.json` checks primary-cost return, Sharpe,
 drawdown, and 50-bps stress performance. A passing report remains
 `NOT_VALIDATED_REQUIRES_HUMAN_REVIEW`.
+
+Phase 4 is diagnostic only. It measures feature coverage, zero saturation,
+target association, feature redundancy, paired fold performance, and the
+standardized Ridge coefficients assigned to the news features. It performs no
+search, fitting, candidate replacement, holdout scoring, or promotion.
 
 ## Reusable stock or crypto joins
 
@@ -73,13 +80,15 @@ python -m py_compile \
   ml/news_intelligence/point_in_time_join.py \
   ml/crypto_v6/phase1.py \
   ml/crypto_v6/phase2.py \
-  ml/crypto_v6/phase3.py
+  ml/crypto_v6/phase3.py \
+  ml/crypto_v6/phase4.py
 
 python -m unittest \
   tests.test_news_gdelt_consolidate \
   tests.test_news_gdelt_consolidate_v2 \
   tests.test_news_intelligence \
-  tests.test_crypto_v6_news_pipeline -v
+  tests.test_crypto_v6_news_pipeline \
+  tests.test_crypto_v6_phase4 -v
 ```
 
 After Phase 3, review:
@@ -90,4 +99,7 @@ python -m json.tool \
 
 python -m json.tool \
   data/research/crypto_ten_year/reconstruction/crypto_v6/phase3/manifest.json
+
+python -m json.tool \
+  data/research/crypto_ten_year/reconstruction/crypto_v6/phase4/diagnostic_summary.json
 ```
