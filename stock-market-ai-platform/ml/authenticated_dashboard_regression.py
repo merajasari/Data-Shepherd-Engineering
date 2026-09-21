@@ -407,14 +407,15 @@ def main() -> None:
     )
     require(
         all(label in crypto_template for label in (
-            "OVERVIEW", "MODEL COMPARISON", "CRYPTO V1", "CRYPTO V2",
-            "CRYPTO V3", "CRYPTO V4", "CRYPTO V5", "SHARED CRYPTO V2",
-            "XRP V1", "SHARED CRYPTO V3", "XRP V2", "XRP V3",
+            "OVERVIEW", "MODEL COMPARISON", "CRYPTO V5", "SHARED CRYPTO V2",
         ))
+        and crypto_template.count("data-crypto-tab=") == 4
+        and all(f'data-crypto-tab="{tab}"' in crypto_template
+                for tab in ("overview", "comparison", "v5", "15m-v2"))
         and "setupTabs" in crypto_research_tabs
         and "ArrowLeft" in crypto_research_tabs
         and "data-crypto-panel" in crypto_template,
-        "Crypto Model Research preserves comparison and every classified model tab",
+        "Crypto Model Research exposes only the four requested tabs",
     )
     require(
         "{% include 'crypto_overview_content.html' %}" in crypto_template
@@ -430,8 +431,12 @@ def main() -> None:
         and "ENDING VALUE" in crypto_research_tabs
         and "MAX DRAWDOWN" in crypto_research_tabs
         and "data-model-chart=\"CRYPTO_V5\"" in crypto_template
-        and "SELECTED FOR FORWARD PAPER EVALUATION" in crypto_template,
-        "Crypto comparison and V5 tab expose supporting metrics and evidence boundaries",
+        and "CLEAN FORWARD PAPER EVALUATION" in crypto_template
+        and "STARTING PAPER MONEY" in crypto_template
+        and "shared-v2-equity" in crypto_template
+        and "shared-v2-probabilities" in crypto_template
+        and "v5-forward-equity" in crypto_template,
+        "Crypto V5 and Shared V2 tabs expose current paper metrics and charts",
     )
     require(
         "STOCKS" in crypto_template
