@@ -25,7 +25,6 @@ def _lazy(module,name,*args,**kwargs):
     return getattr(import_module(module),name)(*args,**kwargs)
 
 def get_crypto_dashboard_payload(*a,**k):return _lazy("webapp.services.crypto_dashboard_service","get_crypto_dashboard_payload",*a,**k)
-def get_crypto_model_comparison(*a,**k):return _lazy("webapp.services.crypto_model_comparison_service","get_crypto_model_comparison",*a,**k)
 def get_all_live_quotes(*a,**k):return _lazy("webapp.services.live_market_service","get_all_live_quotes",*a,**k)
 def get_live_quote(*a,**k):return _lazy("webapp.services.live_market_service","get_live_quote",*a,**k)
 def get_stock_stream_health(*a,**k):return _lazy("webapp.services.stock_stream_health_service","get_stock_stream_health",*a,**k)
@@ -191,10 +190,9 @@ def _customer_chat_fallback(message,page="platform"):
     if "v15" in text or "intraday ml" in text:return "V15 V7 is the platform's preregistered intraday machine-learning paper shadow. It combines completed V11 five-minute features with prior-close V14 context, uses an immutable ridge-return model, caps exposure at 60%, holds for 120 minutes with a gap-aware 2% protective stop and 10-bps modeled cost, and begins prospective evidence on September 21, 2026. Brokerage orders and automatic promotion are disabled."
     if "v14" in text or "logistic" in text or "machine learning" in text:return "V14 is the platform's trained machine-learning candidate. It retrains logistic regression with a five-session purge gap, records every learned coefficient and model snapshot, ranks the frozen 100-stock universe by predicted five-session up probability, and collects isolated paper-forward evidence beginning September 11, 2026. Brokerage orders and automatic promotion are disabled."
     if "v8" in text or "holdout" in text:return "V8 is the sole frozen near-term forward model. Its formal holdout begins September 1, 2026 using Top 10 equal weights, next-open entry, a five-session hold, and 10-bps modeled trading cost."
-    if "comparison" in text or "chart" in text:return "The Model Performance Comparison places V4, V5, frozen V8, frozen V10 Cycle 3 reconstruction, and SPY on the same hypothetical $100,000 basis. It excludes live balances and genuine forward evidence."
     if "rank" in text or "signal" in text:return "The ranking score orders stocks cross-sectionally. It is not a probability, guaranteed return, price forecast, or individualized trade recommendation."
     if "provisional" in text or "live data" in text:return "A provisional live value uses the newest intraday reference price and can change before the session closes. Completed-session indicators remain labeled separately so live and finalized evidence are not mixed."
-    return f"I can explain the {location}, model comparisons, frozen holdouts, ranking signals, forward evidence, dashboard controls, and platform terminology. Please ask about one of those areas."
+    return f"I can explain the {location}, frozen holdouts, ranking signals, forward evidence, dashboard controls, and platform terminology. Please ask about one of those areas."
 
 @app.post("/api/customer-chat")
 def api_customer_chat():
@@ -249,11 +247,6 @@ def crypto_visual_dashboard():return render_template("crypto_visual.html",crypto
 @app.route("/api/crypto-v1")
 @login_required
 def api_crypto_v1():return jsonify(get_crypto_dashboard_payload())
-@app.route("/api/crypto-model-comparison")
-@login_required
-def api_crypto_model_comparison():
-    payload=get_crypto_model_comparison()
-    return (jsonify(payload),200) if payload.get("available") else (jsonify(payload),503)
 @app.route("/api/v8-rankings")
 @login_required
 def api_v8_rankings():
