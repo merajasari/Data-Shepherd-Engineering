@@ -32,6 +32,12 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("FORWARD SAMPLE", page)
         self.assertIn("{{ shared.realized_count }} / 30", page)
 
+    def test_obsolete_readiness_gate_is_not_rendered(self):
+        overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
+        self.assertNotIn("FORWARD EVALUATION READINESS", overview)
+        self.assertNotIn("Evidence-Lane Integrity Gate", overview)
+        self.assertNotIn("forward_evaluation_readiness", overview)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
