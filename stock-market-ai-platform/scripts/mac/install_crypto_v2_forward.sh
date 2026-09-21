@@ -9,7 +9,8 @@ UID_VALUE="$(id -u)"
 DOMAIN="gui/$UID_VALUE"
 LOGDIR="$PROJECT/logs"
 PHASE5="$PROJECT/data/model/crypto_15m_v2/phase5"
-PARENT="$PHASE5/clean_forward_v2"\nCLEAN="$PHASE5/clean_forward_v3"
+PARENT="$PHASE5/clean_forward_v2"
+CLEAN="$PHASE5/clean_forward_v3"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOGDIR"
 
