@@ -350,6 +350,9 @@ def main() -> None:
     crypto_forward_service = (
         project_root / "ml/crypto_15m_v2/forward_service.py"
     ).read_text()
+    crypto_forward_service_v3 = (
+        project_root / "ml/crypto_15m_v2/forward_service_v3.py"
+    ).read_text()
     crypto_live_template = (
         project_root / "webapp/templates/crypto_visual.html"
     ).read_text()
@@ -459,16 +462,25 @@ def main() -> None:
         "Crypto Live exposes honest availability, failures, assessments, and evidence routing",
     )
     require(
-        "SHARED CRYPTO V2 CLEAN FORWARD V2" in crypto_overview
-        and "SHARED V2 CLEAN START" in crypto_overview
+        "SHARED CRYPTO V2 CLEAN FORWARD V3" in crypto_overview
+        and "SHARED V2 V3 START" in crypto_overview
+        and "SHARED CRYPTO V2 CLEAN FORWARD V3" in crypto_live_template
         and "PRESERVED_INTERRUPTED_NO_BACKFILL" in crypto_forward_service
         and "clean_boundary_missed_no_start" in crypto_forward_service
-        and 'V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"'
+        and 'V2_ARCHIVED_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"'
         in crypto_dashboard_service
-        and 'pd.Timestamp("2026-09-18T00:00:00Z")'
+        and 'V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v3"'
         in crypto_dashboard_service
+        and 'PARENT_ROOT = PHASE5_ROOT / "clean_forward_v2"'
+        in crypto_forward_service_v3
+        and 'CLEAN_ROOT = PHASE5_ROOT / "clean_forward_v3"'
+        in crypto_forward_service_v3
+        and 'pd.Timestamp("2026-09-22T07:00:00Z")'
+        in crypto_forward_service_v3
+        and "No brokerage orders and no automatic promotion"
+        in crypto_forward_service_v3
         and "No automatic promotion" in crypto_live_template,
-        "Shared V2 clean lane is isolated, fail-closed, and disclosed on both crypto pages",
+        "Shared V2 V3 lane is isolated, fail-closed, and preserves the archived V2 parent",
     )
     require(
         "computed-read-only-fallback" in app_source
