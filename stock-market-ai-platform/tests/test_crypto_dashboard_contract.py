@@ -15,6 +15,14 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("CRYPTO V5", template)
         self.assertIn("SHARED CRYPTO V3", template)
 
+    def test_overview_starts_with_v3_and_v5_paper_progress(self):
+        overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
+        self.assertIn('id="crypto-paper-progress"', overview)
+        self.assertIn("SHARED CRYPTO V3 · HOURLY", overview)
+        self.assertIn("CRYPTO V5 · THREE-DAY", overview)
+        self.assertLess(overview.index('id="crypto-paper-progress"'), overview.index("COINBASE REAL-TIME MARKET"))
+        self.assertIn("Real orders remain OFF", overview)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
