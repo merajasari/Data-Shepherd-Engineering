@@ -103,6 +103,16 @@ def main() -> None:
              else crypto_comparison.get_json().get("available") is False),
         "Crypto comparison API is read-only and actionable",
     )
+    crypto_live_api = client.get("/api/crypto-live")
+    crypto_live_payload = crypto_live_api.get_json() or {}
+    require(
+        crypto_live_api.status_code == 200
+        and isinstance(crypto_live_payload.get("quotes"), dict)
+        and crypto_live_payload.get("quotes")
+        == (crypto_live_payload.get("crypto") or {}).get("quotes")
+        and crypto_live_payload.get("brokerage_orders") is False,
+        "Crypto live API serves the direct and legacy-compatible quote contract",
+    )
     readiness_page = client.get("/trading-readiness")
     require(
         readiness_page.status_code == 200,
