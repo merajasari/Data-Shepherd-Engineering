@@ -298,7 +298,13 @@ def api_intraday_24h_symbol(symbol):
 def api_live_prices():return jsonify({"stocks":get_all_live_quotes()})
 @app.route("/api/crypto-live")
 @login_required
-def api_crypto_live():return jsonify({"crypto":get_all_crypto_live_tickers()})
+def api_crypto_live():
+    payload = {"brokerage_orders": False, **get_all_crypto_live_tickers()}
+    # Current crypto dashboards consume the ticker contract directly, while
+    # the legacy two-second refresher still reads the nested ``crypto`` key.
+    # Publish both views from one immutable payload during the compatibility
+    # window so neither renderer can silently discard valid cached quotes.
+    return jsonify({**payload, "crypto": payload})
 @app.route("/api/stock-stream-health")
 @login_required
 def api_stock_stream_health():return jsonify(get_stock_stream_health())
