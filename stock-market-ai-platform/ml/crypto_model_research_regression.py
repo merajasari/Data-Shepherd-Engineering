@@ -26,11 +26,9 @@ def main():
     crypto = client.get("/crypto")
     require(crypto.status_code == 200, "Combined Crypto Model Research page renders")
     require(b"COINBASE REAL-TIME MARKET" in crypto.data, "Complete legacy Crypto Overview content remains present")
-    require(b"MODEL COMPARISON" in crypto.data and b"CRYPTO V5" in crypto.data,
-            "Comparison and latest complete crypto model tabs are present")
-    for label in (b"OVERVIEW", b"CRYPTO V1", b"CRYPTO V2", b"CRYPTO V3", b"CRYPTO V4",
-                  b"SHARED CRYPTO V2", b"XRP V1", b"SHARED CRYPTO V3", b"XRP V2", b"XRP V3"):
-        require(label in crypto.data, f"Crypto research tab is present: {label.decode()}")
+    require(all(label in crypto.data for label in (
+                b"OVERVIEW", b"MODEL COMPARISON", b"CRYPTO V5", b"SHARED CRYPTO V2")),
+            "The four requested Crypto Model Research tabs are present")
     require(b"HISTORICAL RECONSTRUCTION" in crypto.data and b"$100,000" in crypto.data,
             "Ten-year comparison disclosure is present")
 
@@ -43,9 +41,21 @@ def main():
 
     root = Path(__file__).resolve().parents[1]
     source = (root / "webapp/static/js/crypto_model_research.js").read_text()
+    template = (root / "webapp/templates/crypto_model_research.html").read_text()
+    require(template.count("data-crypto-tab=") == 4
+            and all(f'data-crypto-tab="{tab}"' in template
+                    for tab in ("overview", "comparison", "v5", "15m-v2")),
+            "Legacy crypto research tabs are removed from the tab row")
     require(all(label in source for label in ("STARTING VALUE", "ENDING VALUE", "TOTAL RETURN",
                                                "CAGR", "MAX DRAWDOWN", "SHARPE")),
             "Model tabs expose the complete supporting metric set")
+    require(all(chart in template for chart in (
+                "shared-v2-equity", "shared-v2-drawdown", "shared-v2-returns",
+                "shared-v2-probabilities", "v5-forward-equity", "v5-forward-drawdown",
+                "v5-forward-returns")),
+            "Shared V2 and V5 expose dedicated forward paper charts")
+    require(b"STARTING PAPER MONEY" in crypto.data and b"$100,000 paper account" in crypto.data,
+            "Paper starting capital is explicit and separate from brokerage money")
     print("Status: PASSED")
 
 
