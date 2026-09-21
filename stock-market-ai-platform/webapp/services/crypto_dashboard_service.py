@@ -25,6 +25,12 @@ V2_CLEAN_MANIFEST_PATH = V2_CLEAN_ROOT / "clean_lane_manifest.json"
 V2_INTERRUPTED_JOURNAL_PATH = V2_PHASE5_ROOT / "forward_journal.csv"
 V2_POLICY_SUMMARY_PATH = V2_PHASE4_ROOT / "policy_summary.csv"
 V2_PHASE4_MANIFEST_PATH = V2_PHASE4_ROOT / "manifest.json"
+V5_PHASE5_ROOT = Path("data/research/crypto_ten_year/reconstruction/crypto_v5/phase5")
+V5_CLEAN_ROOT = V5_PHASE5_ROOT / "clean_forward_v1"
+V5_STATUS_PATH = V5_CLEAN_ROOT / "forward_service_status.json"
+V5_STATE_PATH = V5_CLEAN_ROOT / "paper_state.json"
+V5_JOURNAL_PATH = V5_CLEAN_ROOT / "paper_events.jsonl"
+V5_MANIFEST_PATH = V5_CLEAN_ROOT / "clean_lane_manifest.json"
 RECONCILE_STATUS_PATH = Path("data/live/crypto_rt/reconcile_status.json")
 XRP_PHASE6_ROOT = Path("data/model/crypto_xrp_v1/phase6")
 XRP_STATUS_PATH = XRP_PHASE6_ROOT / "forward_service_status.json"
@@ -43,6 +49,8 @@ PRIMARY_VARIANT = "top_5_equal_weight"
 PRIMARY_TOP_N = 5
 PRIMARY_COST_BPS = 25.0
 DISPLAY_STARTING_EQUITY = 100000.0
+SHARED_V2_STARTING_PAPER_EQUITY = 100000.0
+V5_STARTING_PAPER_EQUITY = 100000.0
 
 
 def _read_csv(path):
@@ -54,6 +62,23 @@ def _read_json(path):
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     except Exception:
         return {}
+
+
+def _read_jsonl(path):
+    rows = []
+    if not path.exists():
+        return rows
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if line:
+                    value = json.loads(line)
+                    if isinstance(value, dict):
+                        rows.append(value)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return rows
 
 
 def _parse_utc(value):
@@ -142,6 +167,7 @@ def _service_health(name, path, payload, stale_after_minutes, extra_error=None, 
 def _operational_health():
     reconcile = _read_json(RECONCILE_STATUS_PATH)
     v2 = _read_json(V2_STATUS_PATH)
+    v5 = _read_json(V5_STATUS_PATH)
     xrp = _read_json(XRP_STATUS_PATH)
     xrp_phase7 = _read_json(XRP_PHASE7_STATUS_PATH)
 
@@ -150,6 +176,14 @@ def _operational_health():
         v2_error = "Frozen Shared V2 model hash verification failed."
     elif v2 and v2.get("action") in {"clean_boundary_missed_no_start", "gap_detected_no_backfill"}:
         v2_error = "Shared V2 clean evidence lane is fail-closed after a missed required hour."
+
+    v5_error = None
+    if v5 and v5.get("contract_verified") is False:
+        v5_error = "Crypto V5 frozen contract or artifact verification failed."
+    elif v5 and str(v5.get("mode", "")).startswith("FAIL_CLOSED"):
+        v5_error = "Crypto V5 clean paper lane is fail-closed and requires review."
+    elif v5 and v5.get("brokerage_orders") is not False:
+        v5_error = "Crypto V5 unexpectedly reports brokerage orders enabled."
 
     xrp_error = None
     if xrp and xrp.get("model_sha256_verified") is False:
@@ -178,6 +212,7 @@ def _operational_health():
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
         _service_health("Shared V2 Clean Forward V2", V2_STATUS_PATH, v2, 90, v2_error),
+        _service_health("Crypto V5 Clean Paper V1", V5_STATUS_PATH, v5, 30, v5_error),
         _service_health("XRP V1 Forward", XRP_STATUS_PATH, xrp, 90, xrp_error),
         _service_health(
             "XRP Phase 7 Evaluator",
@@ -503,11 +538,23 @@ def _shared_v2_forward_performance():
         "holdout_start_utc": holdout.isoformat(),
         "cost_bps": 5.0,
         "brokerage_orders": False,
+        "starting_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
+    }
+    empty = {
+        "status": "AWAITING_FUTURE_OBSERVATIONS", "decision_count": 0,
+        "realized_count": 0, "pending_count": 0, "switch_count": 0,
+        "candidate_equity": 1.0, "candidate_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
+        "candidate_return": 0.0, "candidate_max_drawdown": None,
+        "benchmark_label": "Always BTC", "benchmark_equity": 1.0,
+        "benchmark_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
+        "benchmark_return": 0.0, "benchmark_max_drawdown": None,
+        "latest_realized_utc": None, "chart_points": [], "return_points": [],
+        "probability_points": [],
     }
     if now < holdout:
-        return {**base, "status": "AWAITING_FUTURE_OBSERVATIONS", "decision_count": 0, "realized_count": 0, "pending_count": 0, "switch_count": 0, "candidate_equity": 1.0, "candidate_return": 0.0, "candidate_max_drawdown": None, "benchmark_label": "Always BTC", "benchmark_equity": 1.0, "benchmark_return": 0.0, "benchmark_max_drawdown": None, "latest_realized_utc": None}
+        return {**base, **empty}
     if journal.empty or "decision_timestamp_utc" not in journal:
-        return {**base, "status": "AWAITING_FUTURE_OBSERVATIONS", "decision_count": 0, "realized_count": 0, "pending_count": 0, "switch_count": 0, "candidate_equity": 1.0, "candidate_return": 0.0, "candidate_max_drawdown": None, "benchmark_label": "Always BTC", "benchmark_equity": 1.0, "benchmark_return": 0.0, "benchmark_max_drawdown": None, "latest_realized_utc": None}
+        return {**base, **empty}
     frame = journal.copy()
     frame["decision_timestamp_utc"] = pd.to_datetime(frame["decision_timestamp_utc"], utc=True, errors="coerce")
     frame = frame[frame["decision_timestamp_utc"] >= holdout].sort_values("decision_timestamp_utc")
@@ -517,14 +564,133 @@ def _shared_v2_forward_performance():
     pending_count = max(0, decision_count - realized_count)
     switch_count = int(pd.to_numeric(frame.get("sleeve_switch", pd.Series(index=frame.index, dtype=float)), errors="coerce").fillna(0).sum())
     if realized.empty:
-        return {**base, "status": "AWAITING_FUTURE_OBSERVATIONS", "decision_count": decision_count, "realized_count": 0, "pending_count": pending_count, "switch_count": switch_count, "candidate_equity": 1.0, "candidate_return": 0.0, "candidate_max_drawdown": None, "benchmark_label": "Always BTC", "benchmark_equity": 1.0, "benchmark_return": 0.0, "benchmark_max_drawdown": None, "latest_realized_utc": None}
+        probabilities = []
+        for row in frame.itertuples(index=False):
+            probabilities.append({
+                "timestamp": pd.Timestamp(row.decision_timestamp_utc).isoformat(),
+                "btc": float(row.prob_btc), "alt": float(row.prob_alt),
+                "cash": float(row.prob_cash),
+                "executed": str(row.executed_label_after),
+            })
+        return {**base, **empty, "decision_count": decision_count,
+                "pending_count": pending_count, "switch_count": switch_count,
+                "probability_points": probabilities}
     candidate_path = pd.to_numeric(realized["equity"], errors="coerce").dropna()
     candidate_equity = float(candidate_path.iloc[-1]) if len(candidate_path) else 1.0
     btc_returns = pd.to_numeric(realized["btc_realized_return_1h"], errors="coerce").dropna()
     btc_path = (1.0 + btc_returns).cumprod()
     benchmark_equity = float(btc_path.iloc[-1]) if len(btc_path) else 1.0
     latest_realized = realized["realized_through_utc"].dropna().iloc[-1] if "realized_through_utc" in realized and realized["realized_through_utc"].notna().any() else realized["decision_timestamp_utc"].iloc[-1].isoformat()
-    return {**base, "status": "FORWARD_EVALUATION_ACTIVE", "decision_count": decision_count, "realized_count": realized_count, "pending_count": pending_count, "switch_count": switch_count, "candidate_equity": candidate_equity, "candidate_return": candidate_equity - 1.0, "candidate_max_drawdown": _equity_drawdown(candidate_path.tolist()), "benchmark_label": "Always BTC", "benchmark_equity": benchmark_equity, "benchmark_return": benchmark_equity - 1.0, "benchmark_max_drawdown": _equity_drawdown(btc_path.tolist()), "latest_realized_utc": str(latest_realized)}
+    candidate_peak = 1.0
+    btc_peak = 1.0
+    btc_running = 1.0
+    chart_points = [{
+        "timestamp": holdout.isoformat(), "candidate": SHARED_V2_STARTING_PAPER_EQUITY,
+        "benchmark": SHARED_V2_STARTING_PAPER_EQUITY, "candidate_drawdown": 0.0,
+        "benchmark_drawdown": 0.0,
+    }]
+    return_points = []
+    for row in realized.itertuples(index=False):
+        candidate = float(row.equity)
+        btc_return = float(row.btc_realized_return_1h)
+        btc_running *= 1.0 + btc_return
+        candidate_peak = max(candidate_peak, candidate)
+        btc_peak = max(btc_peak, btc_running)
+        timestamp = str(row.realized_through_utc or pd.Timestamp(row.decision_timestamp_utc).isoformat())
+        chart_points.append({
+            "timestamp": timestamp,
+            "candidate": candidate * SHARED_V2_STARTING_PAPER_EQUITY,
+            "benchmark": btc_running * SHARED_V2_STARTING_PAPER_EQUITY,
+            "candidate_drawdown": candidate / candidate_peak - 1.0,
+            "benchmark_drawdown": btc_running / btc_peak - 1.0,
+        })
+        return_points.append({
+            "timestamp": timestamp,
+            "net_return": float(row.net_selected_return_1h),
+            "btc_return": btc_return,
+            "executed": str(row.executed_label_after),
+        })
+    probability_points = []
+    for row in frame.itertuples(index=False):
+        probability_points.append({
+            "timestamp": pd.Timestamp(row.decision_timestamp_utc).isoformat(),
+            "btc": float(row.prob_btc), "alt": float(row.prob_alt),
+            "cash": float(row.prob_cash), "executed": str(row.executed_label_after),
+        })
+    return {
+        **base, "status": "FORWARD_EVALUATION_ACTIVE",
+        "decision_count": decision_count, "realized_count": realized_count,
+        "pending_count": pending_count, "switch_count": switch_count,
+        "candidate_equity": candidate_equity,
+        "candidate_equity_dollars": candidate_equity * SHARED_V2_STARTING_PAPER_EQUITY,
+        "candidate_return": candidate_equity - 1.0,
+        "candidate_max_drawdown": _equity_drawdown(candidate_path.tolist()),
+        "benchmark_label": "Always BTC", "benchmark_equity": benchmark_equity,
+        "benchmark_equity_dollars": benchmark_equity * SHARED_V2_STARTING_PAPER_EQUITY,
+        "benchmark_return": benchmark_equity - 1.0,
+        "benchmark_max_drawdown": _equity_drawdown(btc_path.tolist()),
+        "latest_realized_utc": str(latest_realized), "chart_points": chart_points,
+        "return_points": return_points, "probability_points": probability_points,
+    }
+
+
+def _v5_forward_performance():
+    manifest = _read_json(V5_MANIFEST_PATH)
+    status = _read_json(V5_STATUS_PATH)
+    state = _read_json(V5_STATE_PATH)
+    events = _read_jsonl(V5_JOURNAL_PATH)
+    clean_start = manifest.get(
+        "preregistered_observation_start_utc",
+        manifest.get("preregistered_start_utc", "2026-09-22T07:00:00+00:00"),
+    )
+    decisions = [row for row in events if row.get("event_type") == "DECISION"]
+    realizations = [row for row in events if row.get("event_type") == "REALIZATION"]
+    current_equity = float(state.get("paper_equity", V5_STARTING_PAPER_EQUITY) or V5_STARTING_PAPER_EQUITY)
+    chart_points = [{
+        "timestamp": clean_start, "candidate": V5_STARTING_PAPER_EQUITY,
+        "candidate_drawdown": 0.0,
+    }]
+    return_points = []
+    peak = V5_STARTING_PAPER_EQUITY
+    for row in sorted(realizations, key=lambda item: item.get("realized_through_utc", "")):
+        equity = float(row.get("paper_equity_after", V5_STARTING_PAPER_EQUITY))
+        peak = max(peak, equity)
+        timestamp = row.get("realized_through_utc") or row.get("decision_timestamp_utc")
+        chart_points.append({
+            "timestamp": timestamp, "candidate": equity,
+            "candidate_drawdown": equity / peak - 1.0,
+        })
+        return_points.append({
+            "timestamp": timestamp, "net_return": float(row.get("net_return", 0.0)),
+            "gross_return": float(row.get("gross_return", 0.0)),
+            "regime": row.get("selected_regime"),
+        })
+    latest = decisions[-1] if decisions else {}
+    mode = status.get("mode", "NOT_INSTALLED" if not status else "UNKNOWN")
+    return {
+        "name": "Crypto V5 Clean Paper V1", "available": bool(status or state or events),
+        "status": status.get("status", "not_started"), "mode": mode,
+        "action": status.get("action"), "generated_at_utc": status.get("generated_at_utc"),
+        "clean_start_utc": clean_start,
+        "first_eligible_decision_utc": manifest.get("first_eligible_decision_utc", clean_start),
+        "starting_equity_dollars": V5_STARTING_PAPER_EQUITY,
+        "current_equity_dollars": current_equity,
+        "candidate_return": current_equity / V5_STARTING_PAPER_EQUITY - 1.0,
+        "candidate_max_drawdown": min(
+            [point["candidate_drawdown"] for point in chart_points], default=0.0),
+        "decision_count": len(decisions), "realized_count": len(realizations),
+        "pending_count": max(0, len(decisions) - len(realizations)),
+        "selected_regime": latest.get("selected_regime") or state.get("selected_regime", "CASH"),
+        "top_ranked_assets": latest.get("top_ranked_assets", []),
+        "allocation_scores": latest.get("allocation_scores", {}),
+        "target_weights": latest.get("target_weights", state.get("weights", {"CASH": 1.0})),
+        "turnover": latest.get("turnover"), "cost_bps": 25.0,
+        "model_id": latest.get("model_id", "ridge"), "horizon_days": 3,
+        "top_n": 3, "chart_points": chart_points, "return_points": return_points,
+        "contract_verified": bool(status.get("contract_verified", False)) if status else False,
+        "paper_only": True, "brokerage_orders": False,
+        "automatic_promotion": False, "human_review_required": True,
+    }
 
 
 def _xrp_phase7_forward_performance():
@@ -549,6 +715,7 @@ def _future_forward_performance():
         "holdout_start_utc": "2026-09-01T00:00:00+00:00",
         "shared_v2_clean_start_utc": "2026-09-18T00:00:00+00:00",
         "shared_v2": _shared_v2_forward_performance(),
+        "crypto_v5": _v5_forward_performance(),
         "xrp_phase7": _xrp_phase7_forward_performance(),
         "note": "XRP retains its Sep 1 evidence boundary. Shared V2 uses the separately preregistered Sep 18 clean lane; the interrupted Sep 1 journal is preserved and excluded. No backfill, tuning, automatic promotion, or real brokerage orders.",
     }
@@ -676,6 +843,7 @@ def get_crypto_dashboard_payload():
         "operational_health": operational_health,
         "forward_evaluation_readiness": forward_evaluation_readiness,
         "future_forward_performance": future_forward_performance,
+        "v5_forward_performance": future_forward_performance["crypto_v5"],
         "forward_validation_summary": forward_validation_summary,
     }
     if primary.empty:
