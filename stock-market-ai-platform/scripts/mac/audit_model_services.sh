@@ -108,12 +108,16 @@ echo
 
 echo "SUPERSEDED SERVICES"
 archive_count=0
+superseded_present=0
 for label in "${ARCHIVE_LABELS[@]}"; do
   plist="$(plist_for "$label")"
   loaded="NO"
   installed="NO"
   is_loaded "$label" && loaded="YES"
   [[ -f "$plist" ]] && installed="YES"
+  if [[ "$loaded" == "YES" || "$installed" == "YES" ]]; then
+    superseded_present=$((superseded_present + 1))
+  fi
   printf 'ARCHIVE %-48s loaded=%-3s plist=%s\n' "$label" "$loaded" "$installed"
 
   if [[ "$MODE" == "apply" && ( "$loaded" == "YES" || "$installed" == "YES" ) ]]; then
@@ -173,5 +177,9 @@ if [[ "$MODE" == "apply" ]]; then
   echo "Model data, evidence journals, logs, and source files were not changed."
 else
   echo "AUDIT ONLY: nothing was changed."
-  echo "Review this output, then run with --apply to unload and archive only the explicit superseded list."
+  if [[ "$superseded_present" -eq 0 && "$unknown_count" -eq 0 ]]; then
+    echo "CLEAN: no superseded or unclassified Data Shepherd service is loaded or installed."
+  else
+    echo "Review this output, then run with --apply to unload and archive only the explicit superseded list."
+  fi
 fi
