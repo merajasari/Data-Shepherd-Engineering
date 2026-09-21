@@ -18,7 +18,9 @@ PHASE3_ROOT = MODEL_ROOT / "phase3"
 PHASE4_ROOT = MODEL_ROOT / "phase4"
 V2_PHASE4_ROOT = Path("data/model/crypto_15m_v2/phase4")
 V2_PHASE5_ROOT = Path("data/model/crypto_15m_v2/phase5")
-V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"
+V2_ARCHIVED_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"
+V2_ARCHIVED_JOURNAL_PATH = V2_ARCHIVED_ROOT / "forward_journal.csv"
+V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v3"
 V2_STATUS_PATH = V2_CLEAN_ROOT / "forward_service_status.json"
 V2_JOURNAL_PATH = V2_CLEAN_ROOT / "forward_journal.csv"
 V2_CLEAN_MANIFEST_PATH = V2_CLEAN_ROOT / "clean_lane_manifest.json"
@@ -211,7 +213,7 @@ def _operational_health():
 
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
-        _service_health("Shared V2 Clean Forward V2", V2_STATUS_PATH, v2, 90, v2_error),
+        _service_health("Shared V2 Clean Forward V3", V2_STATUS_PATH, v2, 90, v2_error),
         _service_health("Crypto V5 Clean Paper V1", V5_STATUS_PATH, v5, 30, v5_error),
         _service_health("XRP V1 Forward", XRP_STATUS_PATH, xrp, 90, xrp_error),
         _service_health(
@@ -529,13 +531,43 @@ def _equity_drawdown(values):
     return float((series / series.cummax() - 1.0).min())
 
 
+def _archived_shared_v2_performance():
+    journal = _read_csv(V2_ARCHIVED_JOURNAL_PATH)
+    if journal.empty or "status" not in journal:
+        return {
+            "name": "Shared Crypto V2 Clean Forward V2",
+            "classification": "PRESERVED_INTERRUPTED_NO_BACKFILL",
+            "decision_count": 0, "realized_count": 0,
+            "ending_equity": 1.0, "ending_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
+            "return": 0.0, "latest_realized_utc": None,
+        }
+    realized = journal[journal["status"].eq("REALIZED")].copy()
+    values = pd.to_numeric(realized.get("equity", pd.Series(dtype=float)), errors="coerce").dropna()
+    equity = float(values.iloc[-1]) if len(values) else 1.0
+    latest = (
+        realized["realized_through_utc"].dropna().iloc[-1]
+        if not realized.empty and "realized_through_utc" in realized
+        and realized["realized_through_utc"].notna().any()
+        else None
+    )
+    return {
+        "name": "Shared Crypto V2 Clean Forward V2",
+        "classification": "PRESERVED_INTERRUPTED_NO_BACKFILL",
+        "decision_count": len(journal), "realized_count": len(realized),
+        "ending_equity": equity,
+        "ending_equity_dollars": equity * SHARED_V2_STARTING_PAPER_EQUITY,
+        "return": equity - 1.0, "latest_realized_utc": str(latest) if latest else None,
+    }
+
+
 def _shared_v2_forward_performance():
-    holdout = pd.Timestamp("2026-09-18T00:00:00Z")
+    holdout = pd.Timestamp("2026-09-22T07:00:00Z")
     now = pd.Timestamp.now(tz="UTC")
     journal = _read_csv(V2_JOURNAL_PATH)
     base = {
-        "name": "Shared Crypto V2 Clean Forward V2",
+        "name": "Shared Crypto V2 Clean Forward V3",
         "holdout_start_utc": holdout.isoformat(),
+        "archived_v2": _archived_shared_v2_performance(),
         "cost_bps": 5.0,
         "brokerage_orders": False,
         "starting_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
@@ -713,11 +745,11 @@ def _xrp_phase7_forward_performance():
 def _future_forward_performance():
     return {
         "holdout_start_utc": "2026-09-01T00:00:00+00:00",
-        "shared_v2_clean_start_utc": "2026-09-18T00:00:00+00:00",
+        "shared_v2_clean_start_utc": "2026-09-22T07:00:00+00:00",
         "shared_v2": _shared_v2_forward_performance(),
         "crypto_v5": _v5_forward_performance(),
         "xrp_phase7": _xrp_phase7_forward_performance(),
-        "note": "XRP retains its Sep 1 evidence boundary. Shared V2 uses the separately preregistered Sep 18 clean lane; the interrupted Sep 1 journal is preserved and excluded. No backfill, tuning, automatic promotion, or real brokerage orders.",
+        "note": "XRP retains its Sep 1 evidence boundary. Shared V2 Clean Forward V2 is preserved as interrupted evidence. V3 begins at the separately preregistered Sep 22 07:00 UTC boundary with fresh state and a $100,000 paper basis. No backfill, tuning, automatic promotion, or real brokerage orders.",
     }
 
 
