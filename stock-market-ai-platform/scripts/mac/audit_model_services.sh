@@ -55,6 +55,10 @@ ARCHIVE_LABELS=(
   com.datashepherd.v5shadowcomparisonjournal
   com.datashepherd.xrpforward
   com.datashepherd.xrpphase7
+  # V4/V5-only diagnostic journals; no retained model consumes these writes.
+  com.datashepherd.realtimestockjournals
+  # Duplicate of the retained com.datashepherd.iexstream 101-symbol feed.
+  com.datashepherd.stockiex
 )
 
 contains_label() {
