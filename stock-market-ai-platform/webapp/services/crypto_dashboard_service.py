@@ -539,7 +539,7 @@ def _archived_shared_v2_performance():
             "classification": "PRESERVED_INTERRUPTED_NO_BACKFILL",
             "decision_count": 0, "realized_count": 0,
             "ending_equity": 1.0, "ending_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
-            "return": 0.0, "latest_realized_utc": None,
+            "paper_return": 0.0, "latest_realized_utc": None,
         }
     realized = journal[journal["status"].eq("REALIZED")].copy()
     values = pd.to_numeric(realized.get("equity", pd.Series(dtype=float)), errors="coerce").dropna()
@@ -556,7 +556,7 @@ def _archived_shared_v2_performance():
         "decision_count": len(journal), "realized_count": len(realized),
         "ending_equity": equity,
         "ending_equity_dollars": equity * SHARED_V2_STARTING_PAPER_EQUITY,
-        "return": equity - 1.0, "latest_realized_utc": str(latest) if latest else None,
+        "paper_return": equity - 1.0, "latest_realized_utc": str(latest) if latest else None,
     }
 
 
