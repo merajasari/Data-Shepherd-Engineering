@@ -22,7 +22,9 @@ for required in \
   "$PHASE5/frozen_hgb.joblib" \
   "$PHASE5/freeze_manifest.json" \
   "$PHASE5/forward_state.json" \
-  "$PHASE5/forward_journal.csv" \\\n  "$PARENT/forward_state.json" \\\n  "$PARENT/forward_journal.csv"; do
+  "$PHASE5/forward_journal.csv" \
+  "$PARENT/forward_state.json" \
+  "$PARENT/forward_journal.csv"; do
   if [[ ! -f "$required" ]]; then
     echo "Missing frozen Phase 5 artifact: $required" >&2
     echo "Run: python -m ml.crypto_15m_v2.phase5" >&2
@@ -87,8 +89,10 @@ echo "Mode before 2026-09-22 07:00 UTC: WAITING_CLEAN_BOUNDARY (no evidence rows
 echo "Mode at/after the exact boundary: CLEAN_FORWARD paper evaluation"
 echo "If the first boundary is missed: FAIL CLOSED (no late start or backfill)"
 echo "Frozen model: $PHASE5/frozen_hgb.joblib"
-echo "Preserved interrupted state: $PHASE5/forward_state.json"
-echo "Preserved interrupted journal: $PHASE5/forward_journal.csv"
+echo "Preserved original interrupted state: $PHASE5/forward_state.json"
+echo "Preserved original interrupted journal: $PHASE5/forward_journal.csv"
+echo "Preserved V2 parent state: $PARENT/forward_state.json"
+echo "Preserved V2 parent journal: $PARENT/forward_journal.csv"
 echo "Clean state: $CLEAN/forward_state.json"
 echo "Clean journal: $CLEAN/forward_journal.csv"
 echo "Clean status: $CLEAN/forward_service_status.json"
