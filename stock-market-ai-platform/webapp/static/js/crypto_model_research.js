@@ -3,6 +3,7 @@
   const money=n=>Number.isFinite(+n)?'$'+(+n).toLocaleString(undefined,{maximumFractionDigits:0}):'—',pct=n=>Number.isFinite(+n)?`${+n>=0?'+':''}${(+n).toFixed(2)}%`:'—',val=n=>Number.isFinite(+n)?(+n).toFixed(2):'—';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let payload,range='10Y',enabled=new Set(),zoom=1,pan=0,pinned=false;
+  let marketQuotes={},marketFilter='all',marketSort='change',marketSearch='',marketTimer=null,marketInFlight=false,marketLastSuccess=null,marketFailures=0;
 
   function setupTabs(){const tabs=[...document.querySelectorAll('[data-crypto-tab]')],panels=[...document.querySelectorAll('[data-crypto-panel]')];const show=id=>{tabs.forEach(t=>{const on=t.dataset.cryptoTab===id;t.classList.toggle('active',on);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1});panels.forEach(p=>p.hidden=p.dataset.cryptoPanel!==id);history.replaceState(null,'',id==='overview'?location.pathname:`#${id}`);if(id!=='overview')modelCard(id)};tabs.forEach((t,i)=>{t.onclick=()=>show(t.dataset.cryptoTab);t.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[n].focus();show(tabs[n].dataset.cryptoTab)}});const initial=location.hash.slice(1);show(tabs.some(t=>t.dataset.cryptoTab===initial)?initial:'overview')}
   function modelCard(id){
@@ -74,6 +75,63 @@
     forwardLineChart('v5-forward-drawdown',v5.chart_points,[{key:'candidate_drawdown',label:'Crypto V5',color:'#ff6680'}],{percent:true,height:260});
     forwardBarChart('v5-forward-returns',v5.return_points,[{key:'net_return',label:'Net return',color:'#36d8ff'},{key:'gross_return',label:'Gross return',color:'#9b65ff'}]);
   }
+
+  const marketNames={'AAVE-USD':'Aave','ADA-USD':'Cardano','ARB-USD':'Arbitrum','ATOM-USD':'Cosmos','AVAX-USD':'Avalanche','BCH-USD':'Bitcoin Cash','BTC-USD':'Bitcoin','DOGE-USD':'Dogecoin','DOT-USD':'Polkadot','ETC-USD':'Ethereum Classic','ETH-USD':'Ethereum','FIL-USD':'Filecoin','HBAR-USD':'Hedera','ICP-USD':'Internet Computer','INJ-USD':'Injective','LINK-USD':'Chainlink','LTC-USD':'Litecoin','NEAR-USD':'NEAR Protocol','OP-USD':'Optimism','SHIB-USD':'Shiba Inu','SOL-USD':'Solana','SUI-USD':'Sui','UNI-USD':'Uniswap','XLM-USD':'Stellar','XRP-USD':'XRP'};
+  const liveMoney=value=>{const n=Number(value);if(!Number.isFinite(n))return'—';const digits=Math.abs(n)>=1000?2:Math.abs(n)>=1?4:8;return'$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:digits})};
+  const livePct=value=>{const n=Number(value);if(!Number.isFinite(n))return'—';return`${n>=0?'+':''}${n.toFixed(2)}%`};
+  const changeOf=quote=>{const n=Number(quote?.price_percent_chg_24_h);return Number.isFinite(n)?n:null};
+
+  function marketRows(){
+    const btcChange=changeOf(marketQuotes['BTC-USD']);
+    let rows=Object.entries(marketQuotes).map(([symbol,quote])=>({symbol,quote,price:Number(quote?.price),change:changeOf(quote),relative:Number.isFinite(btcChange)&&Number.isFinite(changeOf(quote))?changeOf(quote)-btcChange:null})).filter(row=>Number.isFinite(row.price)&&Number.isFinite(row.change));
+    const query=marketSearch.trim().toLowerCase();
+    if(query)rows=rows.filter(row=>row.symbol.toLowerCase().includes(query)||(marketNames[row.symbol]||'').toLowerCase().includes(query));
+    if(marketFilter==='gainers')rows=rows.filter(row=>row.change>0);
+    if(marketFilter==='losers')rows=rows.filter(row=>row.change<0);
+    if(marketFilter==='extreme')rows=rows.filter(row=>Math.abs(row.change)>=5);
+    const sorters={symbol:(a,b)=>a.symbol.localeCompare(b.symbol),price:(a,b)=>b.price-a.price,change:(a,b)=>b.change-a.change,relative:(a,b)=>b.relative-a.relative};
+    return rows.sort(sorters[marketSort]||sorters.change);
+  }
+
+  function renderMarketBoard(updatedAt){
+    const all=Object.entries(marketQuotes).map(([symbol,quote])=>({symbol,price:Number(quote?.price),change:changeOf(quote)})).filter(row=>Number.isFinite(row.price)&&Number.isFinite(row.change)).sort((a,b)=>b.change-a.change);
+    if(!all.length)return;
+    const btc=all.find(row=>row.symbol==='BTC-USD'),up=all.filter(row=>row.change>0).length,down=all.filter(row=>row.change<0).length;
+    const ordered=[...all].map(row=>row.change).sort((a,b)=>a-b),mid=Math.floor(ordered.length/2),median=ordered.length%2?ordered[mid]:(ordered[mid-1]+ordered[mid])/2;
+    const extreme=all.filter(row=>Math.abs(row.change)>=5).length,leader=all[0],laggard=all[all.length-1],maxAbs=Math.max(0.01,...all.map(row=>Math.abs(row.change)));
+    const set=(id,text,cls='')=>{const node=document.getElementById(id);if(node){node.textContent=text;node.className=cls;}};
+    set('crypto-market-breadth',`${up} UP · ${down} DOWN`,up>=down?'positive':'negative');
+    set('crypto-market-breadth-detail',`${Math.round(up/all.length*100)}% of tracked assets are positive`);
+    set('crypto-market-median',livePct(median),median>=0?'positive':'negative');
+    set('crypto-market-extremes',`${leader.symbol.replace('-USD','')} / ${laggard.symbol.replace('-USD','')}`);
+    set('crypto-market-extremes-detail',`${livePct(leader.change)} · ${livePct(laggard.change)}`);
+    set('crypto-market-extreme-count',`${extreme} / ${all.length}`,extreme?'gold':'');
+    set('crypto-market-btc-change',btc?livePct(btc.change):'—',btc?.change>=0?'positive':'negative');
+    set('crypto-market-btc-price',btc?liveMoney(btc.price):'Price unavailable');
+    const stamp=document.getElementById('crypto-live-ticker-stamp');if(stamp){stamp.textContent=`LIVE CACHE · ${updatedAt||'CURRENT'}`;stamp.className='mode';}
+    const detail=document.getElementById('crypto-live-ticker-detail');if(detail)detail.textContent=`Auto-refresh · ${new Date().toLocaleTimeString()} · ${all.length} Coinbase USD markets`;
+    const rows=marketRows(),root=document.getElementById('crypto-market-board');if(!root)return;
+    root.innerHTML=rows.map(row=>`<tr><td><div class="market-asset"><span class="market-coin">${esc(row.symbol.replace('-USD','').slice(0,4))}</span><div><strong>${esc(row.symbol)}</strong><small>${esc(marketNames[row.symbol]||'')}</small></div></div></td><td><strong>${liveMoney(row.price)}</strong></td><td class="market-change-cell ${row.change>=0?'positive':'negative'}"><strong>${livePct(row.change)}</strong><small>${row.change>=0?'GAINING':'DECLINING'}</small></td><td class="${row.relative>=0?'positive':'negative'}">${livePct(row.relative)}</td><td><div class="market-intensity"><span>${Math.abs(row.change).toFixed(1)}%</span><span class="market-intensity-track"><i class="${row.change<0?'down':''}" style="width:${Math.max(2,Math.abs(row.change)/maxAbs*100).toFixed(1)}%"></i></span></div></td></tr>`).join('')||'<tr><td colspan="5">No assets match this search and filter.</td></tr>';
+    document.querySelectorAll('[data-market-filter]').forEach(button=>button.classList.toggle('active',button.dataset.marketFilter===marketFilter));
+    document.querySelectorAll('[data-market-sort]').forEach(button=>button.classList.toggle('active',button.dataset.marketSort===marketSort));
+  }
+
+  function scheduleMarketRefresh(delay=2000){if(marketTimer)window.clearTimeout(marketTimer);marketTimer=window.setTimeout(refreshMarket,delay)}
+  async function refreshMarket(){
+    if(!document.getElementById('crypto-market-board'))return;
+    if(document.hidden){scheduleMarketRefresh();return}
+    if(marketInFlight)return;marketInFlight=true;
+    try{const response=await fetch('/api/crypto-live',{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json();marketQuotes=data.quotes||{};if(!Object.keys(marketQuotes).length)throw new Error(data.error||'No live quotes available');marketLastSuccess=new Date();marketFailures=0;renderMarketBoard(data.updated_at)}catch(error){marketFailures+=1;const stamp=document.getElementById('crypto-live-ticker-stamp');if(stamp){stamp.textContent=marketLastSuccess?'STALE · RETRYING':'UNAVAILABLE · RETRYING';stamp.className='mode negative'}const detail=document.getElementById('crypto-live-ticker-detail');if(detail)detail.textContent=`${error.message} · retry ${marketFailures} · last success ${marketLastSuccess?.toLocaleTimeString()||'none'}`;}finally{marketInFlight=false;scheduleMarketRefresh()}
+  }
+
+  function initMarketBoard(){
+    if(!document.getElementById('crypto-market-board'))return;
+    document.getElementById('crypto-market-search')?.addEventListener('input',event=>{marketSearch=event.target.value;renderMarketBoard()});
+    document.querySelectorAll('[data-market-filter]').forEach(button=>button.addEventListener('click',()=>{marketFilter=button.dataset.marketFilter;renderMarketBoard()}));
+    document.querySelectorAll('[data-market-sort]').forEach(button=>button.addEventListener('click',()=>{marketSort=button.dataset.marketSort;renderMarketBoard()}));
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshMarket()});
+    refreshMarket();
+  }
   async function init(){const status=document.getElementById('cmr-status');try{const r=await fetch('/api/crypto-model-comparison',{credentials:'same-origin'});payload=await r.json();if(!r.ok||!payload.available)throw new Error(payload.error||`HTTP ${r.status}`);enabled=new Set(payload.series.map(s=>s.model_id));status.textContent=`${payload.series.length} ELIGIBLE SERIES · GENERATED ${(payload.generated_at_utc||'').slice(0,10)}`;document.getElementById('cmr-policy').textContent=payload.common_clock_policy;const u=document.getElementById('cmr-unavailable');if(payload.unavailable_series?.length){u.hidden=false;u.innerHTML='<strong>Not charted:</strong> '+payload.unavailable_series.map(s=>`${esc(s.label)} — ${esc(s.reason)}`).join(' · ')}render();modelCard(document.querySelector('[data-crypto-tab].active')?.dataset.cryptoTab)}catch(e){status.textContent='COMPARISON NOT BUILT';const box=document.getElementById('cmr-error');box.hidden=false;box.textContent=`${e.message} Run: python -m ml.build_crypto_model_comparison`}}
-  document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{range=b.dataset.range;zoom=1;pan=0;pinned=false;render()});document.querySelectorAll('[data-chart-nav]').forEach(b=>b.onclick=()=>{const a=b.dataset.chartNav;if(a==='in')zoom=Math.min(16,zoom*1.6);if(a==='out')zoom=Math.max(1,zoom/1.6);if(a==='earlier')pan=Math.max(-1,pan-.25);if(a==='later')pan=Math.min(1,pan+.25);if(a==='reset'){zoom=1;pan=0;pinned=false}render()});setupTabs();renderForwardCharts();init();
+  document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{range=b.dataset.range;zoom=1;pan=0;pinned=false;render()});document.querySelectorAll('[data-chart-nav]').forEach(b=>b.onclick=()=>{const a=b.dataset.chartNav;if(a==='in')zoom=Math.min(16,zoom*1.6);if(a==='out')zoom=Math.max(1,zoom/1.6);if(a==='earlier')pan=Math.max(-1,pan-.25);if(a==='later')pan=Math.min(1,pan+.25);if(a==='reset'){zoom=1;pan=0;pinned=false}render()});setupTabs();renderForwardCharts();initMarketBoard();init();
 })();
