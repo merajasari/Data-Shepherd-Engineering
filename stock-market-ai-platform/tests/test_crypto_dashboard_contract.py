@@ -23,6 +23,15 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertLess(overview.index('id="crypto-paper-progress"'), overview.index("COINBASE REAL-TIME MARKET"))
         self.assertIn("Real orders remain OFF", overview)
 
+    def test_duplicate_forward_sections_are_removed_from_overview(self):
+        overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
+        page = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
+        self.assertNotIn("UNTOUCHED FORWARD PERFORMANCE", overview)
+        self.assertNotIn("POST-BOUNDARY FORWARD VALIDATION SUMMARY", overview)
+        self.assertNotIn("XRP V1 Phase 7", overview)
+        self.assertIn("FORWARD SAMPLE", page)
+        self.assertIn("{{ shared.realized_count }} / 30", page)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
