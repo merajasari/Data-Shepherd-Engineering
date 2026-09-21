@@ -40,7 +40,7 @@ from ml.crypto_v5.phase5 import (
 )
 
 
-ROOT = CONTRACT_PATH.parent / "clean_forward_v1"
+ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v1"
 STATE_PATH = ROOT / "paper_state.json"
 STATUS_PATH = ROOT / "forward_service_status.json"
 JOURNAL_PATH = ROOT / "paper_events.jsonl"
