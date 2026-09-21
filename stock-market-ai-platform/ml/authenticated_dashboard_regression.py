@@ -474,11 +474,25 @@ def main() -> None:
         "computed-read-only-fallback" in app_source
         and "syncRangeAvailability" in crypto_history_js
         and "archive_global_start_utc" in crypto_history_js
+        and "seriesMetrics" in crypto_history_js
+        and "data-history-preset" in crypto_live_template
+        and "history-ranking-body" in crypto_live_template
+        and "LOWEST MAX DRAWDOWN" in crypto_live_template
         and "columnIndex<rowIndex" in crypto_relationship_js
         and "rows.slice(0,8)" in crypto_relationship_js
         and "UNAVAILABLE · RETRYING" in crypto_live_js
         and "document.hidden" in crypto_live_js,
         "Crypto Live repairs history fallback and keeps dense or stale views legible",
+    )
+    require(
+        "crypto-market-board" in crypto_overview
+        and "MARKET BREADTH" in crypto_overview
+        and "MEDIAN 24H MOVE" in crypto_overview
+        and "data-market-filter=\"extreme\"" in crypto_overview
+        and "renderMarketBoard" in crypto_research_tabs
+        and "Vs BTC" in crypto_overview
+        and "document.hidden" in crypto_research_tabs,
+        "Crypto Overview presents a searchable live breadth board with BTC-relative context",
     )
     require(
         all(label in research_tabs for label in (
