@@ -8,7 +8,7 @@ from webapp.services import crypto_dashboard_service as dashboard
 
 
 class CryptoForwardDashboardTest(unittest.TestCase):
-    def test_shared_v2_translates_normalized_equity_to_100k_paper_account(self):
+    def test_shared_v3_translates_post_boundary_equity_to_100k_paper_account(self):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory) / "forward.csv"
             journal.write_text(
@@ -17,8 +17,8 @@ class CryptoForwardDashboardTest(unittest.TestCase):
                 "btc_realized_return_1h,alt_realized_return_1h,gross_selected_return_1h,"
                 "sleeve_switch,cost_bps_assumption,transaction_cost,net_selected_return_1h,"
                 "equity,realized_through_utc,status\n"
-                "2026-09-18T00:00:00Z,ALT,CASH,ALT,,0,.2,.6,.2,.01,.02,.02,1,5,.0005,.01949,"
-                "1.01949,2026-09-18T01:00:00Z,REALIZED\n",
+                "2026-09-23T00:00:00Z,ALT,CASH,ALT,,0,.2,.6,.2,.01,.02,.02,1,5,.0005,.01949,"
+                "1.01949,2026-09-23T01:00:00Z,REALIZED\n",
                 encoding="utf-8",
             )
             with patch.object(dashboard, "V2_JOURNAL_PATH", journal):
