@@ -19,6 +19,7 @@ ARCHIVE_DIR="$LAUNCH_DIR/DataShepherd-Archived/$STAMP"
 # market-data, reconciliation, and awake-host infrastructure required by them.
 KEEP_LABELS=(
   com.datashepherd.web
+  com.datashepherd.cloudflared
   com.datashepherd.keepawake
   com.datashepherd.iexstream
   com.datashepherd.v8refresh
@@ -29,11 +30,15 @@ KEEP_LABELS=(
   com.datashepherd.v14logisticforward
   com.datashepherd.v15prospectivev7
   com.datashepherd.cryptort
+  com.datashepherd.cryptoticker
+  com.datashepherd.cryptohistorywebcache
+  com.datashepherd.cryptoreadiness
   com.datashepherd.cryptoreconcile
   # Historical label; the current installer targets Shared Crypto V2 Clean
   # Forward V3 and must remain active despite the v2 label.
   com.datashepherd.cryptov2forward
   com.datashepherd.cryptov5forward
+  com.datashepherd.v8holdoutmonitor
 )
 
 # Explicitly superseded or archived lanes. --apply unloads only these labels.
@@ -47,6 +52,9 @@ ARCHIVE_LABELS=(
   com.datashepherd.v13quoterecoverypreflight
   com.datashepherd.v13quoterecoverycollect
   com.datashepherd.papershadow
+  com.datashepherd.v5shadowcomparisonjournal
+  com.datashepherd.xrpforward
+  com.datashepherd.xrpphase7
 )
 
 contains_label() {
@@ -65,6 +73,17 @@ is_loaded() {
 
 plist_for() {
   echo "$LAUNCH_DIR/$1.plist"
+}
+
+program_for() {
+  local plist="$1"
+  if [[ ! -f "$plist" ]]; then
+    echo "plist unavailable"
+    return
+  fi
+  /usr/libexec/PlistBuddy -c 'Print :ProgramArguments' "$plist" 2>/dev/null \
+    | sed -E '1d;$d;s/^[[:space:]]+//g' \
+    | paste -sd ' ' -
 }
 
 echo "DATA SHEPHERD MAC SERVICE AUDIT"
@@ -114,6 +133,7 @@ for label in "${(@u)all_labels}"; do
   [[ -z "$label" ]] && continue
   if ! contains_label "$label" "${KEEP_LABELS[@]}" && ! contains_label "$label" "${ARCHIVE_LABELS[@]}"; then
     printf 'REVIEW  %s\n' "$label"
+    printf '        command: %s\n' "$(program_for "$(plist_for "$label")")"
     unknown_count=$((unknown_count + 1))
   fi
 done
