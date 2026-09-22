@@ -13,6 +13,7 @@ class CryptoV5ForwardServiceTest(unittest.TestCase):
     def _paths(self, root):
         return patch.multiple(
             service,
+            ARCHIVED_ROOT=root.parent / "clean_forward_v1",
             ROOT=root,
             STATE_PATH=root / "paper_state.json",
             STATUS_PATH=root / "forward_service_status.json",
@@ -28,10 +29,21 @@ class CryptoV5ForwardServiceTest(unittest.TestCase):
                 manifest, state = service._ensure_lane(
                     pd.Timestamp("2026-09-21T12:00:00Z"), "contract-hash")
                 self.assertEqual(manifest["lane_id"], service.LANE_ID)
+                self.assertEqual(manifest["supersedes_missed_lane_id"], service.ARCHIVED_LANE_ID)
+                self.assertEqual(
+                    manifest["preregistered_observation_start_utc"],
+                    service.OBSERVATION_START_UTC.isoformat(),
+                )
+                self.assertEqual(
+                    manifest["first_eligible_decision_utc"],
+                    service.FIRST_ELIGIBLE_DECISION_UTC.isoformat(),
+                )
                 self.assertEqual(manifest["starting_paper_equity"], 100_000.0)
                 self.assertEqual(state["paper_equity"], 100_000.0)
                 self.assertFalse(manifest["brokerage_orders"])
+                self.assertFalse(manifest["archived_lane_mutated"])
                 self.assertTrue((root / "paper_events.jsonl").exists())
+                self.assertFalse((root.parent / "clean_forward_v1").exists())
 
     def test_late_initialization_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
