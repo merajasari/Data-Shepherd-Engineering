@@ -228,6 +228,21 @@ def build_candidate_frame(
     return frame
 
 
+def add_cross_sectional_ranks(panel: pd.DataFrame) -> pd.DataFrame:
+    result = panel.copy()
+    grouped = result.groupby("timestamp_utc", sort=False)
+    for raw_column, rank_column in zip(
+        RAW_FEATURE_COLUMNS,
+        RANK_FEATURE_COLUMNS,
+    ):
+        result[rank_column] = grouped[raw_column].rank(
+            method="average",
+            pct=True,
+            ascending=True,
+        )
+    return result
+
+
 def validate_panel(
     panel: pd.DataFrame,
     expected_symbols=STOCK_250_SYMBOLS,
@@ -308,16 +323,7 @@ def build_panel(
     panel = panel.loc[development_mask].copy()
     panel = panel.sort_values(["timestamp_utc", "symbol"]).reset_index(drop=True)
 
-    grouped = panel.groupby("timestamp_utc", sort=False)
-    for raw_column, rank_column in zip(
-        RAW_FEATURE_COLUMNS,
-        RANK_FEATURE_COLUMNS,
-    ):
-        panel[rank_column] = grouped[raw_column].rank(
-            method="average",
-            pct=True,
-            ascending=True,
-        )
+    panel = add_cross_sectional_ranks(panel)
 
     rank_complete = panel[list(RANK_FEATURE_COLUMNS)].notna().all(axis=1)
     panel["model_eligible"] = (
