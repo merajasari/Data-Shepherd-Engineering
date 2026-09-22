@@ -12,14 +12,17 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertNotIn('data-crypto-panel="comparison"', template)
         self.assertNotIn("Historical V5 Reconstruction", template)
         self.assertIn("OVERVIEW", template)
-        self.assertIn("CRYPTO V5", template)
+        self.assertIn("CRYPTO V5 V2", template)
+        self.assertIn("September 23, 2026 at 12:00 a.m. Pacific", template)
+        self.assertIn("missed V1 lane remains archived", template)
         self.assertIn("SHARED CRYPTO V3", template)
 
     def test_overview_starts_with_v3_and_v5_paper_progress(self):
         overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
         self.assertIn('id="crypto-paper-progress"', overview)
         self.assertIn("SHARED CRYPTO V3 · HOURLY", overview)
-        self.assertIn("CRYPTO V5 · THREE-DAY", overview)
+        self.assertIn("CRYPTO V5 V2 · THREE-DAY", overview)
+        self.assertIn("Missed V1 remains archived", overview)
         self.assertLess(overview.index('id="crypto-paper-progress"'), overview.index("COINBASE REAL-TIME MARKET"))
         self.assertIn("Real orders remain OFF", overview)
 
