@@ -87,16 +87,32 @@ if ! launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
 fi
 
 STATUS="$CLEAN/forward_service_status.json"
-for _ in {1..10}; do
-  [[ -s "$STATUS" ]] && break
-  sleep 1
-done
-"$PYTHON" - "$STATUS" <<'PY'
+RUNNING_PID="$(launchctl print "$DOMAIN/$LABEL" | awk '/pid =/{print $3; exit}')"
+if [[ -z "$RUNNING_PID" || "$RUNNING_PID" != <-> ]]; then
+  echo "Crypto V5 V2 LaunchAgent has no running PID." >&2
+  exit 1
+fi
+for _ in {1..30}; do
+  STATUS_PID="$("$PYTHON" - "$STATUS" <<'PY' 2>/dev/null || true
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+if path.exists():
+    print(json.loads(path.read_text(encoding="utf-8")).get("service_pid", ""))
+PY
+)"
+  [[ "$STATUS_PID" == "$RUNNING_PID" ]] && break
+  sleep 1
+done
+"$PYTHON" - "$STATUS" "$RUNNING_PID" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+expected_pid = int(sys.argv[2])
 if not path.exists():
     raise SystemExit(f"Crypto V5 V2 heartbeat was not created: {path}")
 payload = json.loads(path.read_text(encoding="utf-8"))
@@ -106,7 +122,12 @@ if payload.get("lane_id") != "crypto_v5_clean_forward_v2":
     raise SystemExit(f"Unexpected Crypto V5 lane: {payload.get('lane_id')}")
 if payload.get("contract_verified") is not True:
     raise SystemExit("Crypto V5 V2 contract verification failed")
-print("Crypto V5 V2 heartbeat: VERIFIED")
+if int(payload.get("service_pid", -1)) != expected_pid:
+    raise SystemExit(
+        f"Crypto V5 V2 heartbeat PID {payload.get('service_pid')} "
+        f"does not match LaunchAgent PID {expected_pid}"
+    )
+print(f"Crypto V5 V2 persistent heartbeat: VERIFIED (PID {expected_pid})")
 PY
 
 echo "Installed $LABEL"
