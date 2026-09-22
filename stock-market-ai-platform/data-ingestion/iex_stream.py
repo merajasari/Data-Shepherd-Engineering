@@ -34,15 +34,26 @@ def get_stream_symbols():
     if symbol_set in {"v5", "101"}:
         from v5_symbols import get_v5_data_symbols
         return get_v5_data_symbols()
-    raise RuntimeError("Unsupported IEX_SYMBOL_SET. Use legacy, v5, or provide IEX_SYMBOLS.")
+    if symbol_set in {"stock250", "250"}:
+        from stock_universe_250 import get_stock_250_data_symbols
+        return get_stock_250_data_symbols()
+    raise RuntimeError(
+        "Unsupported IEX_SYMBOL_SET. Use legacy, v5, stock250, or provide IEX_SYMBOLS."
+    )
 
 
 SYMBOLS = get_stream_symbols()
+IS_STOCK_250 = len(SYMBOLS) == 251
 ROLLING_24H_PATH = ROOT / (
-    "data/live/iex_24h_5m_v5.json" if len(SYMBOLS) >= 50 else "data/live/iex_24h_5m_legacy.json"
+    "data/live/iex_24h_5m_stock250.json"
+    if IS_STOCK_250
+    else ("data/live/iex_24h_5m_v5.json" if len(SYMBOLS) >= 50 else "data/live/iex_24h_5m_legacy.json")
 )
+FROZEN_V5_ROLLING_PATH = ROOT / "data/live/iex_24h_5m_v5.json"
+LATEST_WRITE_SECONDS = 1.0
 latest_quotes = {}
 rolling_5m = {}
+last_latest_write = 0.0
 last_rolling_write = 0.0
 last_disk_mtime = 0.0
 
@@ -70,13 +81,18 @@ def _atomic_json_write(path: Path, payload: dict):
     temp.replace(path)
 
 
-def write_cache():
+def write_cache(force=False):
+    global last_latest_write
+    now_mono = time.monotonic()
+    if not force and now_mono - last_latest_write < LATEST_WRITE_SECONDS:
+        return
     _atomic_json_write(CACHE_PATH, {
         "updated_at": utc_now(),
         "symbol_count": len(latest_quotes),
         "configured_symbols": SYMBOLS,
         "quotes": latest_quotes,
     })
+    last_latest_write = now_mono
 
 
 def _bucket_5m(now: datetime) -> str:
@@ -203,13 +219,28 @@ def _write_rolling_cache(force=False):
     if not force and now_mono - last_rolling_write < ROLLING_WRITE_SECONDS:
         return
     _merge_external_cache_if_newer()
-    _atomic_json_write(ROLLING_24H_PATH, {
+    payload = {
         "updated_at": utc_now(),
         "window_hours": 24,
         "interval_minutes": 5,
         "symbol_count": len(rolling_5m),
         "series": rolling_5m,
-    })
+    }
+    _atomic_json_write(ROLLING_24H_PATH, payload)
+    if IS_STOCK_250:
+        from v5_symbols import get_v5_data_symbols
+        frozen_symbols = get_v5_data_symbols()
+        frozen_series = {
+            symbol: rolling_5m[symbol]
+            for symbol in frozen_symbols
+            if symbol in rolling_5m
+        }
+        _atomic_json_write(FROZEN_V5_ROLLING_PATH, {
+            **payload,
+            "symbol_count": len(frozen_series),
+            "series": frozen_series,
+            "source_universe": "stock250_compatibility_projection",
+        })
     try:
         last_disk_mtime = ROLLING_24H_PATH.stat().st_mtime
     except OSError:
@@ -221,7 +252,7 @@ def initialize_cache():
     print(f"Initializing live cache: {CACHE_PATH}")
     print(f"Rolling 24h cache: {ROLLING_24H_PATH}")
     _load_rolling_cache()
-    write_cache()
+    write_cache(force=True)
     _write_rolling_cache(force=True)
 
 
@@ -286,6 +317,7 @@ def on_error(ws, error):
 
 
 def on_close(ws, close_status_code, close_message):
+    write_cache(force=True)
     _write_rolling_cache(force=True)
     print("\nTiingo WebSocket closed")
     print("Status:", close_status_code)

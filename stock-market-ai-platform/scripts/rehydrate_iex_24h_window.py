@@ -30,6 +30,7 @@ DATA_INGESTION = ROOT / "data-ingestion"
 import sys
 if str(DATA_INGESTION) not in sys.path:
     sys.path.insert(0, str(DATA_INGESTION))
+from stock_universe_250 import get_stock_250_data_symbols  # noqa: E402
 from v5_symbols import get_v5_data_symbols  # noqa: E402
 
 START_TOLERANCE_HOURS = 2.0
@@ -68,7 +69,7 @@ def reaches_window_start(rows: list[dict]) -> bool:
 
 
 def main() -> int:
-    symbols = get_v5_data_symbols()
+    symbols = get_stock_250_data_symbols() if USE_STOCK_250 else get_v5_data_symbols()
     merged = merge_series(load_existing_cache(), load_log_history())
     append_live_marks(merged)
 

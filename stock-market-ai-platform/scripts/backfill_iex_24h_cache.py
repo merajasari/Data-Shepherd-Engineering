@@ -23,9 +23,16 @@ DATA_INGESTION = ROOT / "data-ingestion"
 if str(DATA_INGESTION) not in sys.path:
     sys.path.insert(0, str(DATA_INGESTION))
 
+from stock_universe_250 import get_stock_250_data_symbols  # noqa: E402
 from v5_symbols import get_v5_data_symbols  # noqa: E402
 
-CACHE_PATH = ROOT / "data/live/iex_24h_5m_v5.json"
+SYMBOL_SET = os.getenv("IEX_SYMBOL_SET", "v5").strip().lower()
+USE_STOCK_250 = SYMBOL_SET in {"stock250", "250"}
+CACHE_PATH = ROOT / (
+    "data/live/iex_24h_5m_stock250.json"
+    if USE_STOCK_250
+    else "data/live/iex_24h_5m_v5.json"
+)
 LATEST_QUOTES_PATH = ROOT / "data/live/latest_quotes.json"
 LOG_PATHS = [ROOT / "logs/iex_stream.log", ROOT / "logs/stockiex.log"]
 MAX_LOG_BYTES = 256 * 1024 * 1024
@@ -200,7 +207,7 @@ def append_live_marks(series: dict[str, list[dict]]) -> None:
 
 
 def main() -> int:
-    symbols = get_v5_data_symbols()
+    symbols = get_stock_250_data_symbols() if USE_STOCK_250 else get_v5_data_symbols()
     existing = load_existing_cache()
     log_history = load_log_history()
     merged = merge_series(existing, log_history)

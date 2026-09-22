@@ -32,7 +32,7 @@ cat > "$LAUNCH_DIR/com.datashepherd.iexstream.plist" <<EOF
 <key>Label</key><string>com.datashepherd.iexstream</string>
 <key>ProgramArguments</key><array>
 <string>/bin/zsh</string><string>-lc</string>
-<string>cd '$PROJECT_DIR' &amp;&amp; set -a &amp;&amp; source .env &amp;&amp; export IEX_SYMBOL_SET=v5 &amp;&amp; set +a &amp;&amp; export PYTHONPATH='$PROJECT_DIR/data-ingestion' &amp;&amp; exec '$PYTHON' -u data-ingestion/iex_stream.py</string>
+<string>cd '$PROJECT_DIR' &amp;&amp; set -a &amp;&amp; source .env &amp;&amp; export IEX_SYMBOL_SET=stock250 &amp;&amp; set +a &amp;&amp; export PYTHONPATH='$PROJECT_DIR/data-ingestion' &amp;&amp; exec '$PYTHON' -u data-ingestion/iex_stream.py</string>
 </array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LOG_DIR/iex_stream.log</string>
@@ -61,5 +61,5 @@ done
 
 echo "Realtime Mac services installed."
 echo "Web: http://127.0.0.1:5001"
-echo "Live universe: 100 V5 candidates + SPY"
+echo "Live universe: 250 candidates + SPY; frozen 101-symbol compatibility cache retained"
 echo "Idle sleep prevention: enabled"
