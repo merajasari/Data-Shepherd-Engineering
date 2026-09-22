@@ -17,7 +17,8 @@
   "target": {
     "name": "forward_relative_return_5d",
     "horizon_completed_sessions": 5,
-    "definition": "candidate five-session forward close return minus SPY return over the identical endpoint",
+    "definition": "candidate return from the next completed session open through the fifth completed session close minus SPY return over identical entry and exit timestamps",
+    "entry_match_required": true,
     "endpoint_match_required": true,
     "unknown_future_labels_remain_missing": true,
     "primary_task": "cross_sectional_regression_and_ranking"
