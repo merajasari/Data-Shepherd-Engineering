@@ -141,6 +141,34 @@ class SparkFeatureParityTests(unittest.TestCase):
                 err_msg=f"Spark/Pandas mismatch in {column}",
             )
 
+    def test_zero_denominators_return_null_without_ansi_failure(self):
+        gold = self._gold_frame()
+        gold.loc[30, [
+            "close",
+            "open",
+            "volume",
+            "volume_sma_20",
+            "sma_7",
+            "sma_20",
+            "sma_50",
+            "sma_200",
+        ]] = 0.0
+
+        output = (
+            transform_to_features_spark(self.spark.createDataFrame(gold))
+            .orderBy("timestamp")
+            .toPandas()
+        )
+
+        generated = output[GENERATED_COLUMNS].apply(
+            pd.to_numeric,
+            errors="coerce",
+        )
+        self.assertFalse(np.isinf(generated.to_numpy(dtype=float)).any())
+        self.assertTrue(pd.isna(output.loc[30, "intraday_range"]))
+        self.assertTrue(pd.isna(output.loc[32, "return_2d"]))
+        self.assertTrue(pd.isna(output.loc[35, "volume_change_5d"]))
+
     def test_spark_preserves_unknown_tail_targets(self):
         output = (
             transform_to_features_spark(
