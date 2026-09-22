@@ -92,7 +92,7 @@ class CryptoV5ForwardServiceTest(unittest.TestCase):
         state["last_decision_utc"] = service.FIRST_ELIGIBLE_DECISION_UTC.isoformat()
         self.assertEqual(
             service._next_required_decision(state),
-            service.FIRST_ELIGIBLE_DECISION_UTC + pd.Timedelta(days=3),
+            service.FIRST_ELIGIBLE_DECISION_UTC + pd.Timedelta(3, unit="D"),
         )
 
 
