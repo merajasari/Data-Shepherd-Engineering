@@ -22,6 +22,12 @@ class StockUniverse250Test(unittest.TestCase):
         self.assertNotIn(V5_BENCHMARK_SYMBOL, STOCK_250_SYMBOLS)
         self.assertEqual(get_stock_250_data_symbols()[-1], V5_BENCHMARK_SYMBOL)
 
+    def test_failed_or_obsolete_initial_symbols_are_replaced(self):
+        removed = {"EA", "DARD", "HES", "CTRA", "BK", "MMC"}
+        replacements = {"RBLX", "ULTA", "EQT", "APA", "HOOD", "TRV"}
+        self.assertTrue(removed.isdisjoint(STOCK_250_SYMBOLS))
+        self.assertTrue(replacements.issubset(STOCK_250_SYMBOLS))
+
     def test_preserves_every_frozen_v5_candidate(self):
         self.assertTrue(set(V5_SYMBOLS).issubset(STOCK_250_SYMBOLS))
         self.assertEqual(set(STOCK_250_SYMBOLS_BY_SECTOR), {

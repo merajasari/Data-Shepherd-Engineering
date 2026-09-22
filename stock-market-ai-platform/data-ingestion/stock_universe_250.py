@@ -13,22 +13,22 @@ from v5_symbols import (
 
 STOCK_250_ADDITIONS_BY_SECTOR = {
     "Communication Services": (
-        "FOXA", "CHTR", "WBD", "EA", "TTWO", "OMC", "LYV",
+        "FOXA", "CHTR", "WBD", "RBLX", "TTWO", "OMC", "LYV",
     ),
     "Consumer Discretionary": (
         "ROST", "AZO", "GM", "F", "ABNB", "DHI", "LEN", "TGT",
-        "YUM", "DARD", "EBAY", "DECK", "RCL", "CCL", "GPC", "EXPE",
+        "YUM", "ULTA", "EBAY", "DECK", "RCL", "CCL", "GPC", "EXPE",
     ),
     "Consumer Staples": (
         "CL", "KMB", "GIS", "KHC", "KR", "SYY", "STZ", "MNST", "ADM", "HSY",
     ),
     "Energy": (
-        "OXY", "VLO", "KMI", "WMB", "HES", "HAL", "DVN", "FANG", "CTRA",
+        "OXY", "VLO", "KMI", "WMB", "EQT", "HAL", "DVN", "FANG", "APA",
         "BKR", "TRGP",
     ),
     "Financials": (
-        "COF", "USB", "PNC", "TFC", "BK", "STT", "CME", "ICE", "MCO", "MSCI",
-        "CB", "PGR", "ALL", "AIG", "MET", "PRU", "AFL", "AMP", "AJG", "MMC",
+        "COF", "USB", "PNC", "TFC", "HOOD", "STT", "CME", "ICE", "MCO", "MSCI",
+        "CB", "PGR", "ALL", "AIG", "MET", "PRU", "AFL", "AMP", "AJG", "TRV",
     ),
     "Health Care": (
         "PFE", "BMY", "CVS", "CI", "ELV", "HCA", "BSX", "EW", "ZTS", "REGN",

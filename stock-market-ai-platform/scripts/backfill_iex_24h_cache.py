@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backfill the persisted V5 rolling 24-hour, 5-minute IEX cache.
+"""Backfill the configured rolling 24-hour, 5-minute IEX cache.
 
 This utility is intentionally separate from Gunicorn. It may scan the existing
 IEX stream log and, when needed, call Tiingo intraday REST in the foreground.
@@ -62,7 +62,7 @@ def normalize_rows(rows: list[dict]) -> list[dict]:
     points: dict[str, float] = {}
     for row in rows or []:
         try:
-            ts = pd.to_datetime(row["t"], utc=True).to_pydatetime()
+            ts = pd.to_datetime(row["t"], utc=True).to_pydatetime(warn=False)
             price = float(row["price"])
         except Exception:
             continue
@@ -117,7 +117,7 @@ def load_log_history() -> dict[str, list[dict]]:
                 continue
             symbol, price_text, ts_text = match.groups()
             try:
-                ts = pd.to_datetime(ts_text, utc=True).to_pydatetime()
+                ts = pd.to_datetime(ts_text, utc=True).to_pydatetime(warn=False)
                 price = float(price_text)
             except Exception:
                 continue
@@ -166,7 +166,7 @@ def fetch_symbol(symbol: str, token: str) -> tuple[str, list[dict], str | None]:
             rows = []
             for item in payload:
                 try:
-                    ts = pd.to_datetime(item["date"], utc=True).to_pydatetime()
+                    ts = pd.to_datetime(item["date"], utc=True).to_pydatetime(warn=False)
                     price = float(item.get("close"))
                 except Exception:
                     continue
@@ -176,8 +176,14 @@ def fetch_symbol(symbol: str, token: str) -> tuple[str, list[dict], str | None]:
             if rows:
                 return symbol, rows, None
             errors.append(f"no rows from {url}")
+        except requests.RequestException as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            status_text = f" HTTP {status}" if status is not None else ""
+            errors.append(
+                f"{url}: {type(exc).__name__}{status_text}; credentials redacted"
+            )
         except Exception as exc:
-            errors.append(f"{url}: {exc}")
+            errors.append(f"{url}: {type(exc).__name__}; details redacted")
     return symbol, [], " | ".join(errors)
 
 
@@ -229,7 +235,7 @@ def main() -> int:
                 try:
                     _, rows, error = future.result()
                 except Exception as exc:
-                    rows, error = [], str(exc)
+                    rows, error = [], f"{type(exc).__name__}; details redacted"
                 if rows:
                     merged[symbol] = normalize_rows([*merged.get(symbol, []), *rows])
                     remote_success += 1
