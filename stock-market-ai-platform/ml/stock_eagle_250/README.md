@@ -47,3 +47,24 @@ python -m json.tool data/model/stock_eagle_250/phase1/manifest.json
 Use Phase 1 `--strict` only when the command should return a failure status if
 any historical feature file is missing, unreadable, or contains duplicate
 timestamps.
+
+## Phase 2 research panel
+
+Phase 2 freezes the development design before any model is fit. It builds:
+
+- next-session-open through fifth-session-close returns relative to SPY;
+- same-timestamp cross-sectional percentile-rank features;
+- 252-session point-in-time eligibility;
+- six-month expanding walk-forward folds with exact endpoint purging; and
+- a development-only panel that cannot include decisions or outcomes from the
+  untouched future holdout beginning September 23, 2026 UTC.
+
+The only preregistered learned candidates for the next phase are fixed Ridge
+regression and fixed histogram gradient boosting. Phase 2 does not fit them.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_phase2 -v
+python -m ml.stock_eagle_250.phase2
+python -m json.tool data/model/stock_eagle_250/phase2/manifest.json
+python -m json.tool data/model/stock_eagle_250/phase2/folds.json
+```
