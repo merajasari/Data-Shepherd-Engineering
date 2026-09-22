@@ -12,7 +12,7 @@ or place brokerage orders.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -34,7 +34,7 @@ CONTRACT_PATH = PHASE1_ROOT / "preregistered_contract.json"
 OUTPUT_ROOT = Path("data/model/shared_crypto_v4_net_edge/phase2")
 
 HOLDOUT = pd.Timestamp("2026-09-01T00:00:00Z")
-PURGE = pd.Timedelta("4h")
+PURGE = timedelta(hours=4)
 MIN_TRAIN_DAYS = 730
 VALIDATION_DAYS = 90
 MAX_FOLDS = 6
@@ -88,14 +88,14 @@ def make_folds(timestamps: pd.Series) -> list[dict]:
     first = unique.iloc[0].floor("D")
     last = unique.iloc[-1]
     starts = list(pd.date_range(
-        first + pd.Timedelta(f"{MIN_TRAIN_DAYS}D"),
+        first + timedelta(days=MIN_TRAIN_DAYS),
         last,
         freq=f"{VALIDATION_DAYS}D",
         tz="UTC",
     ))[-MAX_FOLDS:]
     folds = []
     for start in starts:
-        end = min(start + pd.Timedelta(f"{VALIDATION_DAYS}D"), HOLDOUT)
+        end = min(start + timedelta(days=VALIDATION_DAYS), HOLDOUT)
         train_end = start - PURGE
         train = timestamps < train_end
         validation = (timestamps >= start) & (timestamps < end)
@@ -282,7 +282,7 @@ def run(phase1_root: Path = PHASE1_ROOT, output_root: Path = OUTPUT_ROOT) -> dic
         "stage": "purged_walk_forward_return_regression",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "future_holdout_start_utc": HOLDOUT.isoformat(),
-        "purge_hours": int(PURGE / pd.Timedelta("1h")),
+        "purge_hours": int(PURGE.total_seconds() // 3600),
         "minimum_train_days": MIN_TRAIN_DAYS,
         "validation_days": VALIDATION_DAYS,
         "max_folds": MAX_FOLDS,
