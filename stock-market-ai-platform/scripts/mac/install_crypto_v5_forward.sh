@@ -88,10 +88,16 @@ fi
 
 STATUS="$CLEAN/forward_service_status.json"
 RUNNING_PID="$(launchctl print "$DOMAIN/$LABEL" | awk '/pid =/{print $3; exit}')"
-if [[ -z "$RUNNING_PID" || "$RUNNING_PID" != <-> ]]; then
+if [[ -z "$RUNNING_PID" ]]; then
   echo "Crypto V5 V2 LaunchAgent has no running PID." >&2
   exit 1
 fi
+case "$RUNNING_PID" in
+  *[!0-9]*)
+    echo "Crypto V5 V2 LaunchAgent returned a non-numeric PID: $RUNNING_PID" >&2
+    exit 1
+    ;;
+esac
 for _ in {1..30}; do
   STATUS_PID="$("$PYTHON" - "$STATUS" <<'PY' 2>/dev/null || true
 import json
