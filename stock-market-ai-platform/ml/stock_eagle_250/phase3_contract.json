@@ -1,0 +1,142 @@
+{
+  "contract_id": "STOCK_EAGLE_250_PHASE3_FIXED_WALK_FORWARD_V1",
+  "display_name": "StockEagle250",
+  "model_id": "stock_eagle_250",
+  "research_version": "stock_eagle_250_v1",
+  "created_before_phase3_results": true,
+  "classification": "PREREGISTERED_DEVELOPMENT_EVALUATION_NOT_FROZEN_NOT_PAPER_TRADING",
+  "input": {
+    "panel": "data/model/stock_eagle_250/phase2/research_panel.parquet",
+    "folds": "data/model/stock_eagle_250/phase2/folds.json",
+    "phase2_manifest": "data/model/stock_eagle_250/phase2/manifest.json",
+    "required_candidate_count": 250,
+    "required_fold_count": 14,
+    "future_holdout_start_utc": "2026-09-23T00:00:00+00:00",
+    "maximum_permitted_target_endpoint_utc": "2026-09-22T00:00:00+00:00"
+  },
+  "features": {
+    "inputs": "26 decision-time cross-sectional percentile ranks plus static sector one-hot columns",
+    "imputation": "prohibited_for_model_eligible_rows",
+    "future_derived_columns": "prohibited",
+    "target": "forward_relative_return_5d"
+  },
+  "fixed_candidates": [
+    {
+      "candidate_id": "ridge_fixed_v1",
+      "estimator": "sklearn.linear_model.Ridge",
+      "parameters": {
+        "alpha": 1.0,
+        "fit_intercept": true
+      }
+    },
+    {
+      "candidate_id": "hgb_fixed_v1",
+      "estimator": "sklearn.ensemble.HistGradientBoostingRegressor",
+      "parameters": {
+        "loss": "squared_error",
+        "learning_rate": 0.05,
+        "max_iter": 300,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0,
+        "early_stopping": false,
+        "random_state": 1729
+      }
+    }
+  ],
+  "walk_forward": {
+    "folds_must_match_phase2": true,
+    "expanding_training_window": true,
+    "training_target_endpoint_strictly_before_validation_start": true,
+    "validation_target_endpoint_strictly_before_validation_end": true,
+    "refitting_once_per_candidate_per_fold": true,
+    "hyperparameter_search": false
+  },
+  "portfolio": {
+    "selection": "top_10_predicted_relative_returns_each_decision_session",
+    "positions_per_cohort": 10,
+    "weighting": "equal_weight",
+    "entry": "next_completed_session_open",
+    "exit": "fifth_completed_session_close",
+    "overlapping_cohorts": 5,
+    "starting_equity": 100000,
+    "short_sales": false,
+    "leverage": false,
+    "transaction_cost_bps_per_side": 10,
+    "cost_application": "multiplicative_entry_and_exit_cost_on_each_full_cohort"
+  },
+  "matched_baselines": [
+    {
+      "baseline_id": "spy_buy_and_hold_matched_clock",
+      "description": "five continuously staggered SPY sleeves on the same entry and endpoint clock",
+      "transaction_cost_bps_per_side": 0
+    },
+    {
+      "baseline_id": "equal_weight_eligible_universe",
+      "description": "same-clock equal-weight cohort of every eligible candidate",
+      "transaction_cost_bps_per_side": 10
+    },
+    {
+      "baseline_id": "cross_sectional_return_20d_rank",
+      "description": "same-clock top-10 cohort by preregistered 20-day return rank",
+      "transaction_cost_bps_per_side": 10
+    }
+  ],
+  "reported_metrics": {
+    "signal": [
+      "mae",
+      "rmse",
+      "pearson_correlation",
+      "mean_daily_spearman_rank_ic",
+      "positive_daily_rank_ic_fraction",
+      "top10_mean_realized_excess_vs_spy"
+    ],
+    "portfolio": [
+      "net_return",
+      "maximum_drawdown",
+      "excess_vs_spy",
+      "excess_vs_equal_weight",
+      "excess_vs_return_20d_rank",
+      "positive_fold_fraction"
+    ]
+  },
+  "qualification_gates": {
+    "median_fold_net_return_gt_zero": 0.0,
+    "positive_fold_fraction_gte": 0.7,
+    "median_fold_excess_vs_spy_gt_zero": 0.0,
+    "positive_excess_vs_spy_fold_fraction_gte": 0.6,
+    "median_fold_excess_vs_equal_weight_gt_zero": 0.0,
+    "median_fold_mean_rank_ic_gt_zero": 0.0,
+    "positive_mean_rank_ic_fold_fraction_gte": 0.6,
+    "worst_fold_maximum_drawdown_gte": -0.35
+  },
+  "candidate_ranking": {
+    "eligible_candidates_must_pass_every_gate": true,
+    "primary": "median_fold_excess_vs_spy_descending",
+    "tie_break_1": "median_fold_mean_rank_ic_descending",
+    "tie_break_2": "candidate_id_ascending",
+    "automatic_freeze": false,
+    "human_review_required": true
+  },
+  "untouched_future_holdout": {
+    "rows_may_be_read": false,
+    "rows_may_be_scored": false,
+    "results_may_select_candidate": false
+  },
+  "isolation": {
+    "modify_v5": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v14": false,
+    "modify_v15": false,
+    "read_or_write_existing_forward_journals": false
+  },
+  "authority": {
+    "development_research_only": true,
+    "model_freezing_enabled": false,
+    "paper_trading_enabled": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "automatic_promotion": false
+  }
+}
