@@ -672,7 +672,9 @@ def _v5_forward_performance():
         "status": status.get("status", "not_started"), "mode": mode,
         "action": status.get("action"), "generated_at_utc": status.get("generated_at_utc"),
         "clean_start_utc": clean_start,
-        "first_eligible_decision_utc": manifest.get("first_eligible_decision_utc", clean_start),
+        "first_eligible_decision_utc": manifest.get(
+            "first_eligible_decision_utc", "2026-09-24T00:00:00+00:00"
+        ),
         "starting_equity_dollars": V5_STARTING_PAPER_EQUITY,
         "current_equity_dollars": current_equity,
         "candidate_return": current_equity / V5_STARTING_PAPER_EQUITY - 1.0,
