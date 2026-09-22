@@ -99,3 +99,33 @@ Do not proceed to Phase 3 unless the refresh reports
 `Ready for Phase 2 rebuild: True`, the Phase 2 manifest reports
 `future_holdout_rows_read: 0`, and its maximum development target endpoint
 remains strictly earlier than September 23, 2026 UTC.
+
+
+## Phase 3 fixed learned-candidate evaluation
+
+Phase 3 fits only the two candidates registered before results exist:
+`ridge_fixed_v1` and `hgb_fixed_v1`. Each is refit on every frozen expanding
+fold and scored only on that fold's purged out-of-sample rows.
+
+The evaluation applies the fixed Top-10 equal-weight portfolio, five overlapping
+cohorts, next-session-open entry, fifth-session-close exit, and 10 bps per side.
+It also evaluates matched SPY, equal-weight-universe, and 20-day-momentum
+baselines. Eight qualification gates and the candidate tie-break order are fixed
+in `phase3_contract.json` before the run.
+
+Phase 3 produces development evidence only. A qualifying result requires human
+review and does not freeze a model, read the future holdout, or enable paper
+trading.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_phase3 -v
+
+python -m ml.stock_eagle_250.phase3 \
+  2>&1 | tee logs/stock_eagle_250_phase3.log
+
+python -m json.tool \
+  data/model/stock_eagle_250/phase3/manifest.json
+
+python -m json.tool \
+  data/model/stock_eagle_250/phase3/qualification.json
+```
