@@ -34,7 +34,7 @@ CONTRACT_PATH = PHASE1_ROOT / "preregistered_contract.json"
 OUTPUT_ROOT = Path("data/model/shared_crypto_v4_net_edge/phase2")
 
 HOLDOUT = pd.Timestamp("2026-09-01T00:00:00Z")
-PURGE = pd.Timedelta(hours=4)
+PURGE = pd.Timedelta("4h")
 MIN_TRAIN_DAYS = 730
 VALIDATION_DAYS = 90
 MAX_FOLDS = 6
@@ -88,14 +88,14 @@ def make_folds(timestamps: pd.Series) -> list[dict]:
     first = unique.iloc[0].floor("D")
     last = unique.iloc[-1]
     starts = list(pd.date_range(
-        first + pd.Timedelta(days=MIN_TRAIN_DAYS),
+        first + pd.Timedelta(f"{MIN_TRAIN_DAYS}D"),
         last,
         freq=f"{VALIDATION_DAYS}D",
         tz="UTC",
     ))[-MAX_FOLDS:]
     folds = []
     for start in starts:
-        end = min(start + pd.Timedelta(days=VALIDATION_DAYS), HOLDOUT)
+        end = min(start + pd.Timedelta(f"{VALIDATION_DAYS}D"), HOLDOUT)
         train_end = start - PURGE
         train = timestamps < train_end
         validation = (timestamps >= start) & (timestamps < end)
@@ -186,7 +186,9 @@ def _regime_walk_forward(data: pd.DataFrame, features: list[str]) -> tuple[pd.Da
 
 
 def _rank_ic(group: pd.DataFrame) -> float:
-    if len(group) < 2:
+    if (len(group) < 2
+            or group["predicted_score"].nunique(dropna=True) < 2
+            or group["actual_return"].nunique(dropna=True) < 2):
         return np.nan
     return float(group["predicted_score"].corr(group["actual_return"], method="spearman"))
 
@@ -280,7 +282,7 @@ def run(phase1_root: Path = PHASE1_ROOT, output_root: Path = OUTPUT_ROOT) -> dic
         "stage": "purged_walk_forward_return_regression",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "future_holdout_start_utc": HOLDOUT.isoformat(),
-        "purge_hours": int(PURGE / pd.Timedelta(hours=1)),
+        "purge_hours": int(PURGE / pd.Timedelta("1h")),
         "minimum_train_days": MIN_TRAIN_DAYS,
         "validation_days": VALIDATION_DAYS,
         "max_folds": MAX_FOLDS,
