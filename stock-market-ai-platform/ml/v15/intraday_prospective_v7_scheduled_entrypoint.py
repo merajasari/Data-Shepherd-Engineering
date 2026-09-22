@@ -125,8 +125,12 @@ def _stage(
         return "CASH_SESSION_ALREADY_COMPLETE", None
     if decision is None:
         if decision_start <= local_time < decision_end:
-            minimum = 7 if local_time >= entry_start else 6
-            return "DECISION_ENTRY_CHECKPOINT", minimum
+            # The immutable signal uses exactly the first six completed bars.
+            # Requiring the seventh bar after the entry window opens can make a
+            # five-minute LaunchAgent miss the decision entirely: the 10:00 bar
+            # is not complete until 10:05.  Collect with a six-bar floor here;
+            # run_snapshot will still append ENTRY only when bar seven exists.
+            return "DECISION_ENTRY_CHECKPOINT", 6
         if local_time >= decision_end:
             return "MISSED_DECISION_NO_BACKFILL", None
         return "WAITING_FOR_DECISION_CHECKPOINT", None
