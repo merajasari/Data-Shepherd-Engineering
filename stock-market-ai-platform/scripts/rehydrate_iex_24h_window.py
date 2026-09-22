@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Force-hydrate the V5 rolling cache toward a true 24-hour window.
+"""Force-hydrate the configured rolling cache toward a true 24-hour window.
 
 Unlike the original backfill utility, this script judges coverage by time span,
 not merely by point count. It runs outside Gunicorn and writes the same compact
@@ -16,6 +16,7 @@ from pathlib import Path
 from backfill_iex_24h_cache import (
     CACHE_PATH,
     MAX_WORKERS,
+    USE_STOCK_250,
     append_live_marks,
     atomic_write_json,
     fetch_symbol,
