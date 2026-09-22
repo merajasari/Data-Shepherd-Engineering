@@ -38,6 +38,16 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertNotIn("Evidence-Lane Integrity Gate", overview)
         self.assertNotIn("forward_evaluation_readiness", overview)
 
+    def test_v2_development_evidence_is_scoped_to_v3_page(self):
+        overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
+        page = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
+        self.assertNotIn("CRYPTO 15M V2 — RESEARCH EVIDENCE", overview)
+        self.assertNotIn("Frozen Candidate Development Results", overview)
+        self.assertIn('id="v3-historical-development-evidence"', page)
+        self.assertIn("HISTORICAL DEVELOPMENT EVIDENCE — NOT PAPER PERFORMANCE", page)
+        self.assertIn("September 22, 2026 at 07:00 UTC", page)
+        self.assertNotIn("Sep 18+ clean forward evaluation", page)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
