@@ -48,6 +48,14 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("September 22, 2026 at 07:00 UTC", page)
         self.assertNotIn("Sep 18+ clean forward evaluation", page)
 
+    def test_archived_xrp_and_rejected_tracks_are_not_on_overview(self):
+        overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
+        self.assertNotIn("XRP V1 — EXPLORATORY FORWARD MONITOR", overview)
+        self.assertNotIn("Dedicated XRP Shadow Decision Center", overview)
+        self.assertNotIn("DEVELOPMENT RESEARCH — VERSION STATUS", overview)
+        self.assertNotIn("REJECT_CURRENT_POLICY_FAMILY", overview)
+        self.assertIn("CRYPTO V1 HISTORICAL RESEARCH", overview)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
