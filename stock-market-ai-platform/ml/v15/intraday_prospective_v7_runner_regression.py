@@ -194,8 +194,11 @@ def _assert_scheduler_boundaries() -> None:
             return {"status": "WAITING_FOR_EXIT"}
 
         ready = lambda _: {}
+        # At 10:04 Eastern the seventh 10:00 bar is still forming.  The
+        # scheduler must collect with the immutable six-bar decision floor so
+        # the five-minute cadence cannot skip directly to a missed decision.
         active = run_scheduled(
-            now_utc=datetime(2026, 9, 21, 14, 5, tzinfo=timezone.utc),
+            now_utc=datetime(2026, 9, 21, 14, 4, tzinfo=timezone.utc),
             status_path=root / "active_status.json",
             journal_path=root / "active_journal.jsonl",
             snapshot_path=root / "snapshot.json",
@@ -206,7 +209,7 @@ def _assert_scheduler_boundaries() -> None:
         )
         assert active["collector_invoked"] is True
         assert active["runner_invoked"] is True
-        assert calls == [("2026-09-21", 7)]
+        assert calls == [("2026-09-21", 6)]
         assert active["maximum_tiingo_requests_per_session"] == 303
 
         calls.clear()
