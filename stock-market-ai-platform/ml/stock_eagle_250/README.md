@@ -68,3 +68,34 @@ python -m ml.stock_eagle_250.phase2
 python -m json.tool data/model/stock_eagle_250/phase2/manifest.json
 python -m json.tool data/model/stock_eagle_250/phase2/folds.json
 ```
+
+
+## Guarded final pre-holdout refresh
+
+Before fitting either registered candidate, run the one-time incremental refresh
+through the final permitted pre-holdout session. The workflow is fixed to
+September 22, 2026 and refuses any request for September 23 or later. It covers
+all 250 candidates plus benchmark-only SPY, merges overlapping Tiingo rows into
+the existing Bronze histories, rebuilds Silver/Gold/Features, and fails closed
+unless all 251 feature files reach the cutoff.
+
+It does not fit or score models, enable paper trading, place orders, modify saved
+model artifacts, or read/write existing forward journals.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_pre_holdout_refresh -v
+
+python -m ml.stock_eagle_250.pre_holdout_refresh --dry-run
+
+python -m ml.stock_eagle_250.pre_holdout_refresh \
+  --end-date 2026-09-22 \
+  --max-requests 251
+
+python -m ml.stock_eagle_250.phase1 --strict
+python -m ml.stock_eagle_250.phase2
+```
+
+Do not proceed to Phase 3 unless the refresh reports
+`Ready for Phase 2 rebuild: True`, the Phase 2 manifest reports
+`future_holdout_rows_read: 0`, and its maximum development target endpoint
+remains strictly earlier than September 23, 2026 UTC.
