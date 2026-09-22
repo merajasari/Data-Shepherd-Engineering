@@ -20,9 +20,15 @@ def _rolling_window(days: int):
     )
 
 
+def _safe_divide(numerator, denominator):
+    """Return NULL for zero or NULL denominators, including in ANSI mode."""
+
+    return F.try_divide(numerator.cast("double"), denominator.cast("double"))
+
+
 def _pct_change(column: str, days: int):
     previous = F.lag(column, days).over(_ordered_window())
-    return F.col(column) / previous - F.lit(1.0)
+    return _safe_divide(F.col(column), previous) - F.lit(1.0)
 
 
 def _complete_rolling(expression, source_column: str, days: int):
@@ -45,22 +51,22 @@ def transform_to_features_spark(df: DataFrame) -> DataFrame:
 
     result = (
         result
-        .withColumn("price_vs_sma_7", F.col("close") / F.col("sma_7") - 1)
-        .withColumn("price_vs_sma_20", F.col("close") / F.col("sma_20") - 1)
-        .withColumn("price_vs_sma_50", F.col("close") / F.col("sma_50") - 1)
-        .withColumn("price_vs_sma_200", F.col("close") / F.col("sma_200") - 1)
-        .withColumn("sma_7_vs_sma_20", F.col("sma_7") / F.col("sma_20") - 1)
-        .withColumn("sma_20_vs_sma_50", F.col("sma_20") / F.col("sma_50") - 1)
-        .withColumn("sma_50_vs_sma_200", F.col("sma_50") / F.col("sma_200") - 1)
+        .withColumn("price_vs_sma_7", _safe_divide(F.col("close"), F.col("sma_7")) - 1)
+        .withColumn("price_vs_sma_20", _safe_divide(F.col("close"), F.col("sma_20")) - 1)
+        .withColumn("price_vs_sma_50", _safe_divide(F.col("close"), F.col("sma_50")) - 1)
+        .withColumn("price_vs_sma_200", _safe_divide(F.col("close"), F.col("sma_200")) - 1)
+        .withColumn("sma_7_vs_sma_20", _safe_divide(F.col("sma_7"), F.col("sma_20")) - 1)
+        .withColumn("sma_20_vs_sma_50", _safe_divide(F.col("sma_20"), F.col("sma_50")) - 1)
+        .withColumn("sma_50_vs_sma_200", _safe_divide(F.col("sma_50"), F.col("sma_200")) - 1)
         .withColumn(
             "intraday_range",
-            (F.col("high") - F.col("low")) / F.col("close"),
+            _safe_divide(F.col("high") - F.col("low"), F.col("close")),
         )
         .withColumn(
             "open_close_range",
-            (F.col("close") - F.col("open")) / F.col("open"),
+            _safe_divide(F.col("close") - F.col("open"), F.col("open")),
         )
-        .withColumn("volume_ratio", F.col("volume") / F.col("volume_sma_20"))
+        .withColumn("volume_ratio", _safe_divide(F.col("volume"), F.col("volume_sma_20")))
         .withColumn("volume_change_5d", _pct_change("volume", 5))
     )
 
@@ -76,10 +82,10 @@ def transform_to_features_spark(df: DataFrame) -> DataFrame:
         )
         .withColumn(
             "volatility_ratio_5_20",
-            F.col("volatility_5d") / F.col("volatility_20d"),
+            _safe_divide(F.col("volatility_5d"), F.col("volatility_20d")),
         )
-        .withColumn("trend_20_50", F.col("sma_20") / F.col("sma_50") - 1)
-        .withColumn("trend_50_200", F.col("sma_50") / F.col("sma_200") - 1)
+        .withColumn("trend_20_50", _safe_divide(F.col("sma_20"), F.col("sma_50")) - 1)
+        .withColumn("trend_50_200", _safe_divide(F.col("sma_50"), F.col("sma_200")) - 1)
     )
 
     high_window = _rolling_window(20)
@@ -99,11 +105,11 @@ def transform_to_features_spark(df: DataFrame) -> DataFrame:
         )
         .withColumn(
             "distance_from_20d_high",
-            F.col("close") / F.col("_rolling_high_20") - 1,
+            _safe_divide(F.col("close"), F.col("_rolling_high_20")) - 1,
         )
         .withColumn(
             "distance_from_20d_low",
-            F.col("close") / F.col("_rolling_low_20") - 1,
+            _safe_divide(F.col("close"), F.col("_rolling_low_20")) - 1,
         )
     )
 
@@ -134,7 +140,7 @@ def transform_to_features_spark(df: DataFrame) -> DataFrame:
         F.when(~complete_rsi_window, F.lit(None).cast("double"))
         .when((avg_gain == 0) & (avg_loss == 0), F.lit(None).cast("double"))
         .when(avg_loss == 0, F.lit(100.0))
-        .otherwise(100 - (100 / (1 + (avg_gain / avg_loss))))
+        .otherwise(100 - (100 / (1 + _safe_divide(avg_gain, avg_loss))))
     )
 
     result = (
@@ -147,7 +153,7 @@ def transform_to_features_spark(df: DataFrame) -> DataFrame:
         )
         .withColumn(
             "forward_return_5d",
-            F.lead("close", 5).over(order) / F.col("close") - 1,
+            _safe_divide(F.lead("close", 5).over(order), F.col("close")) - 1,
         )
         .withColumn(
             "target_up_5d",
