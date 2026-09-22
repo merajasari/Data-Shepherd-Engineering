@@ -1,0 +1,49 @@
+{
+  "contract_id": "STOCK_EAGLE_250_RESEARCH_FOUNDATION_V1",
+  "display_name": "StockEagle250",
+  "model_id": "stock_eagle_250",
+  "research_version": "stock_eagle_250_v1",
+  "classification": "ISOLATED_RESEARCH_FOUNDATION_NOT_FROZEN_NOT_PAPER_TRADING",
+  "purpose": "Develop a new learned stock-ranking model over an independently configured 250-stock candidate universe.",
+  "universe": {
+    "source": "data-ingestion/stock_universe_250.py",
+    "candidate_count": 250,
+    "benchmark_symbol": "SPY",
+    "benchmark_is_investable": false,
+    "point_in_time_eligibility_required": true,
+    "minimum_observed_sessions_for_candidate_eligibility": 252,
+    "synthetic_pre_listing_history_prohibited": true
+  },
+  "data_policy": {
+    "historical_feature_root": "data/features/stocks",
+    "live_cache": "data/live/iex_24h_5m_stock250.json",
+    "live_cache_may_be_used_as_historical_training_substitute": false,
+    "phase1_action": "Audit historical feature coverage only.",
+    "missing_history_fails_closed_for_dataset_construction": true
+  },
+  "model_policy": {
+    "model_family": "UNSELECTED",
+    "features": "UNSELECTED",
+    "target": "UNSELECTED",
+    "holding_period": "UNSELECTED",
+    "transaction_costs": "MUST_BE_PREREGISTERED_BEFORE_SCORING",
+    "future_holdout_boundary": "MUST_BE_PREREGISTERED_AFTER_DEVELOPMENT_FREEZE"
+  },
+  "isolation": {
+    "modify_v5": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v14": false,
+    "modify_v15": false,
+    "read_or_write_existing_forward_journals": false,
+    "automatic_promotion": false
+  },
+  "authority": {
+    "research_only": true,
+    "paper_trading_enabled": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "human_review_required": true
+  }
+}
