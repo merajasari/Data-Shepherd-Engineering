@@ -9,7 +9,7 @@ UID_VALUE="$(id -u)"
 DOMAIN="gui/$UID_VALUE"
 LOGDIR="$PROJECT/logs"
 PHASE4="$PROJECT/data/research/crypto_ten_year/reconstruction/crypto_v5/phase4"
-CLEAN="$PROJECT/data/research/crypto_ten_year/reconstruction/crypto_v5/phase5/clean_forward_v1"
+CLEAN="$PROJECT/data/research/crypto_ten_year/reconstruction/crypto_v5/phase5/clean_forward_v2"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOGDIR"
 
@@ -32,6 +32,7 @@ for required in \
 done
 
 cd "$PROJECT"
+"$PYTHON" -m unittest discover -s tests -p 'test_crypto_v5_forward_service.py' -v
 "$PYTHON" -m ml.crypto_v5.forward_service --once
 
 cat > "$PLIST" <<EOF
@@ -85,10 +86,34 @@ if ! launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
   exit 1
 fi
 
+STATUS="$CLEAN/forward_service_status.json"
+for _ in {1..10}; do
+  [[ -s "$STATUS" ]] && break
+  sleep 1
+done
+"$PYTHON" - "$STATUS" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    raise SystemExit(f"Crypto V5 V2 heartbeat was not created: {path}")
+payload = json.loads(path.read_text(encoding="utf-8"))
+if payload.get("status") != "ok":
+    raise SystemExit(f"Crypto V5 V2 heartbeat is not healthy: {payload}")
+if payload.get("lane_id") != "crypto_v5_clean_forward_v2":
+    raise SystemExit(f"Unexpected Crypto V5 lane: {payload.get('lane_id')}")
+if payload.get("contract_verified") is not True:
+    raise SystemExit("Crypto V5 V2 contract verification failed")
+print("Crypto V5 V2 heartbeat: VERIFIED")
+PY
+
 echo "Installed $LABEL"
-echo "Lane: Crypto V5 Clean Paper V1"
-echo "Observation begins: 2026-09-22 07:00 UTC / 2026-09-22 00:00 Pacific"
-echo "First eligible completed daily decision: 2026-09-23 00:00 UTC"
+echo "Lane: Crypto V5 Clean Paper V2"
+echo "Archived lane preserved: Crypto V5 Clean Paper V1"
+echo "Observation begins: 2026-09-23 07:00 UTC / 2026-09-23 00:00 Pacific"
+echo "First eligible completed daily decision: 2026-09-24 00:00 UTC / 2026-09-23 17:00 Pacific"
 echo "Starting paper equity: USD 100,000"
 echo "Decision cadence: every 3 completed UTC daily candles"
 echo "Late or missed decision policy: FAIL CLOSED, NO BACKFILL"
