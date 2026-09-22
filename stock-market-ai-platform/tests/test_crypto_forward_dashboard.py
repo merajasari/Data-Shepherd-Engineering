@@ -17,7 +17,7 @@ class CryptoForwardDashboardTest(unittest.TestCase):
                 "btc_realized_return_1h,alt_realized_return_1h,gross_selected_return_1h,"
                 "sleeve_switch,cost_bps_assumption,transaction_cost,net_selected_return_1h,"
                 "equity,realized_through_utc,status\n"
-                "2026-09-24T00:00:00Z,ALT,CASH,ALT,,0,.2,.6,.2,.01,.02,.02,1,5,.0005,.01949,"
+                "2026-09-23T00:00:00Z,ALT,CASH,ALT,,0,.2,.6,.2,.01,.02,.02,1,5,.0005,.01949,"
                 "1.01949,2026-09-23T01:00:00Z,REALIZED\n",
                 encoding="utf-8",
             )
