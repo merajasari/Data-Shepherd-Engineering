@@ -52,11 +52,33 @@ cat > "$LAUNCH_DIR/com.datashepherd.keepawake.plist" <<EOF
 </dict></plist>
 EOF
 
-for label in com.datashepherd.web com.datashepherd.iexstream com.datashepherd.keepawake; do
-  plist="$LAUNCH_DIR/$label.plist"
+reload_launchagent() {
+  local label="$1"
+  local plist="$LAUNCH_DIR/$label.plist"
+  local domain="gui/$UID_VALUE"
+  local attempt
+
   plutil -lint "$plist"
-  launchctl bootout "gui/$UID_VALUE/$label" 2>/dev/null || true
-  launchctl bootstrap "gui/$UID_VALUE" "$plist"
+  launchctl bootout "$domain/$label" 2>/dev/null || true
+  launchctl bootout "$domain" "$plist" 2>/dev/null || true
+
+  for attempt in 1 2 3; do
+    sleep "$attempt"
+    if launchctl bootstrap "$domain" "$plist"; then
+      launchctl kickstart -k "$domain/$label"
+      return 0
+    fi
+    echo "Retrying $label LaunchAgent bootstrap ($attempt/3)..." >&2
+    launchctl bootout "$domain/$label" 2>/dev/null || true
+    launchctl bootout "$domain" "$plist" 2>/dev/null || true
+  done
+
+  echo "Unable to load $label after three attempts." >&2
+  return 1
+}
+
+for label in com.datashepherd.web com.datashepherd.iexstream com.datashepherd.keepawake; do
+  reload_launchagent "$label"
 done
 
 echo "Realtime Mac services installed."
