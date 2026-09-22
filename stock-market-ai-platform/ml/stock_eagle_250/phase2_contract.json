@@ -1,0 +1,123 @@
+{
+  "contract_id": "STOCK_EAGLE_250_PHASE2_PREREGISTERED_RESEARCH_V1",
+  "display_name": "StockEagle250",
+  "model_id": "stock_eagle_250",
+  "research_version": "stock_eagle_250_v1",
+  "created_at_utc": "2026-09-22T00:00:00+00:00",
+  "classification": "PREREGISTERED_DEVELOPMENT_RESEARCH_NOT_FROZEN_NOT_PAPER_TRADING",
+  "universe": {
+    "source": "data-ingestion/stock_universe_250.py",
+    "candidate_count": 250,
+    "benchmark_symbol": "SPY",
+    "benchmark_is_investable": false,
+    "minimum_observed_sessions_for_candidate_eligibility": 252,
+    "point_in_time_eligibility_required": true,
+    "synthetic_pre_listing_history_prohibited": true
+  },
+  "target": {
+    "name": "forward_relative_return_5d",
+    "horizon_completed_sessions": 5,
+    "definition": "candidate five-session forward close return minus SPY return over the identical endpoint",
+    "endpoint_match_required": true,
+    "unknown_future_labels_remain_missing": true,
+    "primary_task": "cross_sectional_regression_and_ranking"
+  },
+  "features": {
+    "raw_point_in_time_columns": [
+      "daily_return",
+      "return_2d",
+      "return_3d",
+      "return_5d",
+      "return_10d",
+      "return_20d",
+      "return_60d",
+      "price_vs_sma_7",
+      "price_vs_sma_20",
+      "price_vs_sma_50",
+      "price_vs_sma_200",
+      "sma_7_vs_sma_20",
+      "sma_20_vs_sma_50",
+      "sma_50_vs_sma_200",
+      "intraday_range",
+      "open_close_range",
+      "volume_ratio",
+      "volume_change_5d",
+      "volatility_5d",
+      "volatility_20d",
+      "volatility_ratio_5_20",
+      "trend_20_50",
+      "trend_50_200",
+      "distance_from_20d_high",
+      "distance_from_20d_low",
+      "rsi_centered"
+    ],
+    "model_inputs": "cross-sectional percentile ranks of every registered raw column plus decision-time sector one-hot encoding",
+    "future_columns_prohibited": true,
+    "normalization_may_use_future_rows": false
+  },
+  "development": {
+    "validation_start_utc": "2020-01-01T00:00:00+00:00",
+    "validation_window_months": 6,
+    "fold_type": "expanding_window",
+    "purge_policy": "training target endpoint must be strictly earlier than validation start",
+    "validation_endpoint_policy": "validation target endpoint must be strictly earlier than validation end",
+    "model_candidates": [
+      {
+        "candidate_id": "ridge_fixed_v1",
+        "type": "ridge_regression",
+        "alpha": 1.0,
+        "fit_intercept": true
+      },
+      {
+        "candidate_id": "hgb_fixed_v1",
+        "type": "hist_gradient_boosting_regressor",
+        "learning_rate": 0.05,
+        "max_iter": 300,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0
+      }
+    ],
+    "hyperparameter_tuning_after_fold_results": false,
+    "comparison_baselines": [
+      "spy_buy_and_hold",
+      "equal_weight_eligible_universe",
+      "cross_sectional_return_20d_rank"
+    ]
+  },
+  "untouched_future_holdout": {
+    "start_utc": "2026-09-23T00:00:00+00:00",
+    "development_may_read_decisions_at_or_after_boundary": false,
+    "development_may_read_targets_ending_at_or_after_boundary": false,
+    "holdout_results_may_select_model": false
+  },
+  "portfolio_assessment": {
+    "starting_paper_money": 100000,
+    "selection": "top_10_predicted_relative_returns",
+    "positions_per_cohort": 10,
+    "weighting": "equal_weight",
+    "entry": "next_completed_session_open",
+    "holding_completed_sessions": 5,
+    "overlapping_cohorts": 5,
+    "short_sales": false,
+    "leverage": false,
+    "transaction_cost_bps_per_side": 10,
+    "automatic_promotion": false
+  },
+  "isolation": {
+    "modify_v5": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v14": false,
+    "modify_v15": false,
+    "read_or_write_existing_forward_journals": false
+  },
+  "authority": {
+    "research_only": true,
+    "paper_trading_enabled": false,
+    "live_trading_enabled": false,
+    "brokerage_orders": false,
+    "brokerage_sdks_prohibited": true,
+    "human_review_required": true
+  }
+}
