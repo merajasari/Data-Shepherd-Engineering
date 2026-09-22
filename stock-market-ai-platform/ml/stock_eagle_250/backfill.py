@@ -242,17 +242,15 @@ def run_backfill(
         client = client or TiingoClient()
 
     for symbol in plan["download_batch"]:
+        state["requests_used"] += 1
         try:
             frame = client.get_daily_prices(symbol, start_date, end_date)
-            state["requests_used"] += 1
             if frame.empty:
                 raise ValueError("Tiingo returned no rows")
             write_bronze(frame, symbol)
             state["downloaded"].append(symbol)
             state["processed"].append(process_symbol_layers(symbol))
         except Exception as exc:
-            if state["requests_used"] < len(state["downloaded"]) + len(state["failed"]) + 1:
-                state["requests_used"] += 1
             state["failed"].append({
                 "symbol": symbol,
                 "stage": "download_or_transform",
