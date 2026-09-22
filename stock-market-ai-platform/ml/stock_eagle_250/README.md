@@ -18,14 +18,32 @@ Phase 1 does not select features, targets, a model family, costs, a holding
 period, or a future holdout boundary. Those decisions must be preregistered
 before scored development begins.
 
-## Run
+## Historical backfill
+
+The backfill entry point is restricted to the 150 additions. It skips complete
+feature datasets, reuses existing Bronze history, limits new Tiingo requests,
+and processes only those additions through Silver, Gold, and Features.
 
 ```bash
-python -m unittest tests.test_stock_eagle_250_phase1 -v
+python -m ml.stock_eagle_250.backfill --dry-run
+python -m ml.stock_eagle_250.backfill --max-requests 45
+```
+
+Rerun the second command as needed. It is resume-safe. A higher explicit request
+cap may be used only when the configured Tiingo plan supports it.
+
+## Readiness audit
+
+```bash
+python -m unittest \
+  tests.test_stock_eagle_250_backfill \
+  tests.test_stock_eagle_250_phase1 \
+  -v
+
 python -m ml.stock_eagle_250.phase1
 python -m json.tool data/model/stock_eagle_250/phase1/manifest.json
 ```
 
-Use `--strict` only when the command should return a failure status if any
-historical feature file is missing, unreadable, or contains duplicate
+Use Phase 1 `--strict` only when the command should return a failure status if
+any historical feature file is missing, unreadable, or contains duplicate
 timestamps.
