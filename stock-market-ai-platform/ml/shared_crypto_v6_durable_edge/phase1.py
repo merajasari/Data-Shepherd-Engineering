@@ -109,7 +109,7 @@ def _attach_exact_forward_return(
     validate_pre_holdout(frame, "V6 source panel")
     future = frame[["timestamp_utc", "product_id", "close"]].copy()
     future["timestamp_utc"] = future["timestamp_utc"] - pd.Timedelta(
-        hours=horizon_hours
+        f"{int(horizon_hours)}h"
     )
     future = future.rename(columns={"close": "future_close_exact_24h"})
     frame = frame.merge(
