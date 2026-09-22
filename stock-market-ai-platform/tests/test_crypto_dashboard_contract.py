@@ -56,6 +56,17 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertNotIn("REJECT_CURRENT_POLICY_FAMILY", overview)
         self.assertIn("CRYPTO V1 HISTORICAL RESEARCH", overview)
 
+    def test_overview_uses_active_command_center_and_compact_health(self):
+        overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
+        service = (ROOT / "webapp/services/crypto_dashboard_service.py").read_text(encoding="utf-8")
+        browser = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
+        self.assertIn("PAPER TRADING COMMAND CENTER", overview)
+        self.assertIn("NET PAPER P/L", overview)
+        self.assertIn("SHOW ALL 25 ASSETS", overview)
+        self.assertIn("ACTIVE CRYPTO SERVICES", overview)
+        self.assertNotIn("XRP V1 Forward", service[service.index("def _operational_health"):service.index("def _forward_evaluation_readiness")])
+        self.assertIn("initPaperCountdowns", browser)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")

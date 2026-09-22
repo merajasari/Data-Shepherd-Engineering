@@ -99,5 +99,12 @@
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshMarket()});
     refreshMarket();
   }
-  setupTabs();renderForwardCharts();initMarketBoard();
+  function initPaperCountdowns(){
+    const formatDuration=ms=>{const total=Math.max(0,Math.floor(ms/1000)),hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60);return hours?hours+'h '+minutes+'m':minutes+'m'};
+    const formatPacific=date=>new Intl.DateTimeFormat(undefined,{timeZone:'America/Los_Angeles',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(date);
+    const update=()=>document.querySelectorAll('[data-paper-countdown]').forEach(node=>{const target=new Date(node.dataset.target),label=node.dataset.label,cadence=node.dataset.cadence,span=node.querySelector('span');if(!span||!Number.isFinite(target.getTime()))return;const now=new Date();if(now<target){span.textContent=label+' begins in '+formatDuration(target-now)+' · '+formatPacific(target);return}if(cadence==='hourly'){const next=new Date(now);next.setUTCMinutes(0,0,0);next.setUTCHours(next.getUTCHours()+1);span.textContent='PAPER TRADING ACTIVE · next hourly boundary '+formatPacific(next)}else{span.textContent='CLEAN WINDOW OPEN · first/next daily decision at 5:00 PM Pacific'}});
+    update();window.setInterval(update,30000);
+  }
+
+  setupTabs();renderForwardCharts();initMarketBoard();initPaperCountdowns();
 })();

@@ -170,8 +170,6 @@ def _operational_health():
     reconcile = _read_json(RECONCILE_STATUS_PATH)
     v2 = _read_json(V2_STATUS_PATH)
     v5 = _read_json(V5_STATUS_PATH)
-    xrp = _read_json(XRP_STATUS_PATH)
-    xrp_phase7 = _read_json(XRP_PHASE7_STATUS_PATH)
 
     v2_error = None
     if v2 and v2.get("model_sha256_verified") is False:
@@ -187,43 +185,10 @@ def _operational_health():
     elif v5 and v5.get("brokerage_orders") is not False:
         v5_error = "Crypto V5 unexpectedly reports brokerage orders enabled."
 
-    xrp_error = None
-    if xrp and xrp.get("model_sha256_verified") is False:
-        xrp_error = "Frozen XRP V1 model hash verification failed."
-    elif xrp and xrp.get("policy_verified") is False:
-        xrp_error = "Frozen XRP V1 policy verification failed."
-
-    phase7_error = None
-    if xrp_phase7 and xrp_phase7.get("model_sha256_verified") is False:
-        phase7_error = "XRP Phase 7 frozen model hash verification failed."
-    elif xrp_phase7 and xrp_phase7.get("policy_verified") is False:
-        phase7_error = "XRP Phase 7 frozen policy verification failed."
-    elif xrp_phase7 and xrp_phase7.get("brokerage_orders") is not False:
-        phase7_error = "XRP Phase 7 unexpectedly reports brokerage orders enabled."
-    elif xrp_phase7 and xrp_phase7.get("mode") == "WAITING_PRE_HOLDOUT" and xrp_phase7.get("journal_exists") is True:
-        phase7_error = "XRP Phase 7 journal exists before the untouched future boundary."
-
-    phase7_mode = xrp_phase7.get("mode") if xrp_phase7 else None
-    phase7_detail = None
-    if phase7_mode == "WAITING_PRE_HOLDOUT":
-        phase7_detail = "Readiness heartbeat is fresh. Evaluator is locked from writing decision or performance events before Sep 1, 2026 00:00 UTC."
-    elif phase7_mode:
-        event_count = xrp_phase7.get("journal_event_count")
-        phase7_detail = f"Future evaluator mode is {phase7_mode}; journal events: {event_count if event_count is not None else '—'}."
-
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
-        _service_health("Shared V2 Clean Forward V3", V2_STATUS_PATH, v2, 90, v2_error),
-        _service_health("Crypto V5 Clean Paper V1", V5_STATUS_PATH, v5, 30, v5_error),
-        _service_health("XRP V1 Forward", XRP_STATUS_PATH, xrp, 90, xrp_error),
-        _service_health(
-            "XRP Phase 7 Evaluator",
-            XRP_PHASE7_STATUS_PATH,
-            xrp_phase7,
-            90,
-            phase7_error,
-            phase7_detail,
-        ),
+        _service_health("Shared Crypto V3", V2_STATUS_PATH, v2, 90, v2_error),
+        _service_health("Crypto V5", V5_STATUS_PATH, v5, 30, v5_error),
         {
             "name": "Web Dashboard",
             "status": "HEALTHY",
@@ -238,7 +203,7 @@ def _operational_health():
     return {
         "overall_status": overall,
         "services": services,
-        "note": "Web Dashboard health is request-path liveness; LaunchAgent process state is checked separately with launchctl.",
+        "note": "Active crypto lanes only. Archived XRP services are excluded from operational status.",
     }
 
 
