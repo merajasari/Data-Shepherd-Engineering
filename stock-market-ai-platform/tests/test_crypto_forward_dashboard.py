@@ -22,7 +22,7 @@ class CryptoForwardDashboardTest(unittest.TestCase):
                 encoding="utf-8",
             )
             with patch.object(dashboard, "V2_JOURNAL_PATH", journal):
-                payload = dashboard._shared_v2_forward_performance()
+                payload = dashboard._shared_v2_forward_performance("2026-09-23T02:00:00Z")
             self.assertEqual(payload["starting_equity_dollars"], 100_000.0)
             self.assertAlmostEqual(payload["candidate_equity_dollars"], 101_949.0)
             self.assertEqual(payload["realized_count"], 1)

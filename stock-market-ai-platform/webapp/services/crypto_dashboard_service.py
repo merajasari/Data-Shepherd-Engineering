@@ -525,9 +525,9 @@ def _archived_shared_v2_performance():
     }
 
 
-def _shared_v2_forward_performance():
+def _shared_v2_forward_performance(now_utc=None):
     holdout = pd.Timestamp("2026-09-22T07:00:00Z")
-    now = pd.Timestamp.now(tz="UTC")
+    now = pd.Timestamp.now(tz="UTC") if now_utc is None else pd.Timestamp(now_utc)
     journal = _read_csv(V2_JOURNAL_PATH)
     base = {
         "name": "Shared Crypto V2 Clean Forward V3",
