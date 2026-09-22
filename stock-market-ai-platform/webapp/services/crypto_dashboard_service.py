@@ -28,7 +28,8 @@ V2_INTERRUPTED_JOURNAL_PATH = V2_PHASE5_ROOT / "forward_journal.csv"
 V2_POLICY_SUMMARY_PATH = V2_PHASE4_ROOT / "policy_summary.csv"
 V2_PHASE4_MANIFEST_PATH = V2_PHASE4_ROOT / "manifest.json"
 V5_PHASE5_ROOT = Path("data/research/crypto_ten_year/reconstruction/crypto_v5/phase5")
-V5_CLEAN_ROOT = V5_PHASE5_ROOT / "clean_forward_v1"
+V5_ARCHIVED_ROOT = V5_PHASE5_ROOT / "clean_forward_v1"
+V5_CLEAN_ROOT = V5_PHASE5_ROOT / "clean_forward_v2"
 V5_STATUS_PATH = V5_CLEAN_ROOT / "forward_service_status.json"
 V5_STATE_PATH = V5_CLEAN_ROOT / "paper_state.json"
 V5_JOURNAL_PATH = V5_CLEAN_ROOT / "paper_events.jsonl"
@@ -188,7 +189,7 @@ def _operational_health():
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
         _service_health("Shared Crypto V3", V2_STATUS_PATH, v2, 90, v2_error),
-        _service_health("Crypto V5", V5_STATUS_PATH, v5, 30, v5_error),
+        _service_health("Crypto V5 V2", V5_STATUS_PATH, v5, 30, v5_error),
         {
             "name": "Web Dashboard",
             "status": "HEALTHY",
@@ -638,7 +639,7 @@ def _v5_forward_performance():
     events = _read_jsonl(V5_JOURNAL_PATH)
     clean_start = manifest.get(
         "preregistered_observation_start_utc",
-        manifest.get("preregistered_start_utc", "2026-09-22T07:00:00+00:00"),
+        manifest.get("preregistered_start_utc", "2026-09-23T07:00:00+00:00"),
     )
     decisions = [row for row in events if row.get("event_type") == "DECISION"]
     realizations = [row for row in events if row.get("event_type") == "REALIZATION"]
@@ -665,7 +666,9 @@ def _v5_forward_performance():
     latest = decisions[-1] if decisions else {}
     mode = status.get("mode", "NOT_INSTALLED" if not status else "UNKNOWN")
     return {
-        "name": "Crypto V5 Clean Paper V1", "available": bool(status or state or events),
+        "name": "Crypto V5 Clean Paper V2", "available": bool(status or state or events),
+        "archived_lane_name": "Crypto V5 Clean Paper V1",
+        "archived_lane_mutated": False,
         "status": status.get("status", "not_started"), "mode": mode,
         "action": status.get("action"), "generated_at_utc": status.get("generated_at_utc"),
         "clean_start_utc": clean_start,
