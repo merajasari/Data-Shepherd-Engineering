@@ -1,8 +1,10 @@
 """Autonomous clean forward paper service for frozen Crypto V5.
 
-The service begins observing at 2026-09-22 07:00 UTC (midnight Pacific).
-Because V5 uses completed UTC daily candles, the first admissible decision is
-2026-09-23 00:00 UTC.  No earlier decision is imported or reconstructed.
+The V1 lane missed its preregistered observation boundary and remains preserved
+without evidence.  This V2 lane begins observing at 2026-09-23 07:00 UTC
+(midnight Pacific).  Because V5 uses completed UTC daily candles, the first
+admissible V2 decision is 2026-09-24 00:00 UTC.  No earlier decision is imported
+or reconstructed.
 
 Every decision and realization is appended to an immutable hash-chained JSONL
 journal.  The service has no brokerage client, never places orders, never
@@ -40,17 +42,19 @@ from ml.crypto_v5.phase5 import (
 )
 
 
-ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v1"
+ARCHIVED_ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v1"
+ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v2"
 STATE_PATH = ROOT / "paper_state.json"
 STATUS_PATH = ROOT / "forward_service_status.json"
 JOURNAL_PATH = ROOT / "paper_events.jsonl"
 MANIFEST_PATH = ROOT / "clean_lane_manifest.json"
 LOCK_PATH = ROOT / "forward_service.lock"
 
-LANE_ID = "crypto_v5_clean_forward_v1"
-LANE_NAME = "Crypto V5 Clean Paper V1"
-OBSERVATION_START_UTC = pd.Timestamp("2026-09-22T07:00:00Z")
-FIRST_ELIGIBLE_DECISION_UTC = pd.Timestamp("2026-09-23T00:00:00Z")
+ARCHIVED_LANE_ID = "crypto_v5_clean_forward_v1"
+LANE_ID = "crypto_v5_clean_forward_v2"
+LANE_NAME = "Crypto V5 Clean Paper V2"
+OBSERVATION_START_UTC = pd.Timestamp("2026-09-23T07:00:00Z")
+FIRST_ELIGIBLE_DECISION_UTC = pd.Timestamp("2026-09-24T00:00:00Z")
 DEFAULT_POLL_SECONDS = 300
 
 
@@ -137,6 +141,9 @@ def _ensure_lane(now: pd.Timestamp, contract_hash: str) -> tuple[dict, dict]:
         "schema_version": 1,
         "lane_id": LANE_ID,
         "display_name": LANE_NAME,
+        "supersedes_missed_lane_id": ARCHIVED_LANE_ID,
+        "archived_lane_path": str(ARCHIVED_ROOT),
+        "archived_lane_mutated": False,
         "created_at_utc": now.isoformat(),
         "preregistered_observation_start_utc": OBSERVATION_START_UTC.isoformat(),
         "first_eligible_decision_utc": FIRST_ELIGIBLE_DECISION_UTC.isoformat(),
@@ -236,6 +243,8 @@ def _status(now: pd.Timestamp, mode: str, action: str, state: dict, **extra) -> 
         "action": action,
         "lane_id": LANE_ID,
         "lane_name": LANE_NAME,
+        "supersedes_missed_lane_id": ARCHIVED_LANE_ID,
+        "archived_lane_mutated": False,
         "observation_start_utc": OBSERVATION_START_UTC.isoformat(),
         "first_eligible_decision_utc": FIRST_ELIGIBLE_DECISION_UTC.isoformat(),
         "starting_paper_equity": STARTING_PAPER_EQUITY,
@@ -294,7 +303,7 @@ def run_once(as_of_utc=None) -> dict:
 
     models = {name: joblib.load(path) for name, path in ARTIFACT_PATHS.items()}
     decision = score_snapshot(allocation, ranking, models, state, decision_timestamp)
-    decision_id = f"crypto_v5_clean:{decision_timestamp.isoformat()}"
+    decision_id = f"crypto_v5_clean_v2:{decision_timestamp.isoformat()}"
     event = _append_event({
         "event_type": "DECISION",
         "decision_id": decision_id,
