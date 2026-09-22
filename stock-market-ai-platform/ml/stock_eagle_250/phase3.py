@@ -212,10 +212,17 @@ def load_inputs(
         raise RuntimeError("Phase 2 reports future-holdout rows")
     if _utc(phase2_manifest["future_holdout_start_utc"]) != FUTURE_HOLDOUT_START_UTC:
         raise RuntimeError("Phase 2 manifest holdout boundary differs")
-    if _utc(
+    maximum_endpoint = _utc(
         phase2_manifest["maximum_development_target_endpoint_utc"]
-    ) >= FUTURE_HOLDOUT_START_UTC:
+    )
+    if maximum_endpoint >= FUTURE_HOLDOUT_START_UTC:
         raise RuntimeError("Phase 2 target endpoint enters the future holdout")
+    if maximum_endpoint != _utc(
+        required["maximum_permitted_target_endpoint_utc"]
+    ):
+        raise RuntimeError(
+            "Phase 2 does not contain the frozen final pre-holdout endpoint"
+        )
     if phase2_manifest.get("contract_sha256") != _sha256(PHASE2_CONTRACT_PATH):
         raise RuntimeError("Phase 2 contract hash differs from its manifest")
 
