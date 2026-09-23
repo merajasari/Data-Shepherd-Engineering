@@ -48,3 +48,20 @@ python -m json.tool data/model/stock_eagle_250_v2/phase1/manifest.json
 
 Phase 1 cannot freeze a candidate, paper trade, place orders, or modify V1,
 V5, V8, V10, V14, V15, or any existing forward journal.
+
+
+## Phase 2 fixed development evaluation
+
+Phase 2 applies the single preregistered exposure overlay to the saved V1 Ridge
+out-of-sample portfolio periods. It reproduces the V1 10-bps results before
+scoring V2, evaluates V2 at 10-bps primary and 20-bps stress costs, and reports
+fold, market-state, and calendar-year diagnostics.
+
+All eleven gates from the Phase 1 contract are required. Passing them can only
+qualify the candidate for human review; it does not freeze or activate it.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_v2_phase2 -v
+python -m ml.stock_eagle_250_v2.phase2
+python -m json.tool data/model/stock_eagle_250_v2/phase2/qualification.json
+```
