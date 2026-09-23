@@ -129,3 +129,24 @@ python -m json.tool \
 python -m json.tool \
   data/model/stock_eagle_250/phase3/qualification.json
 ```
+
+
+## Phase 4 immutable adjudication
+
+Phase 4 checks the saved Phase 3 manifest, all eight gate values, pass counts,
+qualification flags, and candidate identities without refitting or resimulating
+anything. The observed StockEagle250 V1 result is that Ridge and HGB each passed
+seven of eight gates but failed the fixed maximum-drawdown gate. Consequently,
+neither candidate qualifies for freezing or paper evaluation.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_phase4 -v
+python -m ml.stock_eagle_250.phase4
+
+python -m json.tool \
+  data/model/stock_eagle_250/phase4/adjudication.json
+```
+
+The V1 evidence must remain preserved. Any successor must use a separately
+named, preregistered risk-control hypothesis and a new untouched future boundary;
+the V1 drawdown gate must not be weakened after observing these results.
