@@ -35,7 +35,9 @@ PHASE1_ROOT = Path("data/model/shared_crypto_v6_durable_edge/phase1")
 OUTPUT_ROOT = Path("data/model/shared_crypto_v6_durable_edge/phase2")
 HOLDOUT = pd.Timestamp("2026-09-01T00:00:00Z")
 TARGET = "best_sleeve_net25_24h"
-CLASSES = ("BTC", "ALT", "CASH")
+# Keep probability columns in scikit-learn's canonical lexicographic order.
+# This makes metric evaluation unambiguous across sklearn versions.
+CLASSES = ("ALT", "BTC", "CASH")
 PURGE = timedelta(hours=24)
 MIN_TRAIN_DAYS = 730
 VALIDATION_DAYS = 180
@@ -320,4 +322,3 @@ def main(argv=None) -> None:
 
 if __name__ == "__main__":
     main()
-
