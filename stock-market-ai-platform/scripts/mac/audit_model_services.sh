@@ -35,7 +35,7 @@ KEEP_LABELS=(
   com.datashepherd.cryptoreadiness
   com.datashepherd.cryptoreconcile
   # Historical label; the current installer targets Shared Crypto V2 Clean
-  # Forward V3 and must remain active despite the v2 label.
+  # Forward V4 and must remain active despite the v2 label.
   com.datashepherd.cryptov2forward
   com.datashepherd.cryptov5forward
   com.datashepherd.v8holdoutmonitor
