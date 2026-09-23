@@ -24,6 +24,10 @@ import numpy as np
 import pandas as pd
 
 from ml.feature_source import require_feature_dataset
+from ml.v14.logistic_forward_contract import (
+    EXPECTED_CANDIDATE_ID as V14_CANDIDATE_ID,
+    load_contract as load_v14_contract,
+)
 
 STARTING_CAPITAL = 100_000.0
 V4_PATH = Path("data/model/v4/full_history_equity.json")
@@ -372,11 +376,17 @@ def _load_v13():
 
 
 def _load_v14():
+    contract = load_v14_contract(V14_CONTRACT_PATH)
     if not V14_PATH.exists():
         raise FileNotFoundError(
             f"Missing {V14_PATH}; run python -m ml.v14.logistic_retrospective_10y"
         )
     payload = json.loads(V14_PATH.read_text(encoding="utf-8"))
+    candidate_id = str(payload.get("candidate_id") or "")
+    if candidate_id != contract["candidate_id"] or candidate_id != V14_CANDIDATE_ID:
+        raise RuntimeError(
+            f"V14 retrospective candidate mismatch: {candidate_id} != {V14_CANDIDATE_ID}"
+        )
     if payload.get("status") != "V14_EXACT_CONTRACT_TEN_YEAR_RETROSPECTIVE_COMPLETE":
         raise ValueError("V14 retrospective reconstruction status is invalid")
     if payload.get("classification") != V14_CLASSIFICATION:
@@ -434,6 +444,7 @@ def _load_v14():
         ),
         "retrospective counterfactual; not paper-forward evidence",
     )
+    record["candidate_id"] = candidate_id
     record["reconstruction_sha256"] = identity
     record["requested_start_date"] = payload.get("requested_start_date")
     record["actual_first_entry_session"] = payload.get("actual_first_entry_session")
