@@ -15,12 +15,14 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("CRYPTO V5 V2", template)
         self.assertIn("September 23, 2026 at 12:00 a.m. Pacific", template)
         self.assertIn("missed V1 lane remains archived", template)
-        self.assertIn("SHARED CRYPTO V3", template)
+        self.assertIn("SHARED CRYPTO V4", template)
+        self.assertIn("Preserved V3 result", template)
 
-    def test_overview_starts_with_v3_and_v5_paper_progress(self):
+    def test_overview_starts_with_v4_and_v5_paper_progress(self):
         overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
         self.assertIn('id="crypto-paper-progress"', overview)
-        self.assertIn("SHARED CRYPTO V3 · HOURLY", overview)
+        self.assertIn("SHARED CRYPTO V4 · HOURLY", overview)
+        self.assertIn("interrupted V3", overview)
         self.assertIn("CRYPTO V5 V2 · THREE-DAY", overview)
         self.assertIn("Missed V1 remains archived", overview)
         self.assertLess(overview.index('id="crypto-paper-progress"'), overview.index("COINBASE REAL-TIME MARKET"))
@@ -41,14 +43,14 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertNotIn("Evidence-Lane Integrity Gate", overview)
         self.assertNotIn("forward_evaluation_readiness", overview)
 
-    def test_v2_development_evidence_is_scoped_to_v3_page(self):
+    def test_v2_development_evidence_is_scoped_to_v4_page(self):
         overview = (ROOT / "webapp/templates/crypto_overview_content.html").read_text(encoding="utf-8")
         page = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
         self.assertNotIn("CRYPTO 15M V2 — RESEARCH EVIDENCE", overview)
         self.assertNotIn("Frozen Candidate Development Results", overview)
         self.assertIn('id="v3-historical-development-evidence"', page)
         self.assertIn("HISTORICAL DEVELOPMENT EVIDENCE — NOT PAPER PERFORMANCE", page)
-        self.assertIn("September 22, 2026 at 07:00 UTC", page)
+        self.assertIn("September 23, 2026 at 07:00 UTC", page)
         self.assertNotIn("Sep 18+ clean forward evaluation", page)
 
     def test_archived_xrp_and_rejected_tracks_are_not_on_overview(self):
