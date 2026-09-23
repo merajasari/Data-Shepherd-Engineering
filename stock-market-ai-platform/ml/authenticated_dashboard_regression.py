@@ -363,6 +363,9 @@ def main() -> None:
     crypto_forward_service_v3 = (
         project_root / "ml/crypto_15m_v2/forward_service_v3.py"
     ).read_text()
+    crypto_forward_service_v4 = (
+        project_root / "ml/crypto_15m_v2/forward_service_v4.py"
+    ).read_text()
     crypto_live_template = (
         project_root / "webapp/templates/crypto_visual.html"
     ).read_text()
@@ -472,14 +475,16 @@ def main() -> None:
         "Crypto Live exposes honest availability, failures, assessments, and evidence routing",
     )
     require(
-        "SHARED CRYPTO V2 CLEAN FORWARD V3" in crypto_overview
-        and "SHARED V2 V3 START" in crypto_overview
-        and "SHARED CRYPTO V2 CLEAN FORWARD V3" in crypto_live_template
+        "SHARED CRYPTO V4" in crypto_overview
+        and "V4 CLEAN START UTC" in crypto_overview
+        and "SHARED CRYPTO V2 CLEAN FORWARD V4" in crypto_live_template
         and "PRESERVED_INTERRUPTED_NO_BACKFILL" in crypto_forward_service
         and "clean_boundary_missed_no_start" in crypto_forward_service
         and 'V2_ARCHIVED_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"'
         in crypto_dashboard_service
-        and 'V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v3"'
+        and 'V3_ARCHIVED_ROOT = V2_PHASE5_ROOT / "clean_forward_v3"'
+        in crypto_dashboard_service
+        and 'V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v4"'
         in crypto_dashboard_service
         and 'PARENT_ROOT = PHASE5_ROOT / "clean_forward_v2"'
         in crypto_forward_service_v3
@@ -487,10 +492,16 @@ def main() -> None:
         in crypto_forward_service_v3
         and 'pd.Timestamp("2026-09-22T07:00:00Z")'
         in crypto_forward_service_v3
+        and 'PARENT_ROOT = PHASE5_ROOT / "clean_forward_v3"'
+        in crypto_forward_service_v4
+        and 'CLEAN_ROOT = PHASE5_ROOT / "clean_forward_v4"'
+        in crypto_forward_service_v4
+        and 'pd.Timestamp("2026-09-23T07:00:00Z")'
+        in crypto_forward_service_v4
         and "No brokerage orders and no automatic promotion"
-        in crypto_forward_service_v3
+        in crypto_forward_service_v4
         and "No automatic promotion" in crypto_live_template,
-        "Shared V2 V3 lane is isolated, fail-closed, and preserves the archived V2 parent",
+        "Shared V2 V4 lane is isolated, fail-closed, and preserves V2 and V3",
     )
     require(
         "computed-read-only-fallback" in app_source
