@@ -59,6 +59,16 @@ class SharedV2CleanForwardV4Tests(unittest.TestCase):
             for name, value in original.items():
                 setattr(service, name, value)
 
+    def test_installer_targets_v4_before_the_registered_boundary(self):
+        root = Path(__file__).resolve().parents[1]
+        installer = (
+            root / "scripts/mac/install_crypto_v2_forward.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("ml.crypto_15m_v2.forward_service_v4", installer)
+        self.assertIn('CLEAN="$PHASE5/clean_forward_v4"', installer)
+        self.assertIn("2026-09-23 07:00 UTC", installer)
+        self.assertIn("FAIL CLOSED", installer)
+
     def test_main_configures_before_starting_service(self):
         with patch.object(v4, "configure") as configure, patch.object(
             service, "main"
