@@ -34,11 +34,11 @@ class SharedCryptoV6Phase2Test(unittest.TestCase):
         probabilities = phase2._ordered_probabilities(
             FakeProbabilityModel(), pd.DataFrame({"x": [1, 2]})
         )
-        self.assertTrue(np.allclose(probabilities[0], [0.70, 0.20, 0.10]))
-        self.assertEqual(tuple(phase2.CLASSES), ("BTC", "ALT", "CASH"))
+        self.assertTrue(np.allclose(probabilities[0], [0.20, 0.70, 0.10]))
+        self.assertEqual(tuple(phase2.CLASSES), ("ALT", "BTC", "CASH"))
 
     def test_multiclass_brier_is_zero_for_perfect_probabilities(self):
-        actual = pd.Series(["BTC", "ALT", "CASH"])
+        actual = pd.Series(["ALT", "BTC", "CASH"])
         probabilities = np.eye(3)
         self.assertAlmostEqual(
             phase2._multiclass_brier(actual, probabilities), 0.0
