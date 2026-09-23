@@ -22,6 +22,7 @@ EXPECTED_IDS = ["V4", "V5", "V8", "V10", "V14", "V13", "SPY"]
 EXPECTED_V8_SHA = "ebfbdd23f1f7a29d8a1b74939d346384a7a2a04bf3d0c599103285aa02334e41"
 EXPECTED_V10_ID = "c3_confirm2_blend50"
 EXPECTED_V10_SHA = "2bf467ebf1e97c62697a6fdad48b28e20bdfc2092e26abfdebe7aa3de9388d38"
+EXPECTED_V14_ID = "v14_logistic_walk_forward_top10"
 EXPECTED_V14_SHA = "b1a933792b2d5298281708292dc94e565130397ce79a1533bf89cbe1c805abd3"
 EXPECTED_V13_SHA = "42d7cb6397beb0016715b1dccf4ec070d14132198dc537a6823b68b9546f7702"
 V8_BOUNDARY = pd.Timestamp("2026-09-01T00:00:00Z")
@@ -96,6 +97,7 @@ def validate_artifact():
     )
     require(EXPECTED_V10_ID in v10.get("methodology", ""), "V10 methodology lacks frozen candidate ID")
     require(EXPECTED_V10_SHA in v10.get("methodology", ""), "V10 methodology lacks frozen SHA")
+    require(v14.get("candidate_id") == EXPECTED_V14_ID, "V14 series candidate identity mismatch")
     require(EXPECTED_V14_SHA in v14.get("methodology", ""), "V14 methodology lacks contract SHA")
     require(
         "never paper-forward evidence" in v14.get("methodology", ""),
@@ -137,6 +139,7 @@ def validate_artifact():
     require(lineage.get("v10_candidate_id") == EXPECTED_V10_ID, "V10 lineage candidate mismatch")
     require(lineage.get("v10_frozen_sha256") == EXPECTED_V10_SHA, "V10 lineage SHA mismatch")
     require(lineage.get("v10_forward_holdout_start_utc") == V10_BOUNDARY.isoformat(), "V10 boundary mismatch")
+    require(lineage.get("v14_candidate_id") == EXPECTED_V14_ID, "V14 lineage candidate mismatch")
     require(lineage.get("v14_contract_sha256") == EXPECTED_V14_SHA, "V14 contract SHA mismatch")
     require(lineage.get("v14_reconstruction_sha256") == v14.get("reconstruction_sha256"), "V14 reconstruction lineage mismatch")
     require(lineage.get("v14_classification") == "RETROSPECTIVE_COUNTERFACTUAL_NOT_PAPER_FORWARD_EVIDENCE", "V14 classification mismatch")
@@ -181,6 +184,9 @@ def validate_frozen_sources():
     require(builder.V10_EXPECTED_SHA == EXPECTED_V10_SHA, "builder points at wrong V10 SHA")
     require(builder.V10_PATH == Path("data/model/v10/cycle3/economic_period_results.csv"), "builder uses wrong V10 source")
     require(builder.V10_HOLDOUT_START_UTC == V10_BOUNDARY, "builder uses wrong V10 boundary")
+    v14_spec = load_json(PROJECT_ROOT / builder.V14_CONTRACT_PATH)
+    require(v14_spec.get("candidate_id") == EXPECTED_V14_ID, "V14 contract candidate mismatch")
+    require(builder.V14_CANDIDATE_ID == EXPECTED_V14_ID, "builder points at wrong V14 candidate")
     require(builder.V14_EXPECTED_SHA == EXPECTED_V14_SHA, "builder points at wrong V14 contract")
     require(
         builder.V14_PATH == Path("data/model/v14/logistic_forward/retrospective_10y.json"),
@@ -274,6 +280,7 @@ def main():
     print(f"[PASS] V10 Cycle 3 candidate: {EXPECTED_V10_ID}")
     print(f"[PASS] V10 frozen SHA: {EXPECTED_V10_SHA}")
     print(f"[PASS] V10 development equity: ${float(v10['ending_equity']):,.2f}")
+    print(f"[PASS] V14 candidate identity: {EXPECTED_V14_ID}")
     print(f"[PASS] V14 ten-year retrospective equity: ${float(v14['ending_equity']):,.2f}")
     print("[PASS] V14 starts at $100,000 and remains retrospective counterfactual only")
     print("[PASS] V14 fixed-current-universe survivorship bias is disclosed")
