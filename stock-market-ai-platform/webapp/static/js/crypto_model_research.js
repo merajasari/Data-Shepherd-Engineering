@@ -34,8 +34,8 @@
   function renderForwardCharts(){
     const source=document.getElementById('crypto-forward-chart-data');if(!source)return;let data;try{data=JSON.parse(source.textContent)}catch{return}
     const shared=data.shared_v2||{},v5=data.v5||{};
-    forwardLineChart('shared-v2-equity',shared.chart_points,[{key:'candidate',label:'Shared V3',color:'#39e3a1'},{key:'benchmark',label:'Always BTC',color:'#4d8cff'}],{currency:true});
-    forwardLineChart('shared-v2-drawdown',shared.chart_points,[{key:'candidate_drawdown',label:'Shared V3',color:'#39e3a1'},{key:'benchmark_drawdown',label:'Always BTC',color:'#4d8cff'}],{percent:true,height:260});
+    forwardLineChart('shared-v2-equity',shared.chart_points,[{key:'candidate',label:'Shared V4',color:'#39e3a1'},{key:'benchmark',label:'Always BTC',color:'#4d8cff'}],{currency:true});
+    forwardLineChart('shared-v2-drawdown',shared.chart_points,[{key:'candidate_drawdown',label:'Shared V4',color:'#39e3a1'},{key:'benchmark_drawdown',label:'Always BTC',color:'#4d8cff'}],{percent:true,height:260});
     forwardBarChart('shared-v2-returns',shared.return_points,[{key:'net_return',label:'Selected sleeve',color:'#39e3a1'},{key:'btc_return',label:'BTC',color:'#4d8cff'}]);
     forwardLineChart('shared-v2-probabilities',shared.probability_points,[{key:'btc',label:'BTC probability',color:'#4d8cff'},{key:'alt',label:'ALT probability',color:'#39e3a1'},{key:'cash',label:'CASH probability',color:'#efc56b'}],{percent:true,height:360});
     forwardLineChart('v5-forward-equity',v5.chart_points,[{key:'candidate',label:'Crypto V5',color:'#36d8ff'}],{currency:true});
