@@ -20,7 +20,7 @@ V2_PHASE4_ROOT = Path("data/model/crypto_15m_v2/phase4")
 V2_PHASE5_ROOT = Path("data/model/crypto_15m_v2/phase5")
 V2_ARCHIVED_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"
 V2_ARCHIVED_JOURNAL_PATH = V2_ARCHIVED_ROOT / "forward_journal.csv"
-V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v3"
+V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v4"
 V2_STATUS_PATH = V2_CLEAN_ROOT / "forward_service_status.json"
 V2_JOURNAL_PATH = V2_CLEAN_ROOT / "forward_journal.csv"
 V2_CLEAN_MANIFEST_PATH = V2_CLEAN_ROOT / "clean_lane_manifest.json"
@@ -132,11 +132,20 @@ def _service_health(name, path, payload, stale_after_minutes, extra_error=None, 
         }
 
     if extra_error:
+        heartbeat = _heartbeat_time(path, payload)
+        age_minutes = (
+            max(
+                0.0,
+                (datetime.now(timezone.utc) - heartbeat).total_seconds() / 60.0,
+            )
+            if heartbeat is not None
+            else None
+        )
         return {
             "name": name,
             "status": "ERROR",
-            "heartbeat_at_utc": payload.get("generated_at_utc") or payload.get("last_updated_utc"),
-            "age_minutes": None,
+            "heartbeat_at_utc": heartbeat.isoformat() if heartbeat is not None else None,
+            "age_minutes": round(age_minutes, 1) if age_minutes is not None else None,
             "stale_after_minutes": stale_after_minutes,
             "detail": extra_error,
         }
@@ -188,7 +197,7 @@ def _operational_health():
 
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
-        _service_health("Shared Crypto V3", V2_STATUS_PATH, v2, 90, v2_error),
+        _service_health("Shared Crypto V4", V2_STATUS_PATH, v2, 90, v2_error),
         _service_health("Crypto V5 V2", V5_STATUS_PATH, v5, 30, v5_error),
         {
             "name": "Web Dashboard",
@@ -527,7 +536,7 @@ def _archived_shared_v2_performance():
 
 
 def _shared_v2_forward_performance(now_utc=None):
-    holdout = pd.Timestamp("2026-09-22T07:00:00Z")
+    holdout = pd.Timestamp("2026-09-23T07:00:00Z")
     now = pd.Timestamp.now(tz="UTC") if now_utc is None else pd.Timestamp(now_utc)
     journal = _read_csv(V2_JOURNAL_PATH)
     base = {
@@ -715,11 +724,11 @@ def _xrp_phase7_forward_performance():
 def _future_forward_performance():
     return {
         "holdout_start_utc": "2026-09-01T00:00:00+00:00",
-        "shared_v2_clean_start_utc": "2026-09-22T07:00:00+00:00",
+        "shared_v2_clean_start_utc": "2026-09-23T07:00:00+00:00",
         "shared_v2": _shared_v2_forward_performance(),
         "crypto_v5": _v5_forward_performance(),
         "xrp_phase7": _xrp_phase7_forward_performance(),
-        "note": "XRP retains its Sep 1 evidence boundary. Shared V2 Clean Forward V2 is preserved as interrupted evidence. V3 begins at the separately preregistered Sep 22 07:00 UTC boundary with fresh state and a $100,000 paper basis. No backfill, tuning, automatic promotion, or real brokerage orders.",
+        "note": "XRP retains its Sep 1 evidence boundary. Shared V2 Clean Forward V2 and interrupted V3 are preserved read-only. V4 begins at the separately preregistered Sep 23 07:00 UTC boundary with fresh state and a $100,000 paper basis. No backfill, tuning, automatic promotion, or real brokerage orders.",
     }
 
 
@@ -791,7 +800,7 @@ def _forward_validation_summary(forward_performance):
         "minimum_realizations": FORWARD_VALIDATION_MIN_REALIZATIONS,
         "shared_v2": _forward_validation_track(forward_performance["shared_v2"]),
         "xrp_phase7": _forward_validation_track(forward_performance["xrp_phase7"]),
-        "note": "Fixed 30-realization gate applied independently to XRP's Sep 1 lane and Shared V2's Sep 18 clean lane. This is descriptive assessment, not model selection, threshold tuning, or promotion authority.",
+        "note": "Fixed 30-realization gate applied independently to XRP's Sep 1 lane and the active Shared Crypto V4 Sep 23 clean lane. This is descriptive assessment, not model selection, threshold tuning, or promotion authority.",
     }
 
 
