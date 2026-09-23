@@ -231,7 +231,7 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
         self.assertEqual(len(first), 1)
 
         state = fs._append_forward_decision(ts, "ALT", probabilities("ALT"), state)
-        state = fs._append_forward_decision(ts - pd.Timedelta("1h"), "CASH", probabilities("CASH"), state)
+        state = fs._append_forward_decision(ts - pd.Timedelta(hours=1), "CASH", probabilities("CASH"), state)
         second = self.read_journal()
         self.assertEqual(len(second), 1)
         self.assertEqual(second.iloc[0]["decision_timestamp_utc"], ts.isoformat())
@@ -240,14 +240,14 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
         state = base_state()
         t0 = pd.Timestamp("2026-09-01T00:00:00Z")
         state = fs._append_forward_decision(t0, "ALT", probabilities("ALT"), state)
-        state = fs._append_forward_decision(t0 + pd.Timedelta("1h"), "ALT", probabilities("ALT"), state)
+        state = fs._append_forward_decision(t0 + pd.Timedelta(hours=1), "ALT", probabilities("ALT"), state)
         journal = self.read_journal()
         self.assertEqual(list(journal["executed_label_after"]), ["BTC", "ALT"])
         self.assertEqual(list(journal["sleeve_switch"].astype(int)), [0, 1])
 
     def test_hourly_realized_uses_exact_plus_one_hour_endpoint(self):
         decision = pd.Timestamp("2026-09-01T00:00:00Z")
-        endpoint = decision + pd.Timedelta("1h")
+        endpoint = decision + pd.Timedelta(hours=1)
         btc = pd.DataFrame({
             "timestamp_utc": [decision, endpoint],
             "close": [100.0, 101.0],
@@ -270,9 +270,9 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
 
     def test_hourly_realized_never_fills_missing_exact_endpoint(self):
         decision = pd.Timestamp("2026-09-01T00:00:00Z")
-        endpoint = decision + pd.Timedelta("1h")
+        endpoint = decision + pd.Timedelta(hours=1)
         btc_missing_endpoint = pd.DataFrame({
-            "timestamp_utc": [decision, decision + pd.Timedelta("45min")],
+            "timestamp_utc": [decision, decision + pd.Timedelta(minutes=45)],
             "close": [100.0, 101.0],
             "product_id": [fs.BTC, fs.BTC],
         })
@@ -282,7 +282,7 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
 
     def test_hourly_realized_requires_frozen_minimum_alt_coverage(self):
         decision = pd.Timestamp("2026-09-01T00:00:00Z")
-        endpoint = decision + pd.Timedelta("1h")
+        endpoint = decision + pd.Timedelta(hours=1)
         btc = pd.DataFrame({"timestamp_utc": [decision, endpoint], "close": [100.0, 101.0], "product_id": [fs.BTC, fs.BTC]})
         alt = pd.DataFrame({"timestamp_utc": [decision, endpoint], "close": [50.0, 51.0], "product_id": ["A", "A"]})
         with patch.object(fs, "ALT_PRODUCTS", ("A", "B", "C")), \
@@ -306,7 +306,7 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
                 "realized_through_utc": None, "status": "PENDING_REALIZATION",
             },
             {
-                "decision_timestamp_utc": (t0 + pd.Timedelta("1h")).isoformat(), "raw_predicted_label": "ALT",
+                "decision_timestamp_utc": (t0 + pd.Timedelta(hours=1)).isoformat(), "raw_predicted_label": "ALT",
                 "executed_label_before": "BTC", "executed_label_after": "ALT",
                 "pending_candidate_label": None, "pending_candidate_count": 0,
                 "prob_btc": .1, "prob_alt": .8, "prob_cash": .1,
@@ -342,7 +342,7 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
         before_journal = self.journal.read_bytes()
         state = base_state(current_executed_label="ALT", pending_candidate_label="CASH", pending_candidate_count=1)
         self.state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
-        decision = fs.CLEAN_START - pd.Timedelta("1h")
+        decision = fs.CLEAN_START - pd.Timedelta(hours=1)
         fake_manifest = {"model": {"artifact_sha256": "abc"}, "execution_policy": {"policy_id": "confirm_2", "confirmation_hours": 2}}
         with patch.object(fs, "_load_contract", return_value=(fake_manifest, ["x"], object(), state.copy())), \
              patch.object(fs, "_finalize_pending_rows", return_value=0), \
@@ -364,7 +364,7 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
         t0 = fs.CLEAN_START
         state = fs._append_forward_decision(t0, "BTC", probabilities("BTC"), base_state())
         self.state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
-        latest = t0 + pd.Timedelta("2h")
+        latest = t0 + pd.Timedelta(hours=2)
         fake_manifest = {"model": {"artifact_sha256": "abc"}, "execution_policy": {"policy_id": "confirm_2", "confirmation_hours": 2}}
         with patch.object(fs, "_load_contract", return_value=(fake_manifest, ["x"], object(), state.copy())), \
              patch.object(fs, "_finalize_pending_rows", return_value=0), \
@@ -397,7 +397,7 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
     def test_empty_clean_lane_refuses_to_start_after_missed_boundary(self):
         state = base_state()
         self.state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
-        latest = fs.CLEAN_START + pd.Timedelta("1h")
+        latest = fs.CLEAN_START + pd.Timedelta(hours=1)
         with patch.object(fs, "_load_contract", return_value=(frozen_manifest(), ["x"], object(), state.copy())), \
              patch.object(fs, "_clean_lane_manifest", return_value={"interrupted_lane": {"classification": "PRESERVED_INTERRUPTED_NO_BACKFILL"}}), \
              patch.object(fs, "_finalize_pending_rows", return_value=0), \
