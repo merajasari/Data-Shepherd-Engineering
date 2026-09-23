@@ -8,7 +8,7 @@ from webapp.services import crypto_dashboard_service as dashboard
 
 
 class CryptoForwardDashboardTest(unittest.TestCase):
-    def test_shared_v3_translates_post_boundary_equity_to_100k_paper_account(self):
+    def test_shared_v4_translates_post_boundary_equity_to_100k_paper_account(self):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory) / "forward.csv"
             journal.write_text(
@@ -17,17 +17,53 @@ class CryptoForwardDashboardTest(unittest.TestCase):
                 "btc_realized_return_1h,alt_realized_return_1h,gross_selected_return_1h,"
                 "sleeve_switch,cost_bps_assumption,transaction_cost,net_selected_return_1h,"
                 "equity,realized_through_utc,status\n"
-                "2026-09-23T00:00:00Z,ALT,CASH,ALT,,0,.2,.6,.2,.01,.02,.02,1,5,.0005,.01949,"
-                "1.01949,2026-09-23T01:00:00Z,REALIZED\n",
+                "2026-09-23T07:00:00Z,ALT,CASH,ALT,,0,.2,.6,.2,.01,.02,.02,1,5,.0005,.01949,"
+                "1.01949,2026-09-23T08:00:00Z,REALIZED\n",
                 encoding="utf-8",
             )
-            with patch.object(dashboard, "V2_JOURNAL_PATH", journal):
-                payload = dashboard._shared_v2_forward_performance("2026-09-23T02:00:00Z")
+            with patch.multiple(
+                dashboard,
+                V2_JOURNAL_PATH=journal,
+                V2_ARCHIVED_JOURNAL_PATH=Path(directory) / "archived-v2.csv",
+                V3_ARCHIVED_JOURNAL_PATH=Path(directory) / "archived-v3.csv",
+            ):
+                payload = dashboard._shared_v2_forward_performance("2026-09-23T09:00:00Z")
+            self.assertEqual(payload["name"], "Shared Crypto V2 Clean Forward V4")
+            self.assertEqual(payload["holdout_start_utc"], "2026-09-23T07:00:00+00:00")
+            self.assertEqual(
+                payload["archived_v3"]["classification"],
+                "PRESERVED_INTERRUPTED_NO_BACKFILL",
+            )
             self.assertEqual(payload["starting_equity_dollars"], 100_000.0)
             self.assertAlmostEqual(payload["candidate_equity_dollars"], 101_949.0)
             self.assertEqual(payload["realized_count"], 1)
             self.assertEqual(len(payload["chart_points"]), 2)
             self.assertEqual(len(payload["probability_points"]), 1)
+
+
+    def test_gap_error_preserves_heartbeat_observability(self):
+        with tempfile.TemporaryDirectory() as directory:
+            status_path = Path(directory) / "status.json"
+            status_path.write_text("{}", encoding="utf-8")
+            payload = {
+                "status": "ok",
+                "generated_at_utc": "2099-01-01T00:00:00+00:00",
+            }
+            health = dashboard._service_health(
+                "Shared Crypto V4",
+                status_path,
+                payload,
+                90,
+                "gap_detected_no_backfill",
+            )
+            self.assertEqual(health["status"], "ERROR")
+            self.assertEqual(health["detail"], "gap_detected_no_backfill")
+            self.assertEqual(
+                health["heartbeat_at_utc"],
+                "2099-01-01T00:00:00+00:00",
+            )
+            self.assertEqual(health["age_minutes"], 0.0)
+
 
     def test_v5_dashboard_reads_decisions_and_realizations_without_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
