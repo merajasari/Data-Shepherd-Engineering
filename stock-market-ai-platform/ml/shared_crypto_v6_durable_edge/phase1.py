@@ -13,7 +13,7 @@ order.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -108,8 +108,8 @@ def _attach_exact_forward_return(
     frame["timestamp_utc"] = pd.to_datetime(frame["timestamp_utc"], utc=True)
     validate_pre_holdout(frame, "V6 source panel")
     future = frame[["timestamp_utc", "product_id", "close"]].copy()
-    future["timestamp_utc"] = future["timestamp_utc"] - pd.Timedelta(
-        f"{int(horizon_hours)}h"
+    future["timestamp_utc"] = future["timestamp_utc"] - timedelta(
+        hours=int(horizon_hours)
     )
     future = future.rename(columns={"close": "future_close_exact_24h"})
     frame = frame.merge(
