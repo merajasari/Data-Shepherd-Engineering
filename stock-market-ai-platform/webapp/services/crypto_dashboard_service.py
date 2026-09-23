@@ -20,6 +20,8 @@ V2_PHASE4_ROOT = Path("data/model/crypto_15m_v2/phase4")
 V2_PHASE5_ROOT = Path("data/model/crypto_15m_v2/phase5")
 V2_ARCHIVED_ROOT = V2_PHASE5_ROOT / "clean_forward_v2"
 V2_ARCHIVED_JOURNAL_PATH = V2_ARCHIVED_ROOT / "forward_journal.csv"
+V3_ARCHIVED_ROOT = V2_PHASE5_ROOT / "clean_forward_v3"
+V3_ARCHIVED_JOURNAL_PATH = V3_ARCHIVED_ROOT / "forward_journal.csv"
 V2_CLEAN_ROOT = V2_PHASE5_ROOT / "clean_forward_v4"
 V2_STATUS_PATH = V2_CLEAN_ROOT / "forward_service_status.json"
 V2_JOURNAL_PATH = V2_CLEAN_ROOT / "forward_journal.csv"
@@ -506,18 +508,22 @@ def _equity_drawdown(values):
     return float((series / series.cummax() - 1.0).min())
 
 
-def _archived_shared_v2_performance():
-    journal = _read_csv(V2_ARCHIVED_JOURNAL_PATH)
+def _archived_shared_performance(journal_path, name):
+    journal = _read_csv(journal_path)
     if journal.empty or "status" not in journal:
         return {
-            "name": "Shared Crypto V2 Clean Forward V2",
+            "name": name,
             "classification": "PRESERVED_INTERRUPTED_NO_BACKFILL",
             "decision_count": 0, "realized_count": 0,
-            "ending_equity": 1.0, "ending_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
+            "ending_equity": 1.0,
+            "ending_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
             "paper_return": 0.0, "latest_realized_utc": None,
         }
     realized = journal[journal["status"].eq("REALIZED")].copy()
-    values = pd.to_numeric(realized.get("equity", pd.Series(dtype=float)), errors="coerce").dropna()
+    values = pd.to_numeric(
+        realized.get("equity", pd.Series(dtype=float)),
+        errors="coerce",
+    ).dropna()
     equity = float(values.iloc[-1]) if len(values) else 1.0
     latest = (
         realized["realized_through_utc"].dropna().iloc[-1]
@@ -526,13 +532,28 @@ def _archived_shared_v2_performance():
         else None
     )
     return {
-        "name": "Shared Crypto V2 Clean Forward V2",
+        "name": name,
         "classification": "PRESERVED_INTERRUPTED_NO_BACKFILL",
         "decision_count": len(journal), "realized_count": len(realized),
         "ending_equity": equity,
         "ending_equity_dollars": equity * SHARED_V2_STARTING_PAPER_EQUITY,
-        "paper_return": equity - 1.0, "latest_realized_utc": str(latest) if latest else None,
+        "paper_return": equity - 1.0,
+        "latest_realized_utc": str(latest) if latest else None,
     }
+
+
+def _archived_shared_v2_performance():
+    return _archived_shared_performance(
+        V2_ARCHIVED_JOURNAL_PATH,
+        "Shared Crypto V2 Clean Forward V2",
+    )
+
+
+def _archived_shared_v3_performance():
+    return _archived_shared_performance(
+        V3_ARCHIVED_JOURNAL_PATH,
+        "Shared Crypto V2 Clean Forward V3",
+    )
 
 
 def _shared_v2_forward_performance(now_utc=None):
@@ -540,9 +561,10 @@ def _shared_v2_forward_performance(now_utc=None):
     now = pd.Timestamp.now(tz="UTC") if now_utc is None else pd.Timestamp(now_utc)
     journal = _read_csv(V2_JOURNAL_PATH)
     base = {
-        "name": "Shared Crypto V2 Clean Forward V3",
+        "name": "Shared Crypto V2 Clean Forward V4",
         "holdout_start_utc": holdout.isoformat(),
         "archived_v2": _archived_shared_v2_performance(),
+        "archived_v3": _archived_shared_v3_performance(),
         "cost_bps": 5.0,
         "brokerage_orders": False,
         "starting_equity_dollars": SHARED_V2_STARTING_PAPER_EQUITY,
