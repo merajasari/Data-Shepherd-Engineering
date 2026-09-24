@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -12,6 +14,7 @@ from ml.stock_eagle_250_v2.phase1 import (
 )
 from ml.stock_eagle_250_v2.phase2 import (
     evaluate_gates,
+    load_pre_guard_spy_returns,
     simulate_exposure,
     validate_sources,
 )
@@ -89,6 +92,44 @@ def passing_fold_metrics():
 
 
 class StockEagle250V2Phase2Test(unittest.TestCase):
+    def test_pre_guard_spy_reader_supports_string_timestamp_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "spy.parquet"
+            pd.DataFrame({
+                "timestamp_utc": [
+                    "2026-09-22T00:00:00+00:00",
+                    "2026-09-23T00:00:00+00:00",
+                ],
+                "daily_return": [0.01, 0.02],
+            }).to_parquet(path, index=False)
+
+            result = load_pre_guard_spy_returns(path)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result.iloc[0]["timestamp_utc"],
+            pd.Timestamp("2026-09-22T00:00:00+00:00"),
+        )
+
+    def test_pre_guard_spy_reader_supports_arrow_timestamp_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "spy.parquet"
+            pd.DataFrame({
+                "timestamp_utc": pd.to_datetime([
+                    "2026-09-22T00:00:00+00:00",
+                    "2026-09-23T00:00:00+00:00",
+                ], utc=True),
+                "daily_return": [0.01, 0.02],
+            }).to_parquet(path, index=False)
+
+            result = load_pre_guard_spy_returns(path)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result.iloc[0]["timestamp_utc"],
+            pd.Timestamp("2026-09-22T00:00:00+00:00"),
+        )
+
     def test_zero_exposure_stays_in_cash(self):
         periods = period_frame().head(3).copy()
         periods["gross_exposure"] = 0.0
