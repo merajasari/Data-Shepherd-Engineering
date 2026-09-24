@@ -66,3 +66,31 @@ python -m json.tool data/model/stock_eagle_250_autonomous_ml_v1/phase1/manifest.
 Phase 2 will implement the preregistered nested walk-forward development
 evaluation. Hyperparameters, targets, features, and portfolio mapping may not be
 changed after Phase 1 results are written.
+
+
+## Phase 2 nested walk-forward evaluation
+
+Phase 2 trains all three learned components with nested walk-forward separation.
+
+For every outer development fold, the alpha and downside learners are first
+trained repeatedly inside the outer training window to generate strictly
+out-of-sample session predictions. Those OOS predictions become the only
+training source for the learned meta allocator. The base learners are then fit
+on the complete purged outer training fold, and all three models score the
+untouched outer validation fold.
+
+The learned allocator probability controls total gross exposure between 0 and
+100 percent. Within the learned Top-10, position sizes are determined by the
+fixed learned alpha/downside score mapping. No SPY regime, drawdown throttle,
+confidence threshold, manual exposure tier, or post-result parameter search is
+used.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_autonomous_ml_v1_phase2 -v
+python -m ml.stock_eagle_250_autonomous_ml_v1.phase2
+python -m json.tool data/model/stock_eagle_250_autonomous_ml_v1/phase2/qualification.json
+```
+
+Passing every preregistered development gate qualifies the model family only
+for construction of the autonomous forward-paper runtime. It does not by itself
+enable that runtime.
