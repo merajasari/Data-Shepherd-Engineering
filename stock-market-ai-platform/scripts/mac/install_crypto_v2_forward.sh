@@ -10,7 +10,7 @@ DOMAIN="gui/$UID_VALUE"
 LOGDIR="$PROJECT/logs"
 PHASE5="$PROJECT/data/model/crypto_15m_v2/phase5"
 PARENT="$PHASE5/clean_forward_v3"
-CLEAN="$PHASE5/clean_forward_v4"
+CLEAN="$PHASE5/clean_forward_v5"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOGDIR"
 
@@ -45,7 +45,7 @@ cat > "$PLIST" <<EOF
     <string>$PYTHON</string>
     <string>-u</string>
     <string>-m</string>
-    <string>ml.crypto_15m_v2.forward_service_v4</string>
+    <string>ml.crypto_15m_v2.forward_service_v5</string>
     <string>--poll-seconds</string>
     <string>60</string>
   </array>
@@ -85,8 +85,8 @@ if ! launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
 fi
 
 echo "Installed $LABEL"
-echo "Lane: Shared Crypto V2 Clean Forward V4"
-echo "Mode before 2026-09-23 07:00 UTC: WAITING_CLEAN_BOUNDARY (no evidence rows)"
+echo "Lane: Shared Crypto V2 Clean Forward V5"
+echo "Mode before 2026-09-24 07:00 UTC: WAITING_CLEAN_BOUNDARY (no evidence rows)"
 echo "Mode at/after the exact boundary: CLEAN_FORWARD paper evaluation"
 echo "If the first boundary is missed: FAIL CLOSED (no late start or backfill)"
 echo "Frozen model: $PHASE5/frozen_hgb.joblib"
