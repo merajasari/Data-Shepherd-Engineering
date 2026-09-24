@@ -18,6 +18,7 @@ import pandas as pd
 from webapp.services.live_market_service import get_all_live_quotes
 
 ROOT = Path(__file__).resolve().parents[2]
+STOCK_250_CACHE_PATH = ROOT / "data/live/iex_24h_5m_stock250.json"
 V5_CACHE_PATH = ROOT / "data/live/iex_24h_5m_v5.json"
 LEGACY_COMPAT_PATH = ROOT / "data/live/iex_24h_5m.json"
 MEMORY_TTL_SECONDS = 5
@@ -55,7 +56,7 @@ def _read_small_cache() -> tuple[dict[str, list[dict]], str | None, str]:
     if _memory_cache["series"] and now_mono - _memory_cache["fetched"] < MEMORY_TTL_SECONDS:
         return _memory_cache["series"], _memory_cache["updated_at"], _memory_cache["source"]
 
-    path = V5_CACHE_PATH if V5_CACHE_PATH.exists() else LEGACY_COMPAT_PATH
+    path = STOCK_250_CACHE_PATH if STOCK_250_CACHE_PATH.exists() else (V5_CACHE_PATH if V5_CACHE_PATH.exists() else LEGACY_COMPAT_PATH)
     if not path.exists():
         _memory_cache.update({"fetched": now_mono, "series": {}, "updated_at": None, "source": "CACHE_MISSING"})
         return {}, None, "CACHE_MISSING"
@@ -79,7 +80,7 @@ def _read_small_cache() -> tuple[dict[str, list[dict]], str | None, str]:
             out.sort(key=lambda r: r["t"])
             if out:
                 clean[str(symbol).upper()] = out
-        source = "ROLLING_V5_24H_CACHE" if path == V5_CACHE_PATH else "ROLLING_COMPAT_24H_CACHE"
+        source = "ROLLING_STOCK250_24H_CACHE" if path == STOCK_250_CACHE_PATH else ("ROLLING_V5_24H_CACHE" if path == V5_CACHE_PATH else "ROLLING_COMPAT_24H_CACHE")
     except Exception as exc:
         print(f"[24H CACHE READ ERROR] {path}: {exc}")
         clean, source = {}, "CACHE_READ_ERROR"
@@ -224,7 +225,7 @@ def get_today_top10_intraday(symbols: list[str]) -> dict:
         "point_counts": {symbol: len(rows) for _, symbol, rows in top},
         "cache": {
             "memory_ttl_seconds": MEMORY_TTL_SECONDS,
-            "file": str(V5_CACHE_PATH),
+            "file": str(STOCK_250_CACHE_PATH if STOCK_250_CACHE_PATH.exists() else V5_CACHE_PATH),
         },
         "live": {
             symbol: {
