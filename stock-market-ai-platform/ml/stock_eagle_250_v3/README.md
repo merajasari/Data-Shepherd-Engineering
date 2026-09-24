@@ -64,3 +64,24 @@ python -m json.tool data/model/stock_eagle_250_v3/phase1/manifest.json
 ```
 
 The Phase 2 evaluation must be implemented only after this contract exists.
+
+
+## Phase 2 fixed development evaluation
+
+Phase 2 applies only the preregistered continuous volatility budget to the same
+saved V1 Ridge out-of-sample portfolio periods. It first reproduces the V1 Ridge
+10-bps results, then evaluates V3 at 10 bps per side and at the 20-bps stress
+cost. The exact eleven V2 gates are reused without relaxation.
+
+Diagnostics are reported by fold, exposure band, and calendar year. Passing all
+eleven gates can only qualify V3 for human review; it does not freeze the
+candidate or enable paper/live trading.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_v3_phase2 -v
+python -m ml.stock_eagle_250_v3.phase2
+python -m json.tool data/model/stock_eagle_250_v3/phase2/qualification.json
+```
+
+Phase 2 continues to fail closed on the September 23 guard band and does not
+read or score the October 1 untouched future sample.
