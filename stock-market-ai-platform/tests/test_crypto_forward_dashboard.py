@@ -38,6 +38,23 @@ class CryptoForwardDashboardTest(unittest.TestCase):
             self.assertAlmostEqual(payload["candidate_equity_dollars"], 101_949.0)
             self.assertEqual(payload["realized_count"], 1)
             self.assertEqual(len(payload["chart_points"]), 2)
+            point = payload["chart_points"][1]
+            self.assertEqual(point["event_status"], "REALIZED")
+            self.assertEqual(point["raw_predicted_label"], "ALT")
+            self.assertEqual(point["executed_label_before"], "CASH")
+            self.assertEqual(point["executed_label_after"], "ALT")
+            self.assertTrue(point["sleeve_switch"])
+            self.assertAlmostEqual(point["candidate"], 101_949.0)
+            self.assertAlmostEqual(point["benchmark"], 101_000.0)
+            self.assertAlmostEqual(point["excess_dollars"], 949.0)
+            self.assertAlmostEqual(point["net_selected_return_1h"], 0.01949)
+            self.assertAlmostEqual(point["btc_realized_return_1h"], 0.01)
+            self.assertAlmostEqual(point["alt_realized_return_1h"], 0.02)
+            self.assertAlmostEqual(point["transaction_cost"], 0.0005)
+            self.assertEqual(point["cost_bps_assumption"], 5.0)
+            self.assertAlmostEqual(point["prob_btc"], 0.2)
+            self.assertAlmostEqual(point["prob_alt"], 0.6)
+            self.assertAlmostEqual(point["prob_cash"], 0.2)
             self.assertEqual(len(payload["probability_points"]), 1)
 
 
