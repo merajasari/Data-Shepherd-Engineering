@@ -65,3 +65,25 @@ python -m json.tool data/model/stock_eagle_250_v4/phase1/manifest.json
 ```
 
 Phase 2 may be implemented only after this preregistration exists.
+
+
+## Phase 2 fixed development evaluation
+
+Phase 2 derives the preregistered confidence exposure from the saved V1
+out-of-sample Ridge predictions and joins it to the exact saved V1 Ridge
+portfolio periods. It verifies that each saved portfolio remains the top-10
+Ridge selection before scoring V4.
+
+The same eleven V2/V3 gates are reused without relaxation. Primary transaction
+cost is 10 bps per side and stress cost is 20 bps per side. Diagnostics are
+reported by fold, confidence-percentile band, and calendar year.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_v4_phase2 -v
+python -m ml.stock_eagle_250_v4.phase2
+python -m json.tool data/model/stock_eagle_250_v4/phase2/qualification.json
+```
+
+Passing every gate can only qualify V4 for human review. It does not freeze the
+candidate or enable paper/live trading. September 23 through September 30
+remains sealed and the October 1 future boundary remains untouched.
