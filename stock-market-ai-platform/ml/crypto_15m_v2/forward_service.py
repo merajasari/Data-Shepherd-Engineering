@@ -7,8 +7,10 @@ paper-evaluation records only to the separately preregistered clean lane at/afte
 2026-09-18 00:00 UTC.
 
 The interrupted September 1 lane remains byte-for-byte preserved. Before the
-clean boundary this service publishes waiting telemetry only. It never backfills
-missed decisions, starts late, or places brokerage orders.
+clean boundary this service publishes waiting telemetry only. It never backfills missed decisions, starts the lane late, or places brokerage
+orders. After an operational outage, missed hours remain an explicit permanent
+evidence gap and prospective collection may resume only from the current observed
+hour; confirm_2 transient candidate state is restarted across that gap.
 
 The frozen Phase 1/V2 dataset was built with a minimum-alt-universe rule rather
 than requiring every ALT to have every timestamp. Forward inference therefore
@@ -523,8 +525,45 @@ def run_once() -> dict:
                 result["action"] = "clean_boundary_missed_no_start"
                 result["note"] = "The first preregistered clean boundary was missed. This lane fails closed and may not start late or backfill."
             elif last is not None and decision_ts > last + pd.Timedelta(hours=1):
-                result["action"] = "gap_detected_no_backfill"
-                result["note"] = "A forward decision hour was missed. Frozen policy forbids historical backfill into the forward journal."
+                # Preserve the outage as an explicit evidence gap, but resume from
+                # the current genuinely observed boundary.  Never synthesize the
+                # missing hourly decisions.  A pre-gap confirm_2 candidate cannot
+                # count toward a post-gap confirmation, so restart only that
+                # transient confirmation state while preserving the executed sleeve.
+                gap_start = last + pd.Timedelta(hours=1)
+                gap_end = decision_ts - pd.Timedelta(hours=1)
+                missed_hours = int((decision_ts - last) / pd.Timedelta(hours=1)) - 1
+                gap = {
+                    "detected_at_utc": now.isoformat(),
+                    "last_recorded_decision_utc": last.isoformat(),
+                    "first_missed_decision_utc": gap_start.isoformat(),
+                    "last_missed_decision_utc": gap_end.isoformat(),
+                    "resume_decision_utc": decision_ts.isoformat(),
+                    "missed_decision_hours": missed_hours,
+                    "classification": "PRESERVED_GAP_NO_BACKFILL",
+                }
+                gaps = state.setdefault("evidence_gaps", [])
+                already_recorded = any(
+                    item.get("resume_decision_utc") == gap["resume_decision_utc"]
+                    and item.get("last_recorded_decision_utc") == gap["last_recorded_decision_utc"]
+                    for item in gaps
+                    if isinstance(item, dict)
+                )
+                if not already_recorded:
+                    gaps.append(gap)
+                state["pending_candidate_label"] = None
+                state["pending_candidate_count"] = 0
+                state = _append_forward_decision(decision_ts, raw_label, probs, state)
+                result["action"] = "forward_resumed_after_gap"
+                result["evidence_gap"] = gap
+                result["note"] = (
+                    "Missed forward hours were preserved as an explicit evidence gap and were not "
+                    "backfilled. Prospective collection resumed at the current observed boundary; "
+                    "confirm_2 transient candidate state restarted across the gap."
+                )
+                result["current_executed_label"] = state["current_executed_label"]
+                result["pending_candidate_label"] = state.get("pending_candidate_label")
+                result["pending_candidate_count"] = state.get("pending_candidate_count", 0)
             else:
                 state = _append_forward_decision(decision_ts, raw_label, probs, state)
                 result["action"] = "forward_decision_appended"
