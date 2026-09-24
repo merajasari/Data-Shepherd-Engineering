@@ -551,6 +551,9 @@ def get_v15_intraday_v7_dashboard() -> dict[str, object]:
     completed = _completed_sessions(decisions, exits)
     performance = _performance(completed)
     operational_failures = list(status.get("operational_failures") or [])
+    historical_operational_gaps = list(
+        status.get("historical_operational_gaps") or []
+    )
     operational_integrity = (
         journal_error is None
         and status.get("current_run_health", True) is True
@@ -621,6 +624,7 @@ def get_v15_intraday_v7_dashboard() -> dict[str, object]:
         "current_run_health": status.get("current_run_health", operational_integrity),
         "operational_failures": operational_failures
         + ([journal_error] if journal_error else []),
+        "historical_operational_gaps": historical_operational_gaps,
         "journal_integrity": journal_error is None,
         "journal_error": journal_error,
         "decisions": len(decisions),
