@@ -16,6 +16,7 @@ from flask import Flask, g, jsonify, redirect, render_template, request, send_fi
 from werkzeug.security import check_password_hash
 load_dotenv(); sys.path.append("data-ingestion")
 from v5_symbols import get_v5_company_name, get_v5_sector, get_v5_symbol_options, get_v5_symbols  # noqa: E402
+from stock_universe_250 import get_stock_250_symbols  # noqa: E402
 from webapp.services.account_service import authenticate_account, begin_signup, change_password, complete_account_setup, get_account_setup_context, initialize_account_store, send_verification_email, verify_email_token  # noqa: E402
 # Dashboard research/data services are intentionally imported on first use.
 # This keeps health and lightweight holdout requests from loading Pandas/PyArrow
@@ -87,7 +88,12 @@ def inject_dashboard_modules(response):
         response.headers["Server-Timing"]=f"app;dur={elapsed_ms:.2f}"
         response.headers["X-Response-Time-Ms"]=f"{elapsed_ms:.2f}"
     return response
-V5_SYMBOLS=get_v5_symbols(); V5_SYMBOL_OPTIONS=get_v5_symbol_options(); DEFAULT_SYMBOL="AAPL"
+V5_SYMBOLS=get_v5_symbols(); V5_SYMBOL_OPTIONS=get_v5_symbol_options(); STOCK_250_SYMBOLS=get_stock_250_symbols(); DEFAULT_SYMBOL="AAPL"
+def _live_symbol_options():
+    """Presentation-only 250-stock selector metadata; frozen model metadata stays unchanged."""
+    legacy={item["symbol"]:item["company_name"] for item in V5_SYMBOL_OPTIONS}
+    return [{"symbol":symbol,"company_name":legacy.get(symbol,symbol)} for symbol in sorted(STOCK_250_SYMBOLS)]
+STOCK_250_SYMBOL_OPTIONS=_live_symbol_options()
 def _session_idle_expired():
     raw=session.get("last_activity_utc")
     if not raw:
@@ -224,14 +230,23 @@ def api_customer_chat():
 @login_required
 def dashboard():
     selected_symbol=request.args.get("symbol",DEFAULT_SYMBOL).upper().strip()
-    if selected_symbol not in V5_SYMBOLS:return redirect(url_for("dashboard",symbol=DEFAULT_SYMBOL))
-    live_view=request.args.get("view")=="live"; selected=build_stock_dashboard(selected_symbol); recent_prices=get_recent_prices_local(selected_symbol,limit=60) if live_view else get_recent_prices(selected_symbol,limit=60); rankings_payload=get_v8_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top10=rankings[:10];top10_rows=[]
+    live_view=request.args.get("view")=="live"
+    allowed_symbols=STOCK_250_SYMBOLS if live_view else V5_SYMBOLS
+    if selected_symbol not in allowed_symbols:return redirect(url_for("dashboard",symbol=DEFAULT_SYMBOL,**({"view":"live"} if live_view else {})))
+    if live_view:
+        recent_prices=get_recent_prices_local(selected_symbol,limit=60)
+        if not recent_prices:return redirect(url_for("dashboard",symbol=DEFAULT_SYMBOL,view="live"))
+        latest=recent_prices[0]; live=get_live_quote(selected_symbol); display_price=live["reference_price"] if live["available"] else latest["close"]; previous=recent_prices[1]["close"] if len(recent_prices)>1 else latest["close"]; change=float(latest["close"])-float(previous)
+        selected={"symbol":selected_symbol,"company_name":dict((x["symbol"],x["company_name"]) for x in STOCK_250_SYMBOL_OPTIONS).get(selected_symbol,selected_symbol),"timestamp":latest["timestamp"],"close":latest["close"],"display_price":display_price,"price_source":"LIVE IEX" if live["available"] else "LATEST EOD","price_change":change,"price_change_pct":change/float(previous) if previous else 0.0,"rsi_14":latest.get("rsi_14"),"sma_20":latest.get("sma_20"),"sma_50":latest.get("sma_50"),"sma_200":latest.get("sma_200"),"volatility_20d":latest.get("volatility_20d"),"volume_ratio":latest.get("volume_ratio"),"prediction":"V8 N/A","signal_score":0.0,"rank":"—","rank_percentile":0.0,"selected_top10":False,"candidate_count":100}
+    else:
+        selected=build_stock_dashboard(selected_symbol); recent_prices=get_recent_prices(selected_symbol,limit=60)
+    rankings_payload=get_v8_rankings();rankings=enrich_ranking_rows(rankings_payload["rankings"]);top10=rankings[:10];top10_rows=[]
     if not live_view:
         for row in rankings[:10]:
             try:
                 market=get_market_summary(row["symbol"]);live=get_live_quote(row["symbol"]);row=dict(row);row["display_price"]=live["reference_price"] if live["available"] else market["close"];row["eod_change_pct"]=market["price_change_pct"];row["rsi_14"]=market["rsi_14"];top10_rows.append(row)
             except Exception as exc:print(f"[V8 TOP10 ERROR] {row['symbol']}: {exc}")
-    return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top10=top10,top10_rows=top10_rows,stock_symbols=V5_SYMBOL_OPTIONS,v8=rankings_payload,live_view=live_view)
+    return render_template("index.html",selected=selected,recent_prices=recent_prices,rankings=rankings,top10=top10,top10_rows=top10_rows,stock_symbols=STOCK_250_SYMBOL_OPTIONS if live_view else V5_SYMBOL_OPTIONS,v8=rankings_payload,live_view=live_view)
 @app.route("/trading-readiness")
 @login_required
 def trading_readiness():
@@ -276,15 +291,15 @@ def api_prices(symbol):
 @login_required
 def api_local_history_bulk():
     limit=request.args.get("limit",130,type=int) or 130
-    return jsonify({"series":get_bulk_local_history(V5_SYMBOLS,limit=limit)})
+    return jsonify({"series":get_bulk_local_history(STOCK_250_SYMBOLS,limit=limit)})
 @app.route("/api/intraday-24h-top10")
 @login_required
-def api_intraday_24h_top10():return jsonify(get_today_top10_intraday(V5_SYMBOLS))
+def api_intraday_24h_top10():return jsonify(get_today_top10_intraday(STOCK_250_SYMBOLS))
 @app.route("/api/intraday-24h/<symbol>")
 @login_required
 def api_intraday_24h_symbol(symbol):
     symbol=symbol.upper().strip()
-    if symbol not in V5_SYMBOLS:return jsonify({"error":"unsupported symbol"}),404
+    if symbol not in STOCK_250_SYMBOLS:return jsonify({"error":"unsupported symbol"}),404
     return jsonify(get_symbol_24h_intraday(symbol))
 @app.route("/api/live-prices")
 @login_required
