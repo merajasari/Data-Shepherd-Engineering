@@ -1,0 +1,162 @@
+{
+  "contract_id": "STOCK_EAGLE_250_AUTONOMOUS_ML_V1_PHASE1",
+  "display_name": "StockEagle250 Autonomous ML V1",
+  "model_id": "stock_eagle_250_autonomous_ml_v1",
+  "research_version": "stock_eagle_250_autonomous_ml_v1",
+  "created_at_utc": "2026-09-24T00:00:00+00:00",
+  "created_before_model_results": true,
+  "classification": "PREREGISTERED_FULLY_LEARNED_AUTONOMOUS_PAPER_RESEARCH_NOT_FROZEN",
+  "architecture": {
+    "alpha_model": {
+      "role": "predict_5_session_relative_return_for_each_stock",
+      "estimator": "sklearn.ensemble.HistGradientBoostingRegressor",
+      "target": "forward_relative_return_5d",
+      "parameters": {
+        "loss": "squared_error",
+        "learning_rate": 0.05,
+        "max_iter": 300,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0,
+        "early_stopping": false,
+        "random_state": 1729
+      }
+    },
+    "downside_model": {
+      "role": "predict_probability_of_negative_absolute_5_session_return",
+      "estimator": "sklearn.ensemble.HistGradientBoostingClassifier",
+      "target": "forward_stock_return_lt_0",
+      "parameters": {
+        "loss": "log_loss",
+        "learning_rate": 0.05,
+        "max_iter": 300,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0,
+        "early_stopping": false,
+        "random_state": 1730
+      }
+    },
+    "meta_allocator": {
+      "role": "predict_probability_alpha_top10_cohort_net_return_is_positive",
+      "estimator": "sklearn.ensemble.HistGradientBoostingClassifier",
+      "target": "alpha_top10_net_return_10bps_each_side_gt_0",
+      "parameters": {
+        "loss": "log_loss",
+        "learning_rate": 0.05,
+        "max_iter": 200,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "l2_regularization": 1.0,
+        "early_stopping": false,
+        "random_state": 1731
+      },
+      "inputs": [
+        "alpha_top10_mean",
+        "alpha_top10_min",
+        "alpha_top10_vs_next10_gap",
+        "alpha_cross_sectional_std",
+        "downside_top10_mean",
+        "downside_top10_max",
+        "downside_top10_std",
+        "eligible_stock_count"
+      ],
+      "training_features_must_be_inner_walk_forward_oos": true
+    }
+  },
+  "stock_level_inputs": {
+    "source": "data/model/stock_eagle_250/phase2/research_panel.parquet",
+    "features": "26 decision-time cross-sectional rank features plus static sector one-hot columns",
+    "future_derived_features_prohibited": true,
+    "imputation_for_model_eligible_rows": false
+  },
+  "nested_walk_forward": {
+    "outer_folds": "reuse_exact_stock_eagle_250_phase2_14_purged_folds",
+    "outer_training_target_endpoint_strictly_before_validation_start": true,
+    "outer_validation_target_endpoint_strictly_before_validation_end": true,
+    "inner_meta_training": {
+      "purpose": "generate_oos_alpha_and_downside_predictions_for_allocator_training",
+      "type": "expanding_window_completed_session_blocks",
+      "minimum_base_training_sessions": 252,
+      "test_block_sessions": 63,
+      "purge_sessions": 5,
+      "allocator_minimum_oos_sessions": 60,
+      "current_or_future_outer_validation_rows_prohibited": true
+    },
+    "hyperparameter_search": false,
+    "model_family_search": false,
+    "feature_search": false,
+    "allocator_threshold_search": false
+  },
+  "portfolio_policy": {
+    "candidate_universe": 250,
+    "selection": "top_10_by_learned_alpha_prediction",
+    "positions_per_cohort": 10,
+    "gross_exposure": "clip(meta_allocator_probability_positive, 0.0, 1.0)",
+    "per_stock_learned_score": "exp(cross_sectional_zscore(alpha_prediction) - downside_probability)",
+    "weighting": "gross_exposure_times_normalized_per_stock_learned_score_within_selected_top10",
+    "cash_fraction": "1_minus_gross_exposure",
+    "entry": "next_completed_session_open",
+    "exit": "fifth_completed_session_close",
+    "overlapping_cohorts": 5,
+    "starting_equity": 100000,
+    "short_sales": false,
+    "leverage": false,
+    "primary_transaction_cost_bps_per_side": 10,
+    "stress_transaction_cost_bps_per_side": 20
+  },
+  "autonomous_forward_design": {
+    "feature_refresh": "automatic",
+    "label_maturity_detection": "automatic",
+    "retrain_when_new_matured_labels_exist": true,
+    "fixed_algorithm_no_runtime_parameter_search": true,
+    "model_snapshot_sha256_required": true,
+    "training_cutoff_required_in_every_decision": true,
+    "source_hashes_required_in_every_decision": true,
+    "late_decision_backfill": false,
+    "stale_or_incomplete_data_behavior": "fail_closed",
+    "paper_decision_generation": "automatic",
+    "paper_entry_exit_management": "automatic",
+    "journal_append_only": true,
+    "automatic_snapshot_use_in_paper_lane": true
+  },
+  "data_boundaries": {
+    "development_decision_end_utc": "2026-09-15T00:00:00+00:00",
+    "maximum_development_target_endpoint_utc": "2026-09-22T00:00:00+00:00",
+    "sealed_guard_band_start_utc": "2026-09-23T00:00:00+00:00",
+    "sealed_guard_band_end_exclusive_utc": "2026-10-01T00:00:00+00:00",
+    "untouched_future_start_utc": "2026-10-01T00:00:00+00:00",
+    "development_may_read_guard_band": false,
+    "development_may_read_future": false
+  },
+  "development_gates": {
+    "median_fold_net_return_gt": 0.0,
+    "positive_fold_fraction_gte": 0.7,
+    "median_fold_excess_vs_spy_gt": 0.0,
+    "positive_excess_vs_spy_fold_fraction_gte": 0.6,
+    "median_fold_excess_vs_equal_weight_gt": 0.0,
+    "median_fold_rank_ic_gt": 0.0,
+    "positive_rank_ic_fold_fraction_gte": 0.6,
+    "worst_fold_maximum_drawdown_gte": -0.3,
+    "median_fold_stress_20bps_net_return_gt": 0.0
+  },
+  "isolation": {
+    "modify_stock_eagle_250_v1": false,
+    "modify_stock_eagle_250_v2": false,
+    "modify_stock_eagle_250_v3": false,
+    "modify_stock_eagle_250_v4": false,
+    "modify_stock_eagle_250_v5": false,
+    "consume_stock_eagle_250_v5_phase2": false,
+    "modify_v8": false,
+    "modify_v10": false,
+    "modify_v14": false,
+    "modify_v15": false,
+    "read_or_write_existing_forward_journals": false
+  },
+  "authority": {
+    "development_research_only": true,
+    "autonomous_paper_runtime_enabled": false,
+    "model_freezing_enabled": false,
+    "live_execution_enabled": false
+  }
+}
