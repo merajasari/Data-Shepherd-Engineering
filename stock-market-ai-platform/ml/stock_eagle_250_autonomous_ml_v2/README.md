@@ -71,3 +71,39 @@ python -m json.tool data/model/stock_eagle_250_autonomous_ml_v2/phase1/manifest.
 
 Phase 1 computes no V2 performance. Phase 2 may be implemented only after this
 preregistration exists.
+
+
+## Phase 2 tail-aware nested walk-forward evaluation
+
+Phase 2 trains all four learned components under the same 14 outer purged
+development folds used by Autonomous ML V1.
+
+Inside every outer training fold, the alpha, downside, and 10th-percentile tail
+models are repeatedly fit on expanding matured-label history. Their predictions
+on later inner blocks are strictly out of sample. Only those OOS predictions
+are allowed to form the training rows for the learned meta allocator.
+
+The outer validation fold is then scored by:
+
+- learned alpha for stock ranking;
+- learned downside probability;
+- learned conditional 10th-percentile return;
+- learned meta allocation probability.
+
+The Top-10 stock weights combine learned alpha, downside, and tail predictions.
+The allocator probability determines total gross exposure between 0 and 100
+percent. No manual tail threshold or drawdown rule is applied.
+
+The exact nine Autonomous ML V1 gates are reused without relaxation, including
+the unchanged requirement that worst-fold maximum drawdown must be at least
+-30%.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_autonomous_ml_v2_phase2 -v
+python -m ml.stock_eagle_250_autonomous_ml_v2.phase2
+python -m json.tool data/model/stock_eagle_250_autonomous_ml_v2/phase2/qualification.json
+```
+
+Passing all nine gates qualifies V2 only for construction of an autonomous
+forward-paper runtime. It does not enable the runtime, freeze the model, or
+enable live execution.
