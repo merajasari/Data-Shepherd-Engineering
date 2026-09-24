@@ -7,7 +7,7 @@
     v10: {label:'V10 accelerated', short:'V10', color:'#36d8ff'},
     v14: {label:'V14 ML', short:'V14', color:'#9dff2a'},
     v15: {label:'V15 intraday', short:'V15', color:'#ff67c8'},
-    v8:  {label:'V8 control', short:'V8', color:'#efc56b'},
+    v8:  {label:'V8 frozen', short:'V8', color:'#efc56b'},
     spy: {label:'SPY', short:'SPY', color:'#a78bfa'},
   };
   const visible = new Set(Object.keys(CONFIG));
@@ -72,9 +72,28 @@
     };
     return [
       make('v10_normalized', 'current_equity', 'v10'),
-      make('v8_normalized', 'current_v8_equity', 'v8'),
       make('spy_normalized', 'current_spy_equity', 'spy'),
     ];
+  }
+
+  function v8Series(payload) {
+    const boundary = stamp(payload.holdout_start_utc);
+    const base = finite(payload.starting_equity) ? Number(payload.starting_equity) : START;
+    const rows = boundary == null ? [] : [{time:boundary, value:base, kind:'FORWARD BOUNDARY'}];
+    (Array.isArray(payload.curve) ? payload.curve : []).forEach(row => {
+      const time = stamp(row.timestamp_utc);
+      if (time != null && finite(row.strategy_normalized)) {
+        rows.push({time, value:Number(row.strategy_normalized), kind:'COMPLETED COHORT'});
+      }
+    });
+    appendCurrent(
+      rows, payload, payload.current_equity,
+      payload.equity_basis === 'LIVE_MARK_TO_MARKET'
+    );
+    return {
+      id:'v8', ...CONFIG.v8, boundary, state:payload.state,
+      basis:payload.equity_basis, points:unique(rows),
+    };
   }
 
   function v14Series(payload) {
@@ -131,7 +150,7 @@
         #overview-live-paper-comparison .olp-note{max-width:920px;line-height:1.55}
         #overview-live-paper-comparison .olp-live{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid rgba(57,227,161,.28);border-radius:999px;color:#39e3a1;font-size:.68rem;font-weight:900;letter-spacing:.06em;white-space:nowrap}
         #overview-live-paper-comparison .olp-live i{width:7px;height:7px;border-radius:50%;background:#39e3a1;box-shadow:0 0 12px #39e3a1}
-        #overview-live-paper-comparison .olp-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin:18px 0 14px}
+        #overview-live-paper-comparison .olp-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:18px 0 14px}
         #overview-live-paper-comparison .olp-metric{padding:13px 14px;border:1px solid rgba(120,155,205,.18);border-radius:14px;background:rgba(3,12,24,.42);min-width:0}
         #overview-live-paper-comparison .olp-metric span{display:block;color:#91a6c2;font-size:.65rem;font-weight:900;letter-spacing:.07em;text-transform:uppercase}
         #overview-live-paper-comparison .olp-metric strong{display:block;margin-top:6px;font-size:1.05rem;overflow-wrap:anywhere}
@@ -151,10 +170,10 @@
         #overview-live-paper-comparison .olp-tooltip div{display:flex;justify-content:space-between;gap:16px;margin-top:4px}
         #overview-live-paper-comparison .olp-disclosure{margin-top:13px;padding:12px 14px;border-left:3px solid #36d8ff;background:rgba(54,216,255,.055);color:#91a6c2;font-size:.75rem;line-height:1.5}
         #overview-live-paper-comparison .positive{color:#39e3a1}#overview-live-paper-comparison .negative{color:#ff6680}
-        @media(max-width:780px){#overview-live-paper-comparison{padding:16px}#overview-live-paper-comparison .olp-head{display:block}#overview-live-paper-comparison .olp-live{width:max-content;margin-top:10px}#overview-live-paper-comparison .olp-metrics{grid-template-columns:1fr}#overview-live-paper-comparison .olp-stage,#overview-live-paper-comparison .olp-chart{min-height:315px;height:315px}}
+        @media(max-width:1050px){#overview-live-paper-comparison .olp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:780px){#overview-live-paper-comparison{padding:16px}#overview-live-paper-comparison .olp-head{display:block}#overview-live-paper-comparison .olp-live{width:max-content;margin-top:10px}#overview-live-paper-comparison .olp-metrics{grid-template-columns:1fr}#overview-live-paper-comparison .olp-stage,#overview-live-paper-comparison .olp-chart{min-height:315px;height:315px}}
       </style>
       <div class="olp-head">
-        <div><div class="label">LIVE PROSPECTIVE MODEL COMPARISON</div><h2>Interactive live paper performance</h2><div class="muted olp-note">V10, V14, and V15 are displayed from their own preregistered boundaries on a common $100,000 basis. V8 and SPY remain reference controls. Hover for exact values and toggle any line.</div></div>
+        <div><div class="label">LIVE PROSPECTIVE MODEL COMPARISON</div><h2>Interactive live paper performance</h2><div class="muted olp-note">V8, V10, V14, and V15 are displayed from their own authorized forward boundaries on a common $100,000 basis. SPY remains a reference control. Hover for exact values and toggle any line.</div></div>
         <div class="olp-live"><i></i>READ-ONLY · 15-SECOND REFRESH</div>
       </div>
       <div class="olp-metrics" data-olp-metrics></div>
@@ -191,7 +210,7 @@
   function renderMetrics(series) {
     const host = document.querySelector('[data-olp-metrics]');
     if (!host) return;
-    host.innerHTML = series.filter(item => ['v10','v14','v15'].includes(item.id)).map(item => {
+    host.innerHTML = series.filter(item => ['v8','v10','v14','v15'].includes(item.id)).map(item => {
       const last = item.points.at(-1);
       const value = last?.value ?? START;
       const change = value / START - 1;
@@ -228,7 +247,7 @@
     const paths = active.map(item => {
       const path = item.points.map((row, index) => `${index ? 'L' : 'M'} ${x(row.time).toFixed(1)} ${y(row.value).toFixed(1)}`).join(' ');
       const dots = item.points.map((row, index) => `<circle cx="${x(row.time)}" cy="${y(row.value)}" r="${index === item.points.length-1 ? 4.3 : 2.6}" fill="${item.color}"/>`).join('');
-      return `<path d="${path}" fill="none" stroke="${item.color}" stroke-width="${['v10','v14','v15'].includes(item.id) ? 3.5 : 2.5}" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
+      return `<path d="${path}" fill="none" stroke="${item.color}" stroke-width="${['v8','v10','v14','v15'].includes(item.id) ? 3.5 : 2.5}" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
     }).join('');
     const ends = active.map(item => {
       const last = item.points.at(-1);
@@ -244,7 +263,7 @@
     }
     const labels = ends.map(({item,last,labelY}) => `<text x="${W-p.r+9}" y="${labelY}" fill="${item.color}" font-size="10.5" font-weight="900">${item.short} ${money(last.value)}</text>`).join('');
     model.geometry = {W,H,p,minX,maxX,x,y,active};
-    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Live prospective paper equity for V10, V14, V15, V8 control and SPY">${grid}<line x1="${p.l}" y1="${y(START)}" x2="${W-p.r}" y2="${y(START)}" stroke="rgba(242,246,255,.36)" stroke-dasharray="5 6"/>${paths}${labels}<line data-olp-guide x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.55)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-11}" fill="#91a6c2" font-size="10">${day(minX)}</text><text x="${W-p.r}" y="${H-11}" fill="#91a6c2" text-anchor="end" font-size="10">${day(rawMaxX)}</text></svg>`;
+    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Live prospective paper equity for V8, V10, V14, V15 and SPY">${grid}<line x1="${p.l}" y1="${y(START)}" x2="${W-p.r}" y2="${y(START)}" stroke="rgba(242,246,255,.36)" stroke-dasharray="5 6"/>${paths}${labels}<line data-olp-guide x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.55)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-11}" fill="#91a6c2" font-size="10">${day(minX)}</text><text x="${W-p.r}" y="${H-11}" fill="#91a6c2" text-anchor="end" font-size="10">${day(rawMaxX)}</text></svg>`;
   }
 
   function hover(event) {
@@ -274,6 +293,7 @@
   async function refresh() {
     if (!mount()) return;
     const requests = [
+      fetch('/api/v8/holdout', {credentials:'same-origin', cache:'no-store'}),
       fetch('/api/v10/cycle3/accelerated-v2', {credentials:'same-origin', cache:'no-store'}),
       fetch('/api/v14/ml-ai', {credentials:'same-origin', cache:'no-store'}),
       fetch('/api/v15/intraday-v7', {credentials:'same-origin', cache:'no-store'}),
@@ -283,8 +303,9 @@
       if (result.status !== 'fulfilled' || !result.value.ok) return null;
       try { return await result.value.json(); } catch (_) { return null; }
     }));
-    const [v10,v14,v15] = payloads;
+    const [v8,v10,v14,v15] = payloads;
     const series = [
+      ...(v8 ? [v8Series(v8)] : []),
       ...(v10 ? v10Series(v10) : []),
       ...(v14 ? [v14Series(v14)] : []),
       ...(v15 ? [v15Series(v15)] : []),
@@ -297,7 +318,7 @@
     const updated = document.querySelector('[data-olp-updated]');
     if (updated) updated.textContent = failures
       ? `${failures} read-only source${failures === 1 ? '' : 's'} unavailable · updated ${when(Date.now())}`
-      : `All three paper journals read successfully · updated ${when(Date.now())}`;
+      : `All four paper sources read successfully · updated ${when(Date.now())}`;
   }
 
   function start() {
