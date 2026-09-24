@@ -138,31 +138,14 @@
       let activeRow=null;
 
       const tooltipHtml=row=>{
-        const candidate=+row.candidate,benchmark=+row.benchmark;
-        const candidateReturn=Number.isFinite(+row.candidate_return)?+row.candidate_return:candidate/100000-1;
-        const benchmarkReturn=Number.isFinite(+row.benchmark_return)?+row.benchmark_return:benchmark/100000-1;
-        const excessDollars=Number.isFinite(+row.excess_dollars)?+row.excess_dollars:candidate-benchmark;
-        const excessPoints=Number.isFinite(+row.excess_return_points)?+row.excess_return_points:candidateReturn-benchmarkReturn;
+        const stamp=chartStamp(row.realized_through_utc||row.timestamp);
         const boundary=row.event_status==='FORWARD_BOUNDARY';
-        if(boundary)return `<strong>${esc(chartStamp(row.timestamp))} · FORWARD BOUNDARY</strong><div><span>Shared V4</span><b>${money2(candidate)}</b></div><div><span>Always-BTC</span><b>${money2(benchmark)}</b></div><div><span>Starting basis</span><b>$100,000.00</b></div>`;
-        return `<strong>${esc(chartStamp(row.realized_through_utc||row.timestamp))} · ${esc(row.event_status||'REALIZED')}</strong>
-          <div><span>Decision</span><b>${esc(chartStamp(row.decision_timestamp_utc))}</b></div>
-          <div><span>Shared V4 equity</span><b>${money2(candidate)} · ${signedPct(candidateReturn)}</b></div>
-          <div><span>Always-BTC equity</span><b>${money2(benchmark)} · ${signedPct(benchmarkReturn)}</b></div>
-          <div><span>V4 edge vs BTC</span><b>${excessDollars>=0?'+':''}${money2(excessDollars)} · ${pctPoints(excessPoints)}</b></div>
-          <div><span>Executed sleeve</span><b>${esc(row.executed_label_after||'—')}</b></div>
-          <div><span>Model signal</span><b>${esc(row.raw_predicted_label||'—')}</b></div>
-          <div><span>Sleeve switch</span><b>${row.sleeve_switch?'YES':'NO'}</b></div>
-          <div><span>1h selected net</span><b>${signedPct(row.net_selected_return_1h)}</b></div>
-          <div><span>BTC 1h</span><b>${signedPct(row.btc_realized_return_1h)}</b></div>
-          <div><span>ALT 1h</span><b>${signedPct(row.alt_realized_return_1h)}</b></div>
-          <div><span>Modeled cost</span><b>${signedPct(-Math.abs(Number(row.transaction_cost)||0))} · ${Number.isFinite(+row.cost_bps_assumption)?(+row.cost_bps_assumption).toFixed(0)+' bps':'—'}</b></div>
-          <div><span>V4 drawdown</span><b>${signedPct(row.candidate_drawdown)}</b></div>
-          <div><span>BTC drawdown</span><b>${signedPct(row.benchmark_drawdown)}</b></div>
-          <div><span>Prob BTC / ALT / CASH</span><b>${Number.isFinite(+row.prob_btc)?(+row.prob_btc*100).toFixed(1):'—'}% / ${Number.isFinite(+row.prob_alt)?(+row.prob_alt*100).toFixed(1):'—'}% / ${Number.isFinite(+row.prob_cash)?(+row.prob_cash*100).toFixed(1):'—'}%</b></div>
-          <small style="display:block;margin-top:7px;color:#91a6c2">${pinned?'PINNED · click chart background again or press Esc to release':drilldown?'Hover another hour · click a dot to drill in':'Hover for another hour · click to pin'}</small>`;
+        return `<strong>${esc(stamp)}</strong>
+          <div style="margin-top:7px;color:#36d8ff;font-weight:900;letter-spacing:.08em">DRILL-IN AVAILABLE</div>
+          <div style="margin-top:6px;color:#dfeaff">${boundary?'Click the boundary dot to inspect the clean-forward starting point.':'Click either data-point dot at this hour to open the full realization.'}</div>
+          <div style="margin-top:6px;color:#91a6c2">Full detail includes equity, BTC comparison, model signal, executed sleeve, hourly returns, costs, drawdown, and BTC / ALT / CASH probabilities.</div>
+          <small style="display:block;margin-top:8px;color:#91a6c2">${pinned?'PINNED · click chart background again or press Esc to release':'Hover another hour · click a dot to drill in'}</small>`;
       };
-
       const show=(row,event)=>{
         activeRow=row;
         const xx=x(row._t);
