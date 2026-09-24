@@ -94,6 +94,8 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("Prob BTC / ALT / CASH", browser)
         self.assertIn("stroke-dasharray':'5 4'", browser)
         self.assertIn("event.key==='Escape'", browser)
+        self.assertIn("hourlySlots:true", browser)
+        self.assertIn("1-HOUR SLOTS · PACIFIC TIME", browser)
 
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
