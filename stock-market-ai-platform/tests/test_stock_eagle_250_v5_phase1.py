@@ -227,7 +227,7 @@ class StockEagle250V5Phase1Test(unittest.TestCase):
 
     def test_drawdown_formula_reaches_fixed_floor(self):
         frame = single_fold_periods([
-            -0.80, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            -1.00, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         ])
         result = self_drawdown_exposure_frame(frame)
         self.assertTrue(result["gross_exposure"].between(0.5, 1.0).all())
