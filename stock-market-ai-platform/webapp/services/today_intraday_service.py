@@ -215,7 +215,7 @@ def get_today_top10_intraday(symbols: list[str]) -> dict:
         ranked.append((end_price / start_price - 1.0, symbol, rows))
 
     ranked.sort(key=lambda item: item[0], reverse=True)
-    top = ranked[:10]
+    top = ranked
     return {
         "window_hours": 24,
         "updated_at": cache_updated_at or live_state.get("updated_at"),
