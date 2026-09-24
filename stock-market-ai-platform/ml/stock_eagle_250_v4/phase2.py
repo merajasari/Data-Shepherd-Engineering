@@ -535,7 +535,7 @@ def diagnostic_summaries(
         bins=[-1e-12, 0.2, 0.4, 0.6, 0.8, 1.000000001],
         labels=["P00_20", "P20_40", "P40_60", "P60_80", "P80_100"],
         include_lowest=True,
-    )
+    ).astype(object)
     primary.loc[
         percentile.isna(),
         "confidence_band",
