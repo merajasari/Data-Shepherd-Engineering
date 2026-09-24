@@ -66,7 +66,7 @@ CLEAN_LANE_NAME = "Shared Crypto V2 Clean Forward V2"
 COST_BPS = 5.0
 CONFIRM_REQUIRED = 2
 DEFAULT_POLL_SECONDS = 60
-LOOKBACK_DAYS = 7.0
+LOOKBACK_DAYS = 7
 
 
 def _sha256(path: Path) -> str:
@@ -225,7 +225,7 @@ def _latest_available_timestamp(product_id: str) -> pd.Timestamp | None:
 
 
 def _read_recent(product_id: str, end: pd.Timestamp) -> pd.DataFrame:
-    start = end - pd.Timedelta(days=LOOKBACK_DAYS)
+    start = end - pd.Timedelta(LOOKBACK_DAYS, unit="D")
     months = pd.period_range(start.tz_localize(None).to_period("M"), end.tz_localize(None).to_period("M"), freq="M")
     frames = []
     for period in months:
@@ -392,7 +392,7 @@ def _read_journal() -> pd.DataFrame:
 
 
 def _hourly_realized(decision_ts: pd.Timestamp) -> tuple[float, float] | None:
-    end_ts = decision_ts + pd.Timedelta(hours=1)
+    end_ts = decision_ts + pd.Timedelta(1, unit="h")
     latest = _latest_available_timestamp(BTC)
     if latest is None or latest < end_ts:
         return None
@@ -444,7 +444,7 @@ def _finalize_pending_rows(state: dict) -> int:
         journal.loc[idx, "transaction_cost"] = cost
         journal.loc[idx, "net_selected_return_1h"] = net
         journal.loc[idx, "equity"] = equity
-        journal.loc[idx, "realized_through_utc"] = (ts + pd.Timedelta(hours=1)).isoformat()
+        journal.loc[idx, "realized_through_utc"] = (ts + pd.Timedelta(1, unit="h")).isoformat()
         journal.loc[idx, "status"] = "REALIZED"
         changed += 1
         state["last_realized_timestamp_utc"] = ts.isoformat()
@@ -524,15 +524,15 @@ def run_once() -> dict:
             if last is None and decision_ts > CLEAN_START:
                 result["action"] = "clean_boundary_missed_no_start"
                 result["note"] = "The first preregistered clean boundary was missed. This lane fails closed and may not start late or backfill."
-            elif last is not None and decision_ts > last + pd.Timedelta(hours=1):
+            elif last is not None and decision_ts > last + pd.Timedelta(1, unit="h"):
                 # Preserve the outage as an explicit evidence gap, but resume from
                 # the current genuinely observed boundary.  Never synthesize the
                 # missing hourly decisions.  A pre-gap confirm_2 candidate cannot
                 # count toward a post-gap confirmation, so restart only that
                 # transient confirmation state while preserving the executed sleeve.
-                gap_start = last + pd.Timedelta(hours=1)
-                gap_end = decision_ts - pd.Timedelta(hours=1)
-                missed_hours = int((decision_ts - last) / pd.Timedelta(hours=1)) - 1
+                gap_start = last + pd.Timedelta(1, unit="h")
+                gap_end = decision_ts - pd.Timedelta(1, unit="h")
+                missed_hours = int((decision_ts - last) / pd.Timedelta(1, unit="h")) - 1
                 gap = {
                     "detected_at_utc": now.isoformat(),
                     "last_recorded_decision_utc": last.isoformat(),
