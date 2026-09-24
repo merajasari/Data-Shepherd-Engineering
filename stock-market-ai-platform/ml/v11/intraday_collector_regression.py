@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -71,6 +73,25 @@ class FakeClient:
         return bars(symbol, shift_last=symbol == self.misaligned)
 
 
+class ConcurrentProbeClient(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self._lock = threading.Lock()
+        self.active = 0
+        self.max_active = 0
+
+    def get_five_minute_bars(self, symbol: str, session_date: str) -> list[dict[str, object]]:
+        with self._lock:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            time.sleep(0.01)
+            return super().get_five_minute_bars(symbol, session_date)
+        finally:
+            with self._lock:
+                self.active -= 1
+
+
 def universe() -> list[str]:
     return [f"S{index:03d}" for index in range(100)] + ["SPY"]
 
@@ -93,6 +114,17 @@ def main() -> None:
         require(len(payload["series_sha256"]) == 64, "Published series has a SHA-256 identity")
         require(payload["paper_trading_only"] is True, "Published snapshot is paper only")
         require(payload["brokerage_orders"] is False, "Published snapshot has no brokerage authority")
+
+        probe = ConcurrentProbeClient()
+        concurrent = collect_complete_snapshot(
+            now_utc=now,
+            session_date="2026-08-27",
+            client=probe,
+            output_path=output,
+            symbols=universe(),
+        )
+        require(concurrent.published, "Concurrent 101-symbol collection still publishes atomically")
+        require(probe.max_active > 1, "Universe requests overlap instead of running serially")
 
         before = output.read_bytes()
 
