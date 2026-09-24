@@ -82,6 +82,19 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertNotIn("XRP V1 Forward", service[service.index("def _operational_health"):service.index("def _forward_evaluation_readiness")])
         self.assertIn("initPaperCountdowns", browser)
 
+    def test_shared_v4_equity_chart_has_rich_pointer_interaction(self):
+        template = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
+        browser = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
+        self.assertIn("click to pin", template)
+        self.assertIn("press Esc to release", template)
+        self.assertIn("interactive:true", browser)
+        self.assertIn("V4 edge vs BTC", browser)
+        self.assertIn("Executed sleeve", browser)
+        self.assertIn("Model signal", browser)
+        self.assertIn("Prob BTC / ALT / CASH", browser)
+        self.assertIn("stroke-dasharray':'5 4'", browser)
+        self.assertIn("event.key==='Escape'", browser)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
