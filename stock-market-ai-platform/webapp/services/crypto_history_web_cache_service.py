@@ -5,7 +5,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CACHE_ROOT = PROJECT_ROOT / "data/live/crypto_rt/history_web"
-ALLOWED_RANGES = {"30D", "90D", "1Y", "3Y", "5Y", "ALL"}
+ALLOWED_RANGES = {"24H", "14D", "30D", "90D", "1Y", "3Y", "5Y", "ALL"}
 
 
 def normalize_history_range(value: str | None) -> str:
