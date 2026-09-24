@@ -268,6 +268,40 @@ class SharedV2ForwardInvariantTests(unittest.TestCase):
         self.assertAlmostEqual(btc_r, 0.01)
         self.assertAlmostEqual(alt_r, 0.02)
 
+    def test_hourly_realized_detail_exposes_exact_equal_weight_constituents(self):
+        decision = pd.Timestamp("2026-09-01T00:00:00Z")
+        endpoint = decision + pd.Timedelta(hours=1)
+        btc = pd.DataFrame({
+            "timestamp_utc": [decision, endpoint],
+            "close": [100.0, 101.0],
+            "product_id": [fs.BTC, fs.BTC],
+        })
+        alt_prices = {
+            "A": (50.0, 51.0),
+            "B": (80.0, 84.0),
+        }
+        def read_recent(product, _end):
+            if product == fs.BTC:
+                return btc.copy()
+            p0, p1 = alt_prices[product]
+            return pd.DataFrame({
+                "timestamp_utc": [decision, endpoint],
+                "close": [p0, p1],
+                "product_id": [product, product],
+            })
+        with patch.object(fs, "ALT_PRODUCTS", ("A", "B")), \
+             patch.object(fs, "MIN_ALT_ASSETS", 2), \
+             patch.object(fs, "_latest_available_timestamp", return_value=endpoint), \
+             patch.object(fs, "_read_recent", side_effect=read_recent):
+            detail = fs._hourly_realized_detail(decision)
+        self.assertIsNotNone(detail)
+        self.assertAlmostEqual(detail["btc_return_1h"], 0.01)
+        self.assertAlmostEqual(detail["alt_return_1h"], 0.035)
+        self.assertEqual([row["product_id"] for row in detail["alt_constituents"]], ["A", "B"])
+        self.assertTrue(all(abs(row["weight"] - 0.5) < 1e-12 for row in detail["alt_constituents"]))
+        self.assertAlmostEqual(detail["alt_constituents"][0]["return_1h"], 0.02)
+        self.assertAlmostEqual(detail["alt_constituents"][1]["return_1h"], 0.05)
+
     def test_hourly_realized_never_fills_missing_exact_endpoint(self):
         decision = pd.Timestamp("2026-09-01T00:00:00Z")
         endpoint = decision + pd.Timedelta(hours=1)

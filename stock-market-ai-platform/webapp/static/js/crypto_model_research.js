@@ -37,6 +37,25 @@
     return {before,after,raw,action,bought,sold,held,confirmState};
   }
 
+  function sharedV4HoldingsHtml(row){
+    const sleeve=String(row.executed_label_after||'CASH').toUpperCase();
+    if(sleeve==='BTC'){
+      return '<section class="chart-drilldown-group"><h3>Exact paper holdings · BTC</h3><div class="chart-drilldown-row"><span>BTC-USD</span><b>100.00% · '+signedPct(row.btc_realized_return_1h)+'</b></div></section>';
+    }
+    if(sleeve==='CASH'){
+      return '<section class="chart-drilldown-group"><h3>Exact paper holdings · CASH</h3><div class="chart-drilldown-row"><span>CASH</span><b>100.00% · no market exposure</b></div></section>';
+    }
+    const assets=Array.isArray(row.held_assets)?row.held_assets:[];
+    if(!assets.length){
+      return '<section class="chart-drilldown-group"><h3>Exact paper holdings · ALT</h3><div class="notice">The aggregate ALT result is recorded, but exact constituent detail could not be reconstructed from the authoritative endpoint candles on this machine.</div></section>';
+    }
+    const items=assets.map(item=>{
+      const weight=Number(item.weight),ret=Number(item.return_1h),name=String(item.product_id||'').replace('-USD','');
+      return '<div class="chart-drilldown-row"><span>'+esc(name)+'</span><b>'+(Number.isFinite(weight)?(weight*100).toFixed(2)+'%':'—')+' · <span class="'+(ret<0?'negative':'positive')+'">'+signedPct(ret)+'</span></b></div>';
+    }).join('');
+    return '<section class="chart-drilldown-group"><h3>Exact paper holdings · ALT ('+assets.length+' coins)</h3>'+items+'<div class="chart-drilldown-foot">Equal-weight paper sleeve: each listed coin contributed '+(100/assets.length).toFixed(2)+'% of the ALT basket for this realized hour.</div></section>';
+  }
+
   function sharedV4DrilldownHtml(row){
     const candidate=+row.candidate,benchmark=+row.benchmark;
     const candidateReturn=Number.isFinite(+row.candidate_return)?+row.candidate_return:candidate/100000-1;
@@ -67,6 +86,7 @@
           <div class="chart-drilldown-row"><span>Confirm-2 state</span><b>${esc(activity.confirmState)}</b></div>
           <div class="chart-drilldown-row"><span>Real orders</span><b>NO · PAPER ONLY</b></div>
         </section>
+        ${sharedV4HoldingsHtml(row)}
         <section class="chart-drilldown-group"><h3>Decision + execution</h3>
           <div class="chart-drilldown-row"><span>Decision time</span><b>${esc(chartStamp(row.decision_timestamp_utc))}</b></div>
           <div class="chart-drilldown-row"><span>Realized through</span><b>${esc(chartStamp(row.realized_through_utc||row.timestamp))}</b></div>
@@ -96,7 +116,7 @@
           ${probability('CASH',row.prob_cash,'#efc56b')}
         </section>
       </div>
-      <div class="chart-drilldown-foot">Bought/sold labels describe the paper sleeve transition recorded for this hour. ALT is the model's aggregate ALT sleeve; the current journal does not claim individual coin-level fills. This is a read-only view of genuine forward evidence and never places a real order.</div>`;
+      <div class="chart-drilldown-foot">Bought/sold labels describe the paper sleeve transition recorded for this hour. For ALT hours, the constituent list is a read-only deterministic reconstruction of the exact equal-weight products used by the frozen hourly ALT-return rule from authoritative endpoint candles. It does not backfill or alter the primary journal and does not represent broker fills. Real orders remain OFF.</div>`;
   }
 
   function openSharedV4Drilldown(row){
@@ -171,6 +191,7 @@
         '<div class="metric"><span>HELD / NO SWITCH</span><strong>'+holds+'</strong></div>'+
         '<div class="metric"><span>CURRENT SLEEVE</span><strong>'+esc(latestActivity.held)+'</strong></div>'+
       '</div>'+
+      '<div class="actions-summary-section"><h3>Current exact paper holdings</h3><div class="chart-drilldown-grid">'+sharedV4HoldingsHtml(last)+'</div></div>'+
       '<div class="actions-summary-section"><h3>Period performance + modeled trading impact</h3><div class="chart-drilldown-grid">'+
         '<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Shared V4 period return</span><b class="'+(periodReturn<0?'negative':'positive')+'">'+signedPct(periodReturn)+'</b></div><div class="chart-drilldown-row"><span>Shared V4 paper P/L</span><b class="'+(periodPnl<0?'negative':'positive')+'">'+signedMoney2(periodPnl)+'</b></div><div class="chart-drilldown-row"><span>Ending paper equity</span><b>'+money2(endEquity)+'</b></div><div class="chart-drilldown-row"><span>Modeled transaction-cost impact</span><b>'+signedMoney2(-modeledCostDollars)+'</b></div></div>'+
         '<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Always-BTC period return</span><b class="'+(btcPeriodReturn<0?'negative':'positive')+'">'+signedPct(btcPeriodReturn)+'</b></div><div class="chart-drilldown-row"><span>Always-BTC paper P/L</span><b class="'+(btcPnl<0?'negative':'positive')+'">'+signedMoney2(btcPnl)+'</b></div><div class="chart-drilldown-row"><span>Period return edge vs BTC</span><b class="'+(periodReturn-btcPeriodReturn<0?'negative':'positive')+'">'+pctPoints(periodReturn-btcPeriodReturn)+'</b></div><div class="chart-drilldown-row"><span>Latest confirm-2 state</span><b>'+esc(latestActivity.confirmState)+'</b></div></div>'+
@@ -178,7 +199,7 @@
       '<div class="actions-summary-section"><h3>Sleeve + signal mix</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><h3>Executed sleeve hours</h3><div class="actions-summary-chips">'+chips(sleeveCounts)+'</div></div><div class="chart-drilldown-group"><h3>Raw model signals</h3><div class="actions-summary-chips">'+chips(signalCounts)+'</div></div></div></div>'+
       '<div class="actions-summary-section"><h3>Best / worst completed hour</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Best hour</span><b class="positive">'+(best?signedPct(best.net_selected_return_1h):'—')+'</b></div><div class="chart-drilldown-row"><span>Realized through</span><b>'+(best?esc(chartStamp(best.realized_through_utc||best.timestamp)):'—')+'</b></div></div><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Worst hour</span><b class="'+(worst&&+worst.net_selected_return_1h<0?'negative':'positive')+'">'+(worst?signedPct(worst.net_selected_return_1h):'—')+'</b></div><div class="chart-drilldown-row"><span>Realized through</span><b>'+(worst?esc(chartStamp(worst.realized_through_utc||worst.timestamp)):'—')+'</b></div></div></div></div>'+
       '<div class="actions-summary-section"><h3>Hourly action history</h3><p class="muted">Newest first. Expand any hour to see the exact same equity, buy/sell/hold action, confirm-2 state, decision/execution fields, returns, costs, drawdowns, BTC comparison, and BTC / ALT / CASH probabilities available in the chart drill-in.</p>'+hourly+'</div>'+
-      '<div class="chart-drilldown-foot">ALT remains an aggregate portfolio sleeve in this journal. This view does not invent individual altcoin fills or weights that were not recorded by Shared V4.</div>';
+      '<div class="chart-drilldown-foot">ALT remains the model\'s aggregate sleeve in the primary journal. Exact constituent names, equal weights, and hourly returns shown here are deterministically reconstructed from the same authoritative endpoint-candle rule used to calculate the recorded ALT return; the primary journal is never mutated or backfilled.</div>';
   }
 
   function renderSharedV4ActionsSummary(){

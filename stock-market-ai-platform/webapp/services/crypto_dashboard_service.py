@@ -7,6 +7,7 @@ places orders.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from functools import lru_cache
 import json
 from pathlib import Path
 
@@ -556,6 +557,28 @@ def _archived_shared_v3_performance():
     )
 
 
+@lru_cache(maxsize=2048)
+def _shared_v4_alt_constituents(decision_timestamp_utc: str) -> list[dict]:
+    """Reconstruct exact equal-weight ALT constituents for a realized V4 hour."""
+    try:
+        from ml.crypto_15m_v2.forward_service import _hourly_realized_detail
+        detail = _hourly_realized_detail(pd.Timestamp(decision_timestamp_utc))
+    except Exception:
+        return []
+    if not detail:
+        return []
+    rows = detail.get("alt_constituents") or []
+    return [
+        {
+            "product_id": str(item.get("product_id")),
+            "weight": float(item.get("weight", 0.0)),
+            "return_1h": float(item.get("return_1h", 0.0)),
+        }
+        for item in rows
+        if item.get("product_id")
+    ]
+
+
 def _shared_v2_forward_performance(now_utc=None):
     holdout = pd.Timestamp("2026-09-24T07:00:00Z")
     now = pd.Timestamp.now(tz="UTC") if now_utc is None else pd.Timestamp(now_utc)
@@ -678,6 +701,11 @@ def _shared_v2_forward_performance(now_utc=None):
             "net_selected_return_1h": float(row.net_selected_return_1h),
             "cost_bps_assumption": float(row.cost_bps_assumption),
             "transaction_cost": float(row.transaction_cost),
+            "held_assets": (
+                _shared_v4_alt_constituents(pd.Timestamp(row.decision_timestamp_utc).isoformat())
+                if str(row.executed_label_after).upper() == "ALT"
+                else []
+            ),
         })
         return_points.append({
             "timestamp": timestamp,

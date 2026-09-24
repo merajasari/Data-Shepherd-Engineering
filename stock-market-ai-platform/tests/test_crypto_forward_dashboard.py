@@ -26,6 +26,13 @@ class CryptoForwardDashboardTest(unittest.TestCase):
                 V2_JOURNAL_PATH=journal,
                 V2_ARCHIVED_JOURNAL_PATH=Path(directory) / "archived-v2.csv",
                 V3_ARCHIVED_JOURNAL_PATH=Path(directory) / "archived-v3.csv",
+            ), patch.object(
+                dashboard,
+                "_shared_v4_alt_constituents",
+                return_value=[
+                    {"product_id": "ETH-USD", "weight": 0.5, "return_1h": 0.03},
+                    {"product_id": "SOL-USD", "weight": 0.5, "return_1h": 0.01},
+                ],
             ):
                 payload = dashboard._shared_v2_forward_performance("2026-09-24T09:00:00Z")
             self.assertEqual(payload["name"], "Shared Crypto V2 Clean Forward V5")
@@ -57,6 +64,13 @@ class CryptoForwardDashboardTest(unittest.TestCase):
             self.assertAlmostEqual(point["prob_btc"], 0.2)
             self.assertAlmostEqual(point["prob_alt"], 0.6)
             self.assertAlmostEqual(point["prob_cash"], 0.2)
+            self.assertEqual(
+                point["held_assets"],
+                [
+                    {"product_id": "ETH-USD", "weight": 0.5, "return_1h": 0.03},
+                    {"product_id": "SOL-USD", "weight": 0.5, "return_1h": 0.01},
+                ],
+            )
             self.assertEqual(len(payload["probability_points"]), 1)
 
 

@@ -139,7 +139,10 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("Raw model signals", browser)
         self.assertIn("Best / worst completed hour", browser)
         self.assertIn("Hourly action history", browser)
-        self.assertIn("ALT remains an aggregate portfolio sleeve", browser)
+        self.assertIn("Exact paper holdings · ALT", browser)
+        self.assertIn("sharedV4HoldingsHtml", browser)
+        self.assertIn("held_assets", browser)
+        self.assertIn("equal-weight products used by the frozen hourly ALT-return rule", browser)
 
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")

@@ -391,7 +391,13 @@ def _read_journal() -> pd.DataFrame:
     return df
 
 
-def _hourly_realized(decision_ts: pd.Timestamp) -> tuple[float, float] | None:
+def _hourly_realized_detail(decision_ts: pd.Timestamp) -> dict | None:
+    """Return the exact products used by the frozen hourly ALT realization rule.
+
+    This is a read-only derivation from authoritative endpoint candles. It does
+    not change the frozen model, confirm-2 execution state, or forward journal
+    contract. Every included ALT has equal weight in the aggregate ALT sleeve.
+    """
     end_ts = decision_ts + pd.Timedelta(1, unit="h")
     latest = _latest_available_timestamp(BTC)
     if latest is None or latest < end_ts:
@@ -402,7 +408,7 @@ def _hourly_realized(decision_ts: pd.Timestamp) -> tuple[float, float] | None:
     if btc0.empty or btc1.empty:
         return None
     btc_r = float(btc1.iloc[-1] / btc0.iloc[-1] - 1.0)
-    returns = []
+    constituents = []
     for product_id in ALT_PRODUCTS:
         try:
             df = _read_recent(product_id, end_ts)
@@ -411,10 +417,28 @@ def _hourly_realized(decision_ts: pd.Timestamp) -> tuple[float, float] | None:
         p0 = df.loc[df["timestamp_utc"] == decision_ts, "close"]
         p1 = df.loc[df["timestamp_utc"] == end_ts, "close"]
         if not p0.empty and not p1.empty:
-            returns.append(float(p1.iloc[-1] / p0.iloc[-1] - 1.0))
-    if len(returns) < MIN_ALT_ASSETS:
+            constituents.append({
+                "product_id": product_id,
+                "return_1h": float(p1.iloc[-1] / p0.iloc[-1] - 1.0),
+            })
+    if len(constituents) < MIN_ALT_ASSETS:
         return None
-    return btc_r, float(np.mean(returns))
+    weight = 1.0 / len(constituents)
+    for item in constituents:
+        item["weight"] = weight
+    return {
+        "btc_return_1h": btc_r,
+        "alt_return_1h": float(np.mean([item["return_1h"] for item in constituents])),
+        "alt_constituents": constituents,
+        "realized_through_utc": end_ts.isoformat(),
+    }
+
+
+def _hourly_realized(decision_ts: pd.Timestamp) -> tuple[float, float] | None:
+    detail = _hourly_realized_detail(decision_ts)
+    if detail is None:
+        return None
+    return float(detail["btc_return_1h"]), float(detail["alt_return_1h"])
 
 
 def _finalize_pending_rows(state: dict) -> int:
