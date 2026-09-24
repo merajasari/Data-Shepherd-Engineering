@@ -194,7 +194,7 @@ def get_symbol_24h_intraday(symbol: str) -> dict:
 
 
 def get_today_top10_intraday(symbols: list[str]) -> dict:
-    """Return Top-10 rolling 24h series without network or log-scan latency."""
+    """Return the full requested rolling-24h universe, ranked by window return.\n\n    The legacy function/route name is retained for compatibility, but the Live\n    Stock Viewer must receive every eligible stock so its TODAY ranking and\n    Top 10/25/50/250 controls are derived from the complete universe.\n    """
     local_series, cache_updated_at, source = _read_small_cache()
     live_state = get_all_live_quotes()
     market_open = _regular_session_expected_open()
