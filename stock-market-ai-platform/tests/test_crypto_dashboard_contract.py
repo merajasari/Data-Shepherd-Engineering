@@ -120,6 +120,27 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("hourlySlots:true", browser)
         self.assertIn("1-HOUR SLOTS · PACIFIC TIME", browser)
 
+    def test_shared_v4_actions_summary_reuses_drilldown_evidence_and_defaults_to_24h(self):
+        template = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
+        browser = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
+        self.assertIn("Actions Summery", template)
+        self.assertIn('id="shared-v4-actions-summary"', template)
+        for hours in ("1", "2", "4", "6", "8", "12", "24", "168", "720", "8760"):
+            self.assertIn(f'data-shared-v4-range="{hours}"', template)
+        self.assertIn("sharedV4SummaryHours=24", browser)
+        self.assertIn("sharedV4DrilldownHtml(row)", browser)
+        self.assertIn("Period performance + modeled trading impact", browser)
+        self.assertIn("SLEEVE SWITCHES", browser)
+        self.assertIn("BUY EVENTS", browser)
+        self.assertIn("SELL EVENTS", browser)
+        self.assertIn("HELD / NO SWITCH", browser)
+        self.assertIn("Modeled transaction-cost impact", browser)
+        self.assertIn("Executed sleeve hours", browser)
+        self.assertIn("Raw model signals", browser)
+        self.assertIn("Best / worst completed hour", browser)
+        self.assertIn("Hourly action history", browser)
+        self.assertIn("ALT remains an aggregate portfolio sleeve", browser)
+
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")
         browser_source = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")

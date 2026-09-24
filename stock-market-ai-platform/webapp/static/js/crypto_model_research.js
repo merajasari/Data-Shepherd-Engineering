@@ -7,6 +7,7 @@
   const chartStamp=value=>{const d=new Date(value);return Number.isFinite(d.getTime())?d.toLocaleString(undefined,{timeZone:'America/Los_Angeles',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}):'—'};
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let marketQuotes={},marketFilter='all',marketSort='change',marketSearch='',marketTimer=null,marketInFlight=false,marketLastSuccess=null,marketFailures=0;
+  let sharedV4ChartRows=[],sharedV4SummaryHours=24;
 
   function sharedV4Activity(row){
     const before=String(row.executed_label_before||'CASH').toUpperCase();
@@ -121,6 +122,89 @@
     const modal=document.getElementById('shared-v4-drilldown');if(!modal)return;
     modal.addEventListener('click',event=>{if(event.target.closest('[data-shared-v4-close]'))closeSharedV4Drilldown()});
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!modal.hidden)closeSharedV4Drilldown()});
+  }
+
+
+  const sharedV4RangeLabel=hours=>({1:'last hour',2:'last 2 hours',4:'last 4 hours',6:'last 6 hours',8:'last 8 hours',12:'last 12 hours',24:'last 24 hours',168:'last week',720:'last month',8760:'last year'}[hours]||('last '+hours+' hours'));
+
+  function sharedV4SummaryHtml(hours){
+    const realized=(sharedV4ChartRows||[])
+      .filter(row=>row&&row.event_status!=='FORWARD_BOUNDARY'&&Number.isFinite(Date.parse(row.realized_through_utc||row.timestamp)))
+      .map(row=>({...row,_summaryT:Date.parse(row.realized_through_utc||row.timestamp)}))
+      .sort((a,b)=>a._summaryT-b._summaryT);
+    if(!realized.length)return '<div class="actions-summary-empty">No realized Shared V4 paper hours are available yet. The summary will populate from the clean-forward journal as realizations complete.</div>';
+    const latestT=realized[realized.length-1]._summaryT;
+    const cutoff=latestT-hours*3600e3;
+    const rows=realized.filter(row=>row._summaryT>cutoff&&row._summaryT<=latestT);
+    if(!rows.length)return '<div class="actions-summary-empty">No realized paper activity falls inside this range.</div>';
+    const first=rows[0],last=rows[rows.length-1],activities=rows.map(sharedV4Activity);
+    const switches=rows.filter(row=>Boolean(row.sleeve_switch)).length;
+    const buys=activities.filter(item=>item.bought!=='None').length;
+    const sells=activities.filter(item=>item.sold!=='None').length;
+    const holds=rows.length-switches;
+    const compound=key=>rows.reduce((equity,row)=>{const value=Number(row[key]);return Number.isFinite(value)?equity*(1+value):equity},1)-1;
+    const periodReturn=compound('net_selected_return_1h'),btcPeriodReturn=compound('btc_realized_return_1h');
+    const firstNet=Number(first.net_selected_return_1h),firstBtc=Number(first.btc_realized_return_1h);
+    const startEquity=Number.isFinite(+first.candidate)&&Number.isFinite(firstNet)&&Math.abs(1+firstNet)>1e-9?(+first.candidate)/(1+firstNet):+first.candidate;
+    const startBtc=Number.isFinite(+first.benchmark)&&Number.isFinite(firstBtc)&&Math.abs(1+firstBtc)>1e-9?(+first.benchmark)/(1+firstBtc):+first.benchmark;
+    const endEquity=+last.candidate,endBtc=+last.benchmark;
+    const periodPnl=Number.isFinite(startEquity)&&Number.isFinite(endEquity)?endEquity-startEquity:NaN;
+    const btcPnl=Number.isFinite(startBtc)&&Number.isFinite(endBtc)?endBtc-startBtc:NaN;
+    const modeledCostDollars=rows.reduce((sum,row)=>{const eq=Number(row.candidate),net=Number(row.net_selected_return_1h),cost=Math.abs(Number(row.transaction_cost)||0);if(!Number.isFinite(eq)||!Number.isFinite(net)||Math.abs(1+net)<1e-9)return sum;return sum+(eq/(1+net))*cost},0);
+    const validReturns=rows.filter(row=>Number.isFinite(+row.net_selected_return_1h));
+    const best=validReturns.length?validReturns.reduce((a,b)=>+b.net_selected_return_1h>+a.net_selected_return_1h?b:a):null;
+    const worst=validReturns.length?validReturns.reduce((a,b)=>+b.net_selected_return_1h<+a.net_selected_return_1h?b:a):null;
+    const counts=key=>rows.reduce((acc,row)=>{const value=String(row[key]||'—').toUpperCase();acc[value]=(acc[value]||0)+1;return acc},{});
+    const sleeveCounts=counts('executed_label_after'),signalCounts=counts('raw_predicted_label');
+    const latestActivity=sharedV4Activity(last);
+    const chips=object=>Object.entries(object).sort((a,b)=>b[1]-a[1]).map(([label,count])=>'<span class="chip">'+esc(label)+' · '+count+'h</span>').join('');
+    const hourly=[...rows].reverse().map(row=>{
+      const activity=sharedV4Activity(row),net=+row.net_selected_return_1h;
+      return '<details class="actions-summary-hour"><summary><div><strong>'+esc(chartStamp(row.realized_through_utc||row.timestamp))+'</strong><span>Decision '+esc(chartStamp(row.decision_timestamp_utc))+'</span></div><div><strong>'+esc(activity.action)+'</strong><span>Signal '+esc(activity.raw)+' · executed '+esc(activity.after)+'</span></div><div><strong class="'+(net<0?'negative':'positive')+'">'+signedPct(net)+'</strong><span>Net hourly result</span></div><div><strong>'+money2(row.candidate)+'</strong><span>Paper equity</span></div></summary><div class="actions-summary-hour-body">'+sharedV4DrilldownHtml(row)+'</div></details>';
+    }).join('');
+    return '<div class="notice"><strong>Range:</strong> '+esc(sharedV4RangeLabel(hours))+' ending at the latest completed realization, '+esc(chartStamp(last.realized_through_utc||last.timestamp))+'. '+rows.length+' realized hour'+(rows.length===1?'':'s')+' available in this window. Real orders remain OFF.</div>'+
+      '<div class="actions-summary-kpis">'+
+        '<div class="metric"><span>REALIZED HOURS</span><strong>'+rows.length+'</strong></div>'+
+        '<div class="metric"><span>SLEEVE SWITCHES</span><strong>'+switches+'</strong></div>'+
+        '<div class="metric"><span>BUY EVENTS</span><strong>'+buys+'</strong></div>'+
+        '<div class="metric"><span>SELL EVENTS</span><strong>'+sells+'</strong></div>'+
+        '<div class="metric"><span>HELD / NO SWITCH</span><strong>'+holds+'</strong></div>'+
+        '<div class="metric"><span>CURRENT SLEEVE</span><strong>'+esc(latestActivity.held)+'</strong></div>'+
+      '</div>'+
+      '<div class="actions-summary-section"><h3>Period performance + modeled trading impact</h3><div class="chart-drilldown-grid">'+
+        '<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Shared V4 period return</span><b class="'+(periodReturn<0?'negative':'positive')+'">'+signedPct(periodReturn)+'</b></div><div class="chart-drilldown-row"><span>Shared V4 paper P/L</span><b class="'+(periodPnl<0?'negative':'positive')+'">'+signedMoney2(periodPnl)+'</b></div><div class="chart-drilldown-row"><span>Ending paper equity</span><b>'+money2(endEquity)+'</b></div><div class="chart-drilldown-row"><span>Modeled transaction-cost impact</span><b>'+signedMoney2(-modeledCostDollars)+'</b></div></div>'+
+        '<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Always-BTC period return</span><b class="'+(btcPeriodReturn<0?'negative':'positive')+'">'+signedPct(btcPeriodReturn)+'</b></div><div class="chart-drilldown-row"><span>Always-BTC paper P/L</span><b class="'+(btcPnl<0?'negative':'positive')+'">'+signedMoney2(btcPnl)+'</b></div><div class="chart-drilldown-row"><span>Period return edge vs BTC</span><b class="'+(periodReturn-btcPeriodReturn<0?'negative':'positive')+'">'+pctPoints(periodReturn-btcPeriodReturn)+'</b></div><div class="chart-drilldown-row"><span>Latest confirm-2 state</span><b>'+esc(latestActivity.confirmState)+'</b></div></div>'+
+      '</div></div>'+
+      '<div class="actions-summary-section"><h3>Sleeve + signal mix</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><h3>Executed sleeve hours</h3><div class="actions-summary-chips">'+chips(sleeveCounts)+'</div></div><div class="chart-drilldown-group"><h3>Raw model signals</h3><div class="actions-summary-chips">'+chips(signalCounts)+'</div></div></div></div>'+
+      '<div class="actions-summary-section"><h3>Best / worst completed hour</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Best hour</span><b class="positive">'+(best?signedPct(best.net_selected_return_1h):'—')+'</b></div><div class="chart-drilldown-row"><span>Realized through</span><b>'+(best?esc(chartStamp(best.realized_through_utc||best.timestamp)):'—')+'</b></div></div><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Worst hour</span><b class="'+(worst&&+worst.net_selected_return_1h<0?'negative':'positive')+'">'+(worst?signedPct(worst.net_selected_return_1h):'—')+'</b></div><div class="chart-drilldown-row"><span>Realized through</span><b>'+(worst?esc(chartStamp(worst.realized_through_utc||worst.timestamp)):'—')+'</b></div></div></div></div>'+
+      '<div class="actions-summary-section"><h3>Hourly action history</h3><p class="muted">Newest first. Expand any hour to see the exact same equity, buy/sell/hold action, confirm-2 state, decision/execution fields, returns, costs, drawdowns, BTC comparison, and BTC / ALT / CASH probabilities available in the chart drill-in.</p>'+hourly+'</div>'+
+      '<div class="chart-drilldown-foot">ALT remains an aggregate portfolio sleeve in this journal. This view does not invent individual altcoin fills or weights that were not recorded by Shared V4.</div>';
+  }
+
+  function renderSharedV4ActionsSummary(){
+    const modal=document.getElementById('shared-v4-actions-summary');if(!modal)return;
+    const content=modal.querySelector('[data-shared-v4-summary-content]');
+    if(content)content.innerHTML=sharedV4SummaryHtml(sharedV4SummaryHours);
+    modal.querySelectorAll('[data-shared-v4-range]').forEach(button=>{const active=Number(button.dataset.sharedV4Range)===sharedV4SummaryHours;button.classList.toggle('active',active);button.setAttribute('aria-pressed',active?'true':'false')});
+  }
+
+  function openSharedV4ActionsSummary(){
+    const modal=document.getElementById('shared-v4-actions-summary');if(!modal)return;
+    sharedV4SummaryHours=24;renderSharedV4ActionsSummary();
+    modal.hidden=false;modal.setAttribute('aria-hidden','false');document.body.classList.add('chart-drilldown-open');
+    window.requestAnimationFrame(()=>modal.querySelector('[data-shared-v4-range="24"]')?.focus());
+  }
+
+  function closeSharedV4ActionsSummary(){
+    const modal=document.getElementById('shared-v4-actions-summary');if(!modal||modal.hidden)return;
+    modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('chart-drilldown-open');
+  }
+
+  function setupSharedV4ActionsSummary(){
+    const modal=document.getElementById('shared-v4-actions-summary'),open=document.querySelector('[data-shared-v4-summary-open]');if(!modal||!open)return;
+    open.addEventListener('click',openSharedV4ActionsSummary);
+    modal.addEventListener('click',event=>{const range=event.target.closest('[data-shared-v4-range]');if(range){sharedV4SummaryHours=Number(range.dataset.sharedV4Range)||24;renderSharedV4ActionsSummary();return}if(event.target.closest('[data-shared-v4-summary-close]'))closeSharedV4ActionsSummary()});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!modal.hidden)closeSharedV4ActionsSummary()});
   }
 
   function setupTabs(){const tabs=[...document.querySelectorAll('[data-crypto-tab]')],panels=[...document.querySelectorAll('[data-crypto-panel]')];const show=id=>{tabs.forEach(t=>{const on=t.dataset.cryptoTab===id;t.classList.toggle('active',on);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1});panels.forEach(p=>p.hidden=p.dataset.cryptoPanel!==id);history.replaceState(null,'',id==='overview'?location.pathname:`#${id}`)};tabs.forEach((t,i)=>{t.onclick=()=>show(t.dataset.cryptoTab);t.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[n].focus();show(tabs[n].dataset.cryptoTab)}});const initial=location.hash.slice(1);show(tabs.some(t=>t.dataset.cryptoTab===initial)?initial:'overview')}
@@ -250,7 +334,8 @@
   function renderForwardCharts(){
     const source=document.getElementById('crypto-forward-chart-data');if(!source)return;let data;try{data=JSON.parse(source.textContent)}catch{return}
     const shared=data.shared_v2||{},v5=data.v5||{};
-    forwardLineChart('shared-v2-equity',shared.chart_points,[{key:'candidate',label:'Shared V4',color:'#39e3a1'},{key:'benchmark',label:'Always BTC',color:'#4d8cff'}],{currency:true,interactive:true,hourlySlots:true,drilldown:true});
+    sharedV4ChartRows=Array.isArray(shared.chart_points)?shared.chart_points:[];
+    forwardLineChart('shared-v2-equity',sharedV4ChartRows,[{key:'candidate',label:'Shared V4',color:'#39e3a1'},{key:'benchmark',label:'Always BTC',color:'#4d8cff'}],{currency:true,interactive:true,hourlySlots:true,drilldown:true});
     forwardLineChart('shared-v2-drawdown',shared.chart_points,[{key:'candidate_drawdown',label:'Shared V4',color:'#39e3a1'},{key:'benchmark_drawdown',label:'Always BTC',color:'#4d8cff'}],{percent:true,height:260});
     forwardBarChart('shared-v2-returns',shared.return_points,[{key:'net_return',label:'Selected sleeve',color:'#39e3a1'},{key:'btc_return',label:'BTC',color:'#4d8cff'}]);
     forwardLineChart('shared-v2-probabilities',shared.probability_points,[{key:'btc',label:'BTC probability',color:'#4d8cff'},{key:'alt',label:'ALT probability',color:'#39e3a1'},{key:'cash',label:'CASH probability',color:'#efc56b'}],{percent:true,height:360});
@@ -322,5 +407,5 @@
     update();window.setInterval(update,30000);
   }
 
-  setupTabs();setupSharedV4Drilldown();renderForwardCharts();initMarketBoard();initPaperCountdowns();
+  setupTabs();setupSharedV4Drilldown();renderForwardCharts();setupSharedV4ActionsSummary();initMarketBoard();initPaperCountdowns();
 })();
