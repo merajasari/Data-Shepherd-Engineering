@@ -14,6 +14,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from ml.stock_eagle_250_v2 import DISPLAY_NAME, MODEL_ID, RESEARCH_VERSION
 from ml.stock_eagle_250_v2.phase1 import (
@@ -77,17 +79,39 @@ def _utc(value) -> pd.Timestamp:
     return timestamp.tz_convert("UTC")
 
 
+def _pre_guard_parquet_cutoff(path: Path):
+    """Return a predicate cutoff matching the physical Parquet timestamp type."""
+    schema = pq.read_schema(path)
+    if "timestamp_utc" not in schema.names:
+        raise RuntimeError("SPY feature Parquet is missing timestamp_utc")
+    field_type = schema.field("timestamp_utc").type
+    if pa.types.is_timestamp(field_type):
+        return GUARD_BAND_START_UTC.to_pydatetime()
+    if pa.types.is_date32(field_type) or pa.types.is_date64(field_type):
+        return GUARD_BAND_START_UTC.date()
+    if pa.types.is_string(field_type) or pa.types.is_large_string(field_type):
+        # The stock feature store currently persists timestamp_utc as an ISO
+        # string on some machines. Comparing to the YYYY-MM-DD boundary keeps
+        # predicate pushdown intact and excludes the entire guard-band date.
+        return GUARD_BAND_START_UTC.strftime("%Y-%m-%d")
+    raise RuntimeError(
+        "Unsupported SPY timestamp_utc Parquet type; refusing to read "
+        f"without a safe pre-guard predicate: {field_type}"
+    )
+
+
 def load_pre_guard_spy_returns(
     path: Path = SPY_FEATURE_PATH,
 ) -> pd.DataFrame:
-    """Read only pre-guard SPY rows using a Parquet predicate."""
+    """Read only pre-guard SPY rows using a type-correct Parquet predicate."""
+    cutoff = _pre_guard_parquet_cutoff(path)
     frame = pd.read_parquet(
         path,
         columns=["timestamp_utc", "daily_return"],
         filters=[(
             "timestamp_utc",
             "<",
-            GUARD_BAND_START_UTC.to_pydatetime(),
+            cutoff,
         )],
     ).rename(columns={"daily_return": "spy_return_1d"})
     frame["timestamp_utc"] = pd.to_datetime(frame["timestamp_utc"], utc=True)
