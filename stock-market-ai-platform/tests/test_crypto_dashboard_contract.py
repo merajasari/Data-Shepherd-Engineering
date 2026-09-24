@@ -14,6 +14,16 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("OVERVIEW", template)
         self.assertIn("CRYPTO V5 V2", template)
         self.assertIn("September 23, 2026 at 12:00 a.m. Pacific", template)
+        self.assertIn("First eligible decision candle", template)
+        self.assertIn("September 24, 2026 at 00:00 UTC", template)
+        self.assertIn("Earliest completed-candle availability", template)
+        self.assertIn("September 25 at 00:00 UTC", template)
+        self.assertIn("AWAITING FIRST DECISION", template)
+        self.assertIn(
+            "Initial paper-account state: 100% CASH. This is initialization only "
+            "and is not a model decision.",
+            template,
+        )
         self.assertIn("missed V1 lane remains archived", template)
         self.assertIn("SHARED CRYPTO V4", template)
         self.assertIn("Preserved V3 result", template)
