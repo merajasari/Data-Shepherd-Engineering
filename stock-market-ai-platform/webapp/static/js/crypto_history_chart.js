@@ -35,8 +35,14 @@
   };
   function svgEl(tag, attrs={}) { const n=document.createElementNS('http://www.w3.org/2000/svg',tag); Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v))); return n; }
 
+  function rangeLabel() {
+    return range==='14D' ? '2W' : range;
+  }
+
   function rangeStart(endMs) {
     const day = 86400000;
+    if(range==='24H') return endMs-day;
+    if(range==='14D') return endMs-14*day;
     if(range==='30D') return endMs-30*day;
     if(range==='90D') return endMs-90*day;
     if(range==='1Y') return endMs-365*day;
@@ -199,9 +205,9 @@
     const btc=metrics.find(row=>row.symbol==='BTC-USD');
     const set=(id,text,cls='')=>{const node=document.getElementById(id);if(node){node.textContent=text;node.className=cls;}};
     set('history-period-leader',`${leader.symbol.replace('-USD','')} ${pct(leader.returnPct)}`,'positive');
-    set('history-period-leader-detail',`${assetNames[leader.symbol]} · ${range} available window`);
+    set('history-period-leader-detail',`${assetNames[leader.symbol]} · ${rangeLabel()} available window`);
     set('history-period-laggard',`${laggard.symbol.replace('-USD','')} ${pct(laggard.returnPct)}`,laggard.returnPct>=0?'positive':'negative');
-    set('history-period-laggard-detail',`${assetNames[laggard.symbol]} · ${range} available window`);
+    set('history-period-laggard-detail',`${assetNames[laggard.symbol]} · ${rangeLabel()} available window`);
     set('history-lowest-drawdown',`${lowestDrawdown.symbol.replace('-USD','')} ${lowestDrawdown.maxDrawdownPct.toFixed(2)}%`,lowestDrawdown.maxDrawdownPct>=-10?'positive':'');
     set('history-lowest-drawdown-detail',`${lowestDrawdown.volatilityPct.toFixed(1)}% annualized daily volatility`);
     set('history-btc-period-return',btc?pct(btc.returnPct):'—',btc?.returnPct>=0?'positive':'negative');
@@ -224,7 +230,7 @@
       return `<tr data-history-symbol="${esc(row.symbol)}"><td><div class="history-asset-cell"><i style="background:${color}"></i><div><strong>${esc(row.symbol.replace('-USD',''))}</strong><small>${esc(assetNames[row.symbol]||'')}</small></div></div></td><td class="${row.returnPct>=0?'positive':'negative'}"><strong>${pct(row.returnPct)}</strong></td><td class="${relative>=0?'positive':'negative'}">${pct(relative)}</td><td>${row.maxDrawdownPct.toFixed(2)}%<span class="history-risk-bar"><i style="width:${Math.abs(row.maxDrawdownPct)/maxRisk*100}%"></i></span></td><td>${row.volatilityPct.toFixed(1)}%</td><td>${coverage}</td><td>${money(row.last)}</td></tr>`;
     }).join('')||'<tr><td colspan="7">No comparable history in this range.</td></tr>';
     root.querySelectorAll('[data-history-symbol]').forEach(row=>row.addEventListener('click',()=>focusOnly(row.dataset.historySymbol)));
-    const note=document.getElementById('history-ranking-note');if(note)note.textContent=`${range} · ${metrics.length} assets · daily-close volatility annualized over 365 days`;
+    const note=document.getElementById('history-ranking-note');if(note)note.textContent=`${rangeLabel()} · ${metrics.length} assets · daily-close volatility annualized over 365 days`;
     const toggle=document.getElementById('history-ranking-toggle');if(toggle){toggle.textContent=rankingExpanded?'SHOW TOP 10':`SHOW ALL ${metrics.length}`;toggle.hidden=metrics.length<=10;}
     document.querySelectorAll('[data-history-sort]').forEach(button=>button.classList.toggle('active',button.dataset.historySort===rankingSort));
   }
@@ -233,7 +239,7 @@
     const start=Date.parse(historical?.archive_global_start_utc||'');
     const end=Date.parse(historical?.archive_global_end_utc||'');
     const availableDays=Number.isFinite(start)&&Number.isFinite(end)?Math.max(0,(end-start)/86400000):0;
-    const required={'30D':30,'90D':90,'1Y':365,'3Y':1095,'5Y':1825};
+    const required={'24H':1,'14D':14,'30D':30,'90D':90,'1Y':365,'3Y':1095,'5Y':1825};
     document.querySelectorAll('[data-history-range]').forEach(button=>{
       const need=required[button.dataset.historyRange];
       const unavailable=Number.isFinite(need)&&availableDays+2<need;
