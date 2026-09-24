@@ -650,6 +650,24 @@ def _shared_v2_forward_performance(now_utc=None):
             "raw_predicted_label": str(row.raw_predicted_label),
             "executed_label_before": str(row.executed_label_before),
             "executed_label_after": str(row.executed_label_after),
+            "pending_candidate_label": (
+                None
+                if pd.isna(getattr(row, "pending_candidate_label", None))
+                else str(getattr(row, "pending_candidate_label"))
+            ),
+            "pending_candidate_count": int(
+                pd.to_numeric(
+                    getattr(row, "pending_candidate_count", 0),
+                    errors="coerce",
+                )
+                if pd.notna(
+                    pd.to_numeric(
+                        getattr(row, "pending_candidate_count", 0),
+                        errors="coerce",
+                    )
+                )
+                else 0
+            ),
             "sleeve_switch": bool(row.sleeve_switch),
             "prob_btc": float(row.prob_btc),
             "prob_alt": float(row.prob_alt),
