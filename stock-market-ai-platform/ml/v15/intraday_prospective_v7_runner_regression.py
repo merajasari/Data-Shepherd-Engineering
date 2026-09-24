@@ -241,6 +241,31 @@ def _assert_scheduler_boundaries() -> None:
         assert missed["status"] == "MISSED_DECISION_NO_BACKFILL"
         assert missed["collector_invoked"] is False
         assert missed["missed_decision_sessions"] == ["2026-09-21"]
+        assert missed["current_run_health"] is False
+        assert missed["operational_failures"] == [
+            "current_session_missed_decision_no_backfill"
+        ]
+        assert missed["historical_operational_gaps"] == [
+            "missed_decision_sessions:2026-09-21"
+        ]
+
+        recovered = run_scheduled(
+            now_utc=datetime(2026, 9, 22, 13, 30, tzinfo=timezone.utc),
+            status_path=root / "missed_status.json",
+            journal_path=root / "missed_journal.jsonl",
+            snapshot_path=root / "missed_snapshot.json",
+            model_path=root / "model.json",
+            model_ready_fn=ready,
+            collector_fn=collector,
+            runner_fn=runner,
+        )
+        assert recovered["status"] == "WAITING_FOR_DECISION_CHECKPOINT"
+        assert recovered["current_run_health"] is True
+        assert recovered["operational_failures"] == []
+        assert recovered["missed_decision_sessions"] == ["2026-09-21"]
+        assert recovered["historical_operational_gaps"] == [
+            "missed_decision_sessions:2026-09-21"
+        ]
 
 
 def _assert_source_isolation() -> None:
