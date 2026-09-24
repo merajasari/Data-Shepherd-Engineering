@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import pickle
 from pathlib import Path
 
 import numpy as np
@@ -68,14 +69,14 @@ META_FEATURES = (
 
 
 def _snapshot_sha(model, feature_columns: list[str], training_cutoff: pd.Timestamp) -> str:
+    """Hash the actual fitted estimator plus its feature/cutoff binding."""
     payload = {
-        "class": type(model).__name__,
-        "params": model.get_params(),
-        "features": feature_columns,
+        "model": model,
+        "features": tuple(feature_columns),
         "training_cutoff_utc": pd.Timestamp(training_cutoff).isoformat(),
     }
     return hashlib.sha256(
-        json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        pickle.dumps(payload, protocol=5)
     ).hexdigest()
 
 
