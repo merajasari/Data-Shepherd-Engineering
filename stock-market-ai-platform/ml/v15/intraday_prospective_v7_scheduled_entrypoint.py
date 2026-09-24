@@ -289,11 +289,22 @@ def run_scheduled(
         "completed_exits": sum(row["event_type"] == "EXIT" for row in rows_after),
         "journal_events": len(rows_after),
     }
-    operational_failures = [
+    historical_operational_gaps = [
         f"missed_{name}_sessions:{','.join(values)}"
         for name, values in missed.items()
         if values
     ]
+    # Historical no-backfill gaps remain permanent evidence, but they must not
+    # make every later scheduler check unhealthy forever.  Current run health
+    # reflects the current session/stage only; the historical gaps are exposed
+    # separately for audit and human review.
+    current_operational_failures: list[str] = []
+    if not model_ready:
+        current_operational_failures.append("prepared_model_not_verified")
+    if stage.startswith("MISSED_"):
+        current_operational_failures.append(
+            f"current_session_{stage.lower()}"
+        )
     payload: dict[str, object] = {
         "checked_at_utc": now.isoformat(),
         "status": status,
@@ -310,8 +321,9 @@ def run_scheduled(
         "missed_decision_sessions": missed["decision"],
         "missed_entry_sessions": missed["entry"],
         "missed_exit_sessions": missed["exit"],
-        "current_run_health": not operational_failures,
-        "operational_failures": operational_failures,
+        "current_run_health": not current_operational_failures,
+        "operational_failures": current_operational_failures,
+        "historical_operational_gaps": historical_operational_gaps,
         **summary,
         "paper_shadow_only": True,
         "automatic_promotion": False,
