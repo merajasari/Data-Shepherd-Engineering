@@ -44,7 +44,7 @@
     if(card&&!card.querySelector('.tlrank-selection-help')){
       const help=document.createElement('div');
       help.className='tlrank-selection-help';
-      help.textContent='Click a stock to isolate it. Click additional stocks to compare multiple selections. Click selected stocks again to remove them; when none are selected, all Top 10 lines are shown.';
+      help.textContent='Click a stock to isolate it. Click additional stocks to compare multiple selections. Click selected stocks again to remove them; when none are selected, the current DISPLAY group is shown.';
       card.appendChild(help);
     }
   }
