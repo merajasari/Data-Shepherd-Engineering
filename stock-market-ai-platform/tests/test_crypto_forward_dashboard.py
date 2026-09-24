@@ -43,6 +43,8 @@ class CryptoForwardDashboardTest(unittest.TestCase):
             self.assertEqual(point["raw_predicted_label"], "ALT")
             self.assertEqual(point["executed_label_before"], "CASH")
             self.assertEqual(point["executed_label_after"], "ALT")
+            self.assertIsNone(point["pending_candidate_label"])
+            self.assertEqual(point["pending_candidate_count"], 0)
             self.assertTrue(point["sleeve_switch"])
             self.assertAlmostEqual(point["candidate"], 101_949.0)
             self.assertAlmostEqual(point["benchmark"], 101_000.0)
