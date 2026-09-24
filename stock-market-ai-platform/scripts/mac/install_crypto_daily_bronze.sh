@@ -35,16 +35,16 @@ cat > "$PLIST" <<EOF
     <string>$PROJECT</string>
 
     <!--
-      Run once daily at 18:00 local time.
-      In Pacific time this is always after UTC midnight,
-      so the previous UTC daily candle is complete.
+      Run once daily at 17:05 local time.
+      This local schedule runs after UTC midnight in Pacific time.
+      UTC execution time shifts with daylight-saving time.
     -->
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>18</integer>
+        <integer>17</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>5</integer>
     </dict>
 
     <key>ProcessType</key>
@@ -76,7 +76,7 @@ fi
 
 echo
 echo "Installed: $LABEL"
-echo "Schedule: daily at 18:00 local time"
+echo "Schedule: daily at 17:05 local time"
 echo "Refresh script: $SCRIPT"
 echo "stdout: $LOGDIR/crypto_daily_bronze.out.log"
 echo "stderr: $LOGDIR/crypto_daily_bronze.err.log"
