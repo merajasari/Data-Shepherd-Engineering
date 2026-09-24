@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from webapp.services.live_market_service import load_live_cache
 
 
-LABEL = "com.datashepherd.stockiex"
+LABEL = "com.datashepherd.iexstream"
 MARKET_TZ = ZoneInfo("America/New_York")
 FRESH_SECONDS = 90.0
 CACHE_PATH = Path("data/live/latest_quotes.json")
