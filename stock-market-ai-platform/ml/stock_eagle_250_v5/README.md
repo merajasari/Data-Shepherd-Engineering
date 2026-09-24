@@ -89,3 +89,32 @@ python -m json.tool data/model/stock_eagle_250_v5/phase1/manifest.json
 ```
 
 Phase 2 may be implemented only after this preregistration exists.
+
+
+## Phase 2 final development evaluation
+
+Phase 2 applies the preregistered self-drawdown throttle to the exact saved V1
+Ridge out-of-sample portfolio periods. Before scoring V5 it revalidates the
+Phase 1 contract hash, evidence boundaries, V1 portfolio costs, fold identities,
+and the causal shadow-risk state.
+
+The full-exposure V1 result is reproduced independently inside each fold before
+V5 is compared against V1 Ridge, SPY, and equal weight. V5 is evaluated at the
+fixed 10-bps-per-side primary cost and 20-bps-per-side stress cost.
+
+Outputs include the causal shadow risk-state series, V5 period results, fold
+metrics, drawdown-band diagnostics, year diagnostics, gate results, and the
+qualification record.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_v5_phase2 -v
+python -m ml.stock_eagle_250_v5.phase2
+python -m json.tool data/model/stock_eagle_250_v5/phase2/qualification.json
+```
+
+Passing all eleven gates can only qualify V5 for human review. It does not
+freeze V5 or enable paper/live trading. If any gate fails,
+`development_iteration_must_stop` is true, enforcing the preregistered rule
+that another tuned generation must not be created on this development sample.
+September 23 through September 30 remains sealed and October 1 remains
+untouched.
