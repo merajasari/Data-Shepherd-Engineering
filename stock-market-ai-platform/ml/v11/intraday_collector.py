@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -38,6 +39,7 @@ DEFAULT_OUTPUT = ROOT / "data/research/v11/intraday/latest_complete_snapshot.jso
 SOURCE = "tiingo_iex_historical_5min"
 COLUMNS = "open,high,low,close,volume"
 NEW_YORK = ZoneInfo("America/New_York")
+MAX_FETCH_WORKERS = 12
 
 
 @dataclass(frozen=True)
@@ -203,12 +205,29 @@ def collect_complete_snapshot(
     fetched_latest_timestamps: set[str] = set()
     fetched_bar_counts: set[int] = set()
     trimmed_incomplete_bars = 0
+    # Fetch concurrently so the 101-symbol cross section observes nearly the
+    # same Tiingo publication instant. Validation remains deterministic,
+    # all-or-nothing, and uses the scheduler's fixed observation timestamp.
+    fetched_by_symbol: dict[str, list[dict[str, object]]] = {}
+    fetch_failures: set[str] = set()
+    worker_count = max(1, min(MAX_FETCH_WORKERS, len(universe)))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_to_symbol = {
+            executor.submit(client.get_five_minute_bars, symbol, session_date): symbol
+            for symbol in universe
+        }
+        for future in as_completed(future_to_symbol):
+            symbol = future_to_symbol[future]
+            try:
+                fetched_by_symbol[symbol] = future.result()
+            except Exception:
+                fetch_failures.add(symbol)
+
     for symbol in universe:
-        try:
-            fetched_rows = client.get_five_minute_bars(symbol, session_date)
-        except Exception:
+        if symbol in fetch_failures:
             reasons.append(f"FETCH_FAILED:{symbol}")
             continue
+        fetched_rows = fetched_by_symbol.get(symbol, [])
         rows, trimmed = _completed_bar_prefix(
             fetched_rows,
             now_utc=now_utc,
