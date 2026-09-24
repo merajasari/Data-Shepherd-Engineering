@@ -9,19 +9,36 @@
 
   function setupTabs(){const tabs=[...document.querySelectorAll('[data-crypto-tab]')],panels=[...document.querySelectorAll('[data-crypto-panel]')];const show=id=>{tabs.forEach(t=>{const on=t.dataset.cryptoTab===id;t.classList.toggle('active',on);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1});panels.forEach(p=>p.hidden=p.dataset.cryptoPanel!==id);history.replaceState(null,'',id==='overview'?location.pathname:`#${id}`)};tabs.forEach((t,i)=>{t.onclick=()=>show(t.dataset.cryptoTab);t.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[n].focus();show(tabs[n].dataset.cryptoTab)}});const initial=location.hash.slice(1);show(tabs.some(t=>t.dataset.cryptoTab===initial)?initial:'overview')}
 
-  function forwardLineChart(id,rows,definitions,{percent=false,currency=false,height=430,interactive=false}={}){
+  function forwardLineChart(id,rows,definitions,{percent=false,currency=false,height=430,interactive=false,hourlySlots=false}={}){
     const svg=document.getElementById(id);if(!svg)return;svg.innerHTML='';
     const data=(rows||[]).map(row=>({...row,_t:Date.parse(row.timestamp)})).filter(row=>Number.isFinite(row._t));
     const defs=definitions.filter(def=>data.some(row=>Number.isFinite(+row[def.key])));
     if(data.length<2||!defs.length){svg.innerHTML='<text x="50%" y="50%" fill="#91a6c2" text-anchor="middle">Forward observations will appear here as they complete</text>';return}
-    const W=1100,H=height,pad={l:88,r:40,t:38,b:48},times=data.map(row=>row._t),minT=Math.min(...times),maxT=Math.max(...times);
+    const W=1100,H=height,pad={l:88,r:40,t:38,b:hourlySlots?72:48},times=data.map(row=>row._t),minT=Math.min(...times),maxT=Math.max(...times);
     const values=data.flatMap(row=>defs.map(def=>+row[def.key])).filter(Number.isFinite);let minV=Math.min(...values),maxV=Math.max(...values);
     if(percent){minV=Math.min(minV,0);maxV=Math.max(maxV,0)}else{const span=Math.max(1,maxV-minV);minV-=span*.12;maxV+=span*.12}
     const ns='http://www.w3.org/2000/svg',add=(tag,attrs,parent=svg)=>{const el=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([key,value])=>el.setAttribute(key,value));parent.appendChild(el);return el};
     const x=time=>pad.l+(W-pad.l-pad.r)*(time-minT)/Math.max(1,maxT-minT),y=value=>pad.t+(H-pad.t-pad.b)*(1-(value-minV)/Math.max(1e-9,maxV-minV));
     for(let i=0;i<5;i++){const value=minV+(maxV-minV)*i/4;add('line',{x1:pad.l,x2:W-pad.r,y1:y(value),y2:y(value),stroke:'rgba(145,166,194,.15)'});const label=add('text',{x:pad.l-10,y:y(value)+4,fill:'#91a6c2','text-anchor':'end','font-size':12});label.textContent=currency?money(value):percent?`${(value*100).toFixed(1)}%`:value.toFixed(2)}
     const shortWindow=maxT-minT<=3*864e5;
-    for(let i=0;i<5;i++){const time=minT+(maxT-minT)*i/4;const label=add('text',{x:x(time),y:H-16,fill:'#91a6c2','text-anchor':i===0?'start':i===4?'end':'middle','font-size':12});label.textContent=new Date(time).toLocaleString(undefined,shortWindow?{timeZone:'America/Los_Angeles',month:'short',day:'numeric',hour:'numeric'}:{timeZone:'America/Los_Angeles',month:'short',day:'numeric'})}
+    if(hourlySlots&&maxT-minT<=36*3600e3){
+      const firstHour=Math.ceil(minT/3600e3)*3600e3;
+      const hourCount=Math.max(1,Math.floor((maxT-firstHour)/3600e3)+1);
+      const labelEvery=hourCount>18?2:1;
+      for(let time=firstHour,index=0;time<=maxT;time+=3600e3,index++){
+        const xx=x(time);
+        add('line',{x1:xx,x2:xx,y1:pad.t,y2:H-pad.b,stroke:'rgba(145,166,194,.08)','stroke-width':1});
+        add('line',{x1:xx,x2:xx,y1:H-pad.b,y2:H-pad.b+6,stroke:'rgba(145,166,194,.45)','stroke-width':1});
+        if(index%labelEvery===0){
+          const label=add('text',{x:xx,y:H-29,fill:'#91a6c2','text-anchor':'middle','font-size':10.5});
+          label.textContent=new Date(time).toLocaleTimeString(undefined,{timeZone:'America/Los_Angeles',hour:'numeric'});
+        }
+      }
+      const axisTitle=add('text',{x:(pad.l+W-pad.r)/2,y:H-8,fill:'#91a6c2','text-anchor':'middle','font-size':10.5,'font-weight':800,'letter-spacing':'.08em'});
+      axisTitle.textContent='1-HOUR SLOTS · PACIFIC TIME';
+    }else{
+      for(let i=0;i<5;i++){const time=minT+(maxT-minT)*i/4;const label=add('text',{x:x(time),y:H-16,fill:'#91a6c2','text-anchor':i===0?'start':i===4?'end':'middle','font-size':12});label.textContent=new Date(time).toLocaleString(undefined,shortWindow?{timeZone:'America/Los_Angeles',month:'short',day:'numeric',hour:'numeric'}:{timeZone:'America/Los_Angeles',month:'short',day:'numeric'})}
+    }
     defs.forEach((def,index)=>{const points=data.filter(row=>Number.isFinite(+row[def.key]));add('polyline',{points:points.map(row=>`${x(row._t)},${y(+row[def.key])}`).join(' '),fill:'none',stroke:def.color,'stroke-width':3.5,'stroke-linejoin':'round','stroke-linecap':'round','data-forward-series':def.key});points.forEach(row=>add('circle',{cx:x(row._t),cy:y(+row[def.key]),r:3.5,fill:def.color,stroke:'#07101f','stroke-width':2,opacity:.95}));const legendX=pad.l+index*190;add('line',{x1:legendX,x2:legendX+24,y1:17,y2:17,stroke:def.color,'stroke-width':4});const label=add('text',{x:legendX+31,y:21,fill:'#dfeaff','font-size':12,'font-weight':800});label.textContent=def.label});
 
     if(interactive){
@@ -112,7 +129,7 @@
   function renderForwardCharts(){
     const source=document.getElementById('crypto-forward-chart-data');if(!source)return;let data;try{data=JSON.parse(source.textContent)}catch{return}
     const shared=data.shared_v2||{},v5=data.v5||{};
-    forwardLineChart('shared-v2-equity',shared.chart_points,[{key:'candidate',label:'Shared V4',color:'#39e3a1'},{key:'benchmark',label:'Always BTC',color:'#4d8cff'}],{currency:true,interactive:true});
+    forwardLineChart('shared-v2-equity',shared.chart_points,[{key:'candidate',label:'Shared V4',color:'#39e3a1'},{key:'benchmark',label:'Always BTC',color:'#4d8cff'}],{currency:true,interactive:true,hourlySlots:true});
     forwardLineChart('shared-v2-drawdown',shared.chart_points,[{key:'candidate_drawdown',label:'Shared V4',color:'#39e3a1'},{key:'benchmark_drawdown',label:'Always BTC',color:'#4d8cff'}],{percent:true,height:260});
     forwardBarChart('shared-v2-returns',shared.return_points,[{key:'net_return',label:'Selected sleeve',color:'#39e3a1'},{key:'btc_return',label:'BTC',color:'#4d8cff'}]);
     forwardLineChart('shared-v2-probabilities',shared.probability_points,[{key:'btc',label:'BTC probability',color:'#4d8cff'},{key:'alt',label:'ALT probability',color:'#39e3a1'},{key:'cash',label:'CASH probability',color:'#efc56b'}],{percent:true,height:360});
