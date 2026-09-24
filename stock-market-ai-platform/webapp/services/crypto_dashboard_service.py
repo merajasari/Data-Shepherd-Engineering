@@ -616,7 +616,11 @@ def _shared_v2_forward_performance(now_utc=None):
     chart_points = [{
         "timestamp": holdout.isoformat(), "candidate": SHARED_V2_STARTING_PAPER_EQUITY,
         "benchmark": SHARED_V2_STARTING_PAPER_EQUITY, "candidate_drawdown": 0.0,
-        "benchmark_drawdown": 0.0,
+        "benchmark_drawdown": 0.0, "candidate_return": 0.0,
+        "benchmark_return": 0.0, "excess_dollars": 0.0,
+        "excess_return_points": 0.0, "event_status": "FORWARD_BOUNDARY",
+        "decision_timestamp_utc": holdout.isoformat(),
+        "realized_through_utc": holdout.isoformat(),
     }]
     return_points = []
     for row in realized.itertuples(index=False):
@@ -626,12 +630,36 @@ def _shared_v2_forward_performance(now_utc=None):
         candidate_peak = max(candidate_peak, candidate)
         btc_peak = max(btc_peak, btc_running)
         timestamp = str(row.realized_through_utc or pd.Timestamp(row.decision_timestamp_utc).isoformat())
+        candidate_dollars = candidate * SHARED_V2_STARTING_PAPER_EQUITY
+        benchmark_dollars = btc_running * SHARED_V2_STARTING_PAPER_EQUITY
+        candidate_return = candidate - 1.0
+        benchmark_return = btc_running - 1.0
         chart_points.append({
             "timestamp": timestamp,
-            "candidate": candidate * SHARED_V2_STARTING_PAPER_EQUITY,
-            "benchmark": btc_running * SHARED_V2_STARTING_PAPER_EQUITY,
+            "candidate": candidate_dollars,
+            "benchmark": benchmark_dollars,
             "candidate_drawdown": candidate / candidate_peak - 1.0,
             "benchmark_drawdown": btc_running / btc_peak - 1.0,
+            "candidate_return": candidate_return,
+            "benchmark_return": benchmark_return,
+            "excess_dollars": candidate_dollars - benchmark_dollars,
+            "excess_return_points": candidate_return - benchmark_return,
+            "event_status": str(row.status),
+            "decision_timestamp_utc": pd.Timestamp(row.decision_timestamp_utc).isoformat(),
+            "realized_through_utc": timestamp,
+            "raw_predicted_label": str(row.raw_predicted_label),
+            "executed_label_before": str(row.executed_label_before),
+            "executed_label_after": str(row.executed_label_after),
+            "sleeve_switch": bool(row.sleeve_switch),
+            "prob_btc": float(row.prob_btc),
+            "prob_alt": float(row.prob_alt),
+            "prob_cash": float(row.prob_cash),
+            "btc_realized_return_1h": btc_return,
+            "alt_realized_return_1h": float(row.alt_realized_return_1h),
+            "gross_selected_return_1h": float(row.gross_selected_return_1h),
+            "net_selected_return_1h": float(row.net_selected_return_1h),
+            "cost_bps_assumption": float(row.cost_bps_assumption),
+            "transaction_cost": float(row.transaction_cost),
         })
         return_points.append({
             "timestamp": timestamp,
