@@ -8,6 +8,34 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let marketQuotes={},marketFilter='all',marketSort='change',marketSearch='',marketTimer=null,marketInFlight=false,marketLastSuccess=null,marketFailures=0;
 
+  function sharedV4Activity(row){
+    const before=String(row.executed_label_before||'CASH').toUpperCase();
+    const after=String(row.executed_label_after||before).toUpperCase();
+    const raw=String(row.raw_predicted_label||after).toUpperCase();
+    const pending=row.pending_candidate_label?String(row.pending_candidate_label).toUpperCase():'';
+    const pendingCount=Number.isFinite(+row.pending_candidate_count)?Math.max(0,+row.pending_candidate_count):0;
+    const switched=Boolean(row.sleeve_switch)&&before!==after;
+    let action='Held '+after+' sleeve';
+    let bought='None';
+    let sold='None';
+    if(switched){
+      if(before==='CASH'&&after==='BTC'){action='Bought BTC from cash';bought='BTC';}
+      else if(before==='CASH'&&after==='ALT'){action='Bought ALT sleeve from cash';bought='ALT sleeve';}
+      else if(before==='BTC'&&after==='CASH'){action='Sold BTC to cash';sold='BTC';}
+      else if(before==='ALT'&&after==='CASH'){action='Sold ALT sleeve to cash';sold='ALT sleeve';}
+      else if(before==='BTC'&&after==='ALT'){action='Rotated BTC into ALT sleeve';sold='BTC';bought='ALT sleeve';}
+      else if(before==='ALT'&&after==='BTC'){action='Rotated ALT sleeve into BTC';sold='ALT sleeve';bought='BTC';}
+      else {action='Switched '+before+' → '+after;sold=before;bought=after;}
+    }
+    const confirmState=pending
+      ? `${pending} pending · ${pendingCount}/2 confirmations`
+      : (raw!==after&&!switched
+          ? `${raw} proposed · current ${after} retained`
+          : 'No pending switch');
+    const held=switched?after:(after==='CASH'?'CASH':after+' sleeve');
+    return {before,after,raw,action,bought,sold,held,confirmState};
+  }
+
   function sharedV4DrilldownHtml(row){
     const candidate=+row.candidate,benchmark=+row.benchmark;
     const candidateReturn=Number.isFinite(+row.candidate_return)?+row.candidate_return:candidate/100000-1;
@@ -15,6 +43,7 @@
     const excessDollars=Number.isFinite(+row.excess_dollars)?+row.excess_dollars:candidate-benchmark;
     const excessPoints=Number.isFinite(+row.excess_return_points)?+row.excess_return_points:candidateReturn-benchmarkReturn;
     const tone=value=>Number(value)<0?'negative':'positive';
+    const activity=sharedV4Activity(row);
     const probability=(label,value,color)=>{
       const n=Number(value),pct=Number.isFinite(n)?Math.max(0,Math.min(100,n*100)):0;
       return `<div class="chart-drilldown-prob"><div class="chart-drilldown-prob-head"><span>${esc(label)}</span><b>${Number.isFinite(n)?pct.toFixed(1)+'%':'—'}</b></div><div class="chart-drilldown-prob-track"><i style="width:${pct.toFixed(1)}%;background:${color}"></i></div></div>`;
@@ -29,6 +58,14 @@
         <div class="chart-drilldown-kpi"><span>V4 edge vs BTC</span><strong class="${tone(excessPoints)}">${signedMoney2(excessDollars)} · ${pctPoints(excessPoints)}</strong></div>
       </div>
       <div class="chart-drilldown-grid">
+        <section class="chart-drilldown-group"><h3>What happened during this hour</h3>
+          <div class="chart-drilldown-row"><span>Paper action</span><b>${esc(activity.action)}</b></div>
+          <div class="chart-drilldown-row"><span>Bought</span><b>${esc(activity.bought)}</b></div>
+          <div class="chart-drilldown-row"><span>Sold</span><b>${esc(activity.sold)}</b></div>
+          <div class="chart-drilldown-row"><span>Position after action</span><b>${esc(activity.held)}</b></div>
+          <div class="chart-drilldown-row"><span>Confirm-2 state</span><b>${esc(activity.confirmState)}</b></div>
+          <div class="chart-drilldown-row"><span>Real orders</span><b>NO · PAPER ONLY</b></div>
+        </section>
         <section class="chart-drilldown-group"><h3>Decision + execution</h3>
           <div class="chart-drilldown-row"><span>Decision time</span><b>${esc(chartStamp(row.decision_timestamp_utc))}</b></div>
           <div class="chart-drilldown-row"><span>Realized through</span><b>${esc(chartStamp(row.realized_through_utc||row.timestamp))}</b></div>
@@ -58,7 +95,7 @@
           ${probability('CASH',row.prob_cash,'#efc56b')}
         </section>
       </div>
-      <div class="chart-drilldown-foot">Read-only view of one genuine post-boundary hourly realization. Opening this panel does not invoke the model, alter the journal, or place an order.</div>`;
+      <div class="chart-drilldown-foot">Bought/sold labels describe the paper sleeve transition recorded for this hour. ALT is the model's aggregate ALT sleeve; the current journal does not claim individual coin-level fills. This is a read-only view of genuine forward evidence and never places a real order.</div>`;
   }
 
   function openSharedV4Drilldown(row){
