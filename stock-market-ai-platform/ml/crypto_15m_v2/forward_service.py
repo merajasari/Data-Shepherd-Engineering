@@ -66,7 +66,7 @@ CLEAN_LANE_NAME = "Shared Crypto V2 Clean Forward V2"
 COST_BPS = 5.0
 CONFIRM_REQUIRED = 2
 DEFAULT_POLL_SECONDS = 60
-LOOKBACK_DAYS = 7
+LOOKBACK_DAYS = 7.0
 
 
 def _sha256(path: Path) -> str:
