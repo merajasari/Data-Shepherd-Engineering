@@ -143,6 +143,15 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("sharedV4HoldingsHtml", browser)
         self.assertIn("held_assets", browser)
         self.assertIn("equal-weight products used by the frozen hourly ALT-return rule", browser)
+        self.assertIn("Coin actions in selected range", browser)
+        self.assertIn("Held during selected range", browser)
+        self.assertIn("Action timeline for selected range", browser)
+        self.assertIn("No modeled coin buys or sells occurred in this selected range.", browser)
+        self.assertIn("Bought", browser)
+        self.assertIn("Sold", browser)
+        self.assertIn("ALT basket membership changes · not modeled trades", browser)
+        self.assertIn("Coin-level Bought/Sold labels above are only produced by actual sleeve transitions.", browser)
+        self.assertNotIn("Current exact paper holdings", browser)
 
     def test_comparison_api_and_browser_request_are_removed(self):
         app_source = (ROOT / "webapp/app.py").read_text(encoding="utf-8")

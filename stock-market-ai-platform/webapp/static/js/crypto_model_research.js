@@ -147,6 +147,89 @@
 
   const sharedV4RangeLabel=hours=>({1:'last hour',2:'last 2 hours',4:'last 4 hours',6:'last 6 hours',8:'last 8 hours',12:'last 12 hours',24:'last 24 hours',168:'last week',720:'last month',8760:'last year'}[hours]||('last '+hours+' hours'));
 
+  function sharedV4RangeCoinActivity(rows,realized){
+    const rowIndex=new Map(realized.map((row,index)=>[String(row.decision_timestamp_utc),index]));
+    const coinStats=new Map(),boughtCounts=new Map(),soldCounts=new Map(),timeline=[],membershipChanges=[];
+    let unresolvedAltSale=false;
+    const addCount=(map,name)=>map.set(name,(map.get(name)||0)+1);
+    const altAssets=row=>(Array.isArray(row?.held_assets)?row.held_assets:[]).filter(item=>item&&item.product_id);
+    const altNames=row=>altAssets(row).map(item=>String(item.product_id));
+    const heldAfter=row=>{
+      const sleeve=String(row.executed_label_after||'CASH').toUpperCase();
+      if(sleeve==='BTC')return ['BTC-USD'];
+      if(sleeve==='ALT')return altNames(row);
+      return [];
+    };
+    rows.forEach(row=>{
+      const index=rowIndex.get(String(row.decision_timestamp_utc));
+      const previous=Number.isInteger(index)&&index>0?realized[index-1]:null;
+      const activity=sharedV4Activity(row),bought=[],sold=[];
+      if(activity.before!==activity.after){
+        if(activity.after==='BTC')bought.push('BTC-USD');
+        if(activity.after==='ALT')bought.push(...altNames(row));
+        if(activity.before==='BTC')sold.push('BTC-USD');
+        if(activity.before==='ALT'){
+          const priorAlt=previous&&String(previous.executed_label_after||'').toUpperCase()==='ALT'?altNames(previous):[];
+          if(priorAlt.length)sold.push(...priorAlt);else unresolvedAltSale=true;
+        }
+      }
+      bought.forEach(name=>addCount(boughtCounts,name));
+      sold.forEach(name=>addCount(soldCounts,name));
+
+      const sleeve=String(row.executed_label_after||'CASH').toUpperCase();
+      if(sleeve==='BTC'){
+        const ret=Number(row.btc_realized_return_1h),entry=coinStats.get('BTC-USD')||{hours:0,growth:1,weightSum:0};
+        entry.hours+=1;entry.weightSum+=1;if(Number.isFinite(ret))entry.growth*=1+ret;coinStats.set('BTC-USD',entry);
+      }else if(sleeve==='ALT'){
+        altAssets(row).forEach(item=>{
+          const name=String(item.product_id),ret=Number(item.return_1h),weight=Number(item.weight),entry=coinStats.get(name)||{hours:0,growth:1,weightSum:0};
+          entry.hours+=1;if(Number.isFinite(weight))entry.weightSum+=weight;if(Number.isFinite(ret))entry.growth*=1+ret;coinStats.set(name,entry);
+        });
+        if(previous&&String(previous.executed_label_after||'').toUpperCase()==='ALT'){
+          const beforeSet=new Set(altNames(previous)),afterSet=new Set(altNames(row));
+          const added=[...afterSet].filter(name=>!beforeSet.has(name)),removed=[...beforeSet].filter(name=>!afterSet.has(name));
+          if(added.length||removed.length)membershipChanges.push({row,added,removed});
+        }
+      }
+
+      timeline.push({row,activity,bought,sold,held:heldAfter(row)});
+    });
+
+    const coinLabel=name=>esc(String(name).replace('-USD',''));
+    const actionList=(map,emptyText)=>map.size
+      ? [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([name,count])=>'<span class="chip">'+coinLabel(name)+(count>1?' · '+count+' events':'')+'</span>').join('')
+      : '<span class="muted">'+esc(emptyText)+'</span>';
+    const heldList=coinStats.size
+      ? [...coinStats.entries()].sort((a,b)=>b[1].hours-a[1].hours||a[0].localeCompare(b[0])).map(([name,stats])=>{
+          const ret=stats.growth-1,avgWeight=stats.hours?stats.weightSum/stats.hours:0;
+          return '<div class="chart-drilldown-row"><span>'+coinLabel(name)+'</span><b>'+stats.hours+'h · avg '+(avgWeight*100).toFixed(2)+'% · <span class="'+(ret<0?'negative':'positive')+'">'+signedPct(ret)+'</span></b></div>';
+        }).join('')
+      : '<div class="muted">No coin exposure in this range.</div>';
+
+    const noTrades=boughtCounts.size===0&&soldCounts.size===0;
+    const tradeNotice=noTrades
+      ? '<div class="notice"><strong>No modeled coin buys or sells occurred in this selected range.</strong> Shared V4 stayed in its existing sleeve. Coins shown under “Held during selected range” were exposure that continued through the selected hours; they were not newly purchased every hour.</div>'
+      : '<div class="notice"><strong>Modeled sleeve transitions occurred in this range.</strong> The Bought and Sold lists below expand ALT sleeve entries/exits into the exact equal-weight constituents reconstructed for those transition hours.</div>';
+
+    const membershipHtml=membershipChanges.length
+      ? '<div class="actions-summary-section"><h3>ALT basket membership changes · not modeled trades</h3><p class="muted">These changes reflect which coins had the exact authoritative endpoints used by the ALT return calculation. They are shown separately because V4 does not model constituent-level turnover as buys or sells.</p>'+membershipChanges.map(item=>'<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>'+esc(chartStamp(item.row.realized_through_utc||item.row.timestamp))+'</span><b>ALT coverage changed</b></div><div class="chart-drilldown-row"><span>Added to return basket</span><b>'+(item.added.length?item.added.map(coinLabel).join(', '):'None')+'</b></div><div class="chart-drilldown-row"><span>Removed from return basket</span><b>'+(item.removed.length?item.removed.map(coinLabel).join(', '):'None')+'</b></div></div>').join('')+'</div>'
+      : '';
+
+    const timelineHtml=[...timeline].reverse().map(item=>{
+      const sleeve=item.activity.after;
+      const heldText=sleeve==='ALT'?(item.held.length+' ALT coins'):sleeve==='BTC'?'BTC':'CASH';
+      const boughtText=item.bought.length?item.bought.map(coinLabel).join(', '):(item.activity.bought!=='None'&&item.activity.after==='ALT'?'ALT constituents unavailable':'None');
+      const soldText=item.sold.length?item.sold.map(coinLabel).join(', '):(item.activity.sold!=='None'&&item.activity.before==='ALT'?'ALT constituents unavailable':'None');
+      return '<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Realized through</span><b>'+esc(chartStamp(item.row.realized_through_utc||item.row.timestamp))+'</b></div><div class="chart-drilldown-row"><span>Action</span><b>'+esc(item.activity.action)+'</b></div><div class="chart-drilldown-row"><span>Bought</span><b>'+boughtText+'</b></div><div class="chart-drilldown-row"><span>Sold</span><b>'+soldText+'</b></div><div class="chart-drilldown-row"><span>Held after action</span><b>'+esc(heldText)+'</b></div></div>';
+    }).join('');
+
+    return tradeNotice+
+      '<div class="actions-summary-section"><h3>Coin actions in selected range</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><h3>Bought</h3><div class="actions-summary-chips">'+actionList(boughtCounts,'None in this range')+'</div></div><div class="chart-drilldown-group"><h3>Sold</h3><div class="actions-summary-chips">'+actionList(soldCounts,unresolvedAltSale?'ALT sleeve exit occurred, but prior exact constituents were unavailable':'None in this range')+'</div></div></div></div>'+
+      '<div class="actions-summary-section"><h3>Held during selected range</h3><p class="muted">This is range-specific exposure, not the full crypto universe. Hours show how long each coin was actually inside the executed sleeve during the selected window; return is compounded only across those held hours.</p><div class="chart-drilldown-group">'+heldList+'</div></div>'+
+      '<div class="actions-summary-section"><h3>Action timeline for selected range</h3><p class="muted">Every completed hour in the selected range, newest first. “Bought” and “Sold” only appear when the frozen confirm-2 policy actually switched sleeves.</p>'+timelineHtml+'</div>'+
+      membershipHtml;
+  }
+
   function sharedV4SummaryHtml(hours){
     const realized=(sharedV4ChartRows||[])
       .filter(row=>row&&row.event_status!=='FORWARD_BOUNDARY'&&Number.isFinite(Date.parse(row.realized_through_utc||row.timestamp)))
@@ -191,15 +274,15 @@
         '<div class="metric"><span>HELD / NO SWITCH</span><strong>'+holds+'</strong></div>'+
         '<div class="metric"><span>CURRENT SLEEVE</span><strong>'+esc(latestActivity.held)+'</strong></div>'+
       '</div>'+
-      '<div class="actions-summary-section"><h3>Current exact paper holdings</h3><div class="chart-drilldown-grid">'+sharedV4HoldingsHtml(last)+'</div></div>'+
+      sharedV4RangeCoinActivity(rows,realized)+
       '<div class="actions-summary-section"><h3>Period performance + modeled trading impact</h3><div class="chart-drilldown-grid">'+
         '<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Shared V4 period return</span><b class="'+(periodReturn<0?'negative':'positive')+'">'+signedPct(periodReturn)+'</b></div><div class="chart-drilldown-row"><span>Shared V4 paper P/L</span><b class="'+(periodPnl<0?'negative':'positive')+'">'+signedMoney2(periodPnl)+'</b></div><div class="chart-drilldown-row"><span>Ending paper equity</span><b>'+money2(endEquity)+'</b></div><div class="chart-drilldown-row"><span>Modeled transaction-cost impact</span><b>'+signedMoney2(-modeledCostDollars)+'</b></div></div>'+
         '<div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Always-BTC period return</span><b class="'+(btcPeriodReturn<0?'negative':'positive')+'">'+signedPct(btcPeriodReturn)+'</b></div><div class="chart-drilldown-row"><span>Always-BTC paper P/L</span><b class="'+(btcPnl<0?'negative':'positive')+'">'+signedMoney2(btcPnl)+'</b></div><div class="chart-drilldown-row"><span>Period return edge vs BTC</span><b class="'+(periodReturn-btcPeriodReturn<0?'negative':'positive')+'">'+pctPoints(periodReturn-btcPeriodReturn)+'</b></div><div class="chart-drilldown-row"><span>Latest confirm-2 state</span><b>'+esc(latestActivity.confirmState)+'</b></div></div>'+
       '</div></div>'+
       '<div class="actions-summary-section"><h3>Sleeve + signal mix</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><h3>Executed sleeve hours</h3><div class="actions-summary-chips">'+chips(sleeveCounts)+'</div></div><div class="chart-drilldown-group"><h3>Raw model signals</h3><div class="actions-summary-chips">'+chips(signalCounts)+'</div></div></div></div>'+
       '<div class="actions-summary-section"><h3>Best / worst completed hour</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Best hour</span><b class="positive">'+(best?signedPct(best.net_selected_return_1h):'—')+'</b></div><div class="chart-drilldown-row"><span>Realized through</span><b>'+(best?esc(chartStamp(best.realized_through_utc||best.timestamp)):'—')+'</b></div></div><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Worst hour</span><b class="'+(worst&&+worst.net_selected_return_1h<0?'negative':'positive')+'">'+(worst?signedPct(worst.net_selected_return_1h):'—')+'</b></div><div class="chart-drilldown-row"><span>Realized through</span><b>'+(worst?esc(chartStamp(worst.realized_through_utc||worst.timestamp)):'—')+'</b></div></div></div></div>'+
-      '<div class="actions-summary-section"><h3>Hourly action history</h3><p class="muted">Newest first. Expand any hour to see the exact same equity, buy/sell/hold action, confirm-2 state, decision/execution fields, returns, costs, drawdowns, BTC comparison, and BTC / ALT / CASH probabilities available in the chart drill-in.</p>'+hourly+'</div>'+
-      '<div class="chart-drilldown-foot">ALT remains the model\'s aggregate sleeve in the primary journal. Exact constituent names, equal weights, and hourly returns shown here are deterministically reconstructed from the same authoritative endpoint-candle rule used to calculate the recorded ALT return; the primary journal is never mutated or backfilled.</div>';
+      '<div class="actions-summary-section"><h3>Full hourly drill-in</h3><p class="muted">Newest first. Expand any hour for the complete model signal, confirm-2 state, exact holdings for that hour, returns, costs, drawdowns, BTC comparison, and probabilities.</p>'+hourly+'</div>'+
+      '<div class="chart-drilldown-foot">Coin-level Bought/Sold labels above are only produced by actual sleeve transitions. ALT basket availability changes are kept separate because V4 does not model constituent turnover as transactions. The frozen journal and model remain unchanged.</div>';
   }
 
   function renderSharedV4ActionsSummary(){
