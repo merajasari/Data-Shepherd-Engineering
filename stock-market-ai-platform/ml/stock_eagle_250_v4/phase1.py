@@ -347,7 +347,7 @@ def confidence_exposure_frame(predictions: pd.DataFrame) -> pd.DataFrame:
     for index, row in result.iterrows():
         start = max(0, index - CONFIDENCE_LOOKBACK)
         history = pd.to_numeric(
-            result.loc[start:index - 1, "standardized_confidence"],
+            result.iloc[start:index]["standardized_confidence"],
             errors="coerce",
         )
         history = history[np.isfinite(history.to_numpy(dtype=float))]
