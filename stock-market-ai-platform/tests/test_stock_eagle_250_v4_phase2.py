@@ -12,6 +12,7 @@ from ml.stock_eagle_250_v4.phase1 import (
 )
 from ml.stock_eagle_250_v4.phase2 import (
     attach_confidence_exposure,
+    diagnostic_summaries,
     evaluate_gates,
     simulate_exposure,
     validate_sources,
@@ -185,6 +186,25 @@ class StockEagle250V4Phase2Test(unittest.TestCase):
                 == merged["fold_id"].astype(str)
             ).all()
         )
+
+    def test_diagnostics_support_not_ready_confidence_rows(self):
+        frame = pd.DataFrame({
+            "evaluation": ["v4_primary_10bps", "v4_primary_10bps"],
+            "confidence_percentile": [np.nan, 0.9],
+            "gross_exposure": [0.5, 0.95],
+            "standardized_confidence": [0.4, 1.7],
+            "gross_return": [0.01, 0.02],
+            "net_return": [0.003, 0.015],
+            "timestamp_utc": [
+                "2026-01-02T00:00:00+00:00",
+                "2026-01-05T00:00:00+00:00",
+            ],
+        })
+        confidence, year = diagnostic_summaries(frame)
+
+        self.assertIn("NOT_READY", set(confidence["confidence_band"]))
+        self.assertIn("P80_100", set(confidence["confidence_band"]))
+        self.assertEqual(int(year["periods"].sum()), 2)
 
     def test_partial_exposure_scales_returns_and_costs(self):
         periods = period_frame().head(1).copy()
