@@ -8,6 +8,7 @@ REST to render TODAY.
 
 import json
 import os
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -75,10 +76,28 @@ def build_subscription():
 
 def _atomic_json_write(path: Path, payload: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".tmp")
-    with temp.open("w", encoding="utf-8") as fh:
-        json.dump(payload, fh, separators=(",", ":"), sort_keys=True)
-    temp.replace(path)
+    temp_name = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            temp_name = fh.name
+            json.dump(payload, fh, separators=(",", ":"), sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temp_name, path)
+        temp_name = None
+    finally:
+        if temp_name is not None:
+            try:
+                Path(temp_name).unlink()
+            except FileNotFoundError:
+                pass
 
 
 def write_cache(force=False):
