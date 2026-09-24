@@ -80,6 +80,8 @@ def _daily_product(product_id: str) -> pd.DataFrame:
 
 
 HISTORY_RANGE_DAYS = {
+    "24H": 1,
+    "14D": 14,
     "30D": 30,
     "90D": 90,
     "1Y": 365,
