@@ -13,7 +13,7 @@ class V10Cycle3AcceleratedV2OfficialV8Test(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("Official V8 return", source)
-        self.assertIn("Excess vs official V8", source)
+        self.assertIn("Current return gap vs official V8", source)
         self.assertIn("V8 official", source)
         self.assertIn("/api/v8/holdout", source)
         self.assertIn("DataShepherdV8Snapshot", source)
