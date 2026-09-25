@@ -184,6 +184,39 @@ def learned_position_weights(
     return score / total
 
 
+def benchmark_relative_cohort_return(
+    active_gross_return: float,
+    spy_return: float,
+    active_weight: float,
+    cost_bps_per_side: float,
+) -> tuple[float, float]:
+    """Blend learned active sleeve with SPY and charge full-capital costs."""
+    active_weight = float(active_weight)
+    if not 0.0 <= active_weight <= 1.0:
+        raise ValueError("active_weight must be within [0, 1]")
+    spy_weight = 1.0 - active_weight
+    values = np.asarray(
+        [active_gross_return, spy_return, cost_bps_per_side],
+        dtype=float,
+    )
+    if not np.isfinite(values).all():
+        raise ValueError("benchmark-relative return inputs must be finite")
+    if cost_bps_per_side < 0.0:
+        raise ValueError("cost_bps_per_side cannot be negative")
+
+    blended_gross = (
+        active_weight * float(active_gross_return)
+        + spy_weight * float(spy_return)
+    )
+    side = float(cost_bps_per_side) / 10_000.0
+    net = (
+        (1.0 + blended_gross)
+        * (1.0 - side) ** 2
+        - 1.0
+    )
+    return float(blended_gross), float(net)
+
+
 def session_meta_row(
     scored: pd.DataFrame,
     include_target: bool,
@@ -232,12 +265,6 @@ def session_meta_row(
             weights,
             top["forward_stock_return"].to_numpy(float),
         ))
-        side = PRIMARY_COST_BPS / 10_000.0
-        active_net = (
-            (1.0 + active_gross)
-            * (1.0 - side) ** 2
-            - 1.0
-        )
         spy_return = float(ordered["forward_spy_return"].iloc[0])
         if not np.allclose(
             ordered["forward_spy_return"].to_numpy(float),
@@ -248,6 +275,14 @@ def session_meta_row(
             raise RuntimeError(
                 "Session contains inconsistent SPY forward returns"
             )
+        _active_gross_after_cost_basis, active_net = (
+            benchmark_relative_cohort_return(
+                active_gross_return=active_gross,
+                spy_return=spy_return,
+                active_weight=1.0,
+                cost_bps_per_side=PRIMARY_COST_BPS,
+            )
+        )
         row["meta_target_beats_spy"] = int(active_net > spy_return)
         row["meta_target_active_net_return"] = active_net
         row["meta_target_spy_return"] = spy_return
@@ -550,24 +585,19 @@ def outer_validation_observations(
                 "Validation session contains inconsistent SPY return"
             )
 
-        blended_gross = (
-            active_weight * active_gross
-            + spy_weight * spy_return
-        )
-
         # The preregistered V3 contract charges transaction cost against the
         # full cohort capital rather than scaling it with the active sleeve.
-        primary_side = PRIMARY_COST_BPS / 10_000.0
-        stress_side = STRESS_COST_BPS / 10_000.0
-        primary = (
-            (1.0 + blended_gross)
-            * (1.0 - primary_side) ** 2
-            - 1.0
+        blended_gross, primary = benchmark_relative_cohort_return(
+            active_gross_return=active_gross,
+            spy_return=spy_return,
+            active_weight=active_weight,
+            cost_bps_per_side=PRIMARY_COST_BPS,
         )
-        stress = (
-            (1.0 + blended_gross)
-            * (1.0 - stress_side) ** 2
-            - 1.0
+        _stress_gross, stress = benchmark_relative_cohort_return(
+            active_gross_return=active_gross,
+            spy_return=spy_return,
+            active_weight=active_weight,
+            cost_bps_per_side=STRESS_COST_BPS,
         )
         equal_gross = float(
             session["forward_stock_return"].mean()
