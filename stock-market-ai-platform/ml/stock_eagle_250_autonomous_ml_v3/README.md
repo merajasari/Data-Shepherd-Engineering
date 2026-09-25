@@ -86,3 +86,42 @@ python -m json.tool data/model/stock_eagle_250_autonomous_ml_v3/phase1/manifest.
 ```
 
 Phase 2 may be implemented only after this preregistration exists.
+
+
+## Phase 2 benchmark-relative nested walk-forward evaluation
+
+Phase 2 trains the same four learned model families under the same 14 outer
+purged development folds used by V2.
+
+Inside every outer training fold, alpha, downside, and 10th-percentile tail
+models are fit repeatedly on expanding matured-label history. Their predictions
+on later inner blocks are strictly out of sample. Those OOS predictions create
+the only training rows for the benchmark-relative meta allocator.
+
+For each inner-OOS row, the allocator label is whether the fully active,
+tail-aware Top-10 net return after 10 bps per side exceeded the same-horizon
+SPY return. Future SPY return is used only as the matured label comparator and
+is never an inference feature.
+
+During outer validation, the learned probability becomes the active Top-10
+weight and the residual goes to SPY:
+
+```text
+active_weight = P(Top-10 beats SPY)
+spy_weight    = 1 - active_weight
+cash_weight   = 0
+```
+
+The cohort remains fully invested and non-leveraged. Primary and stress
+transaction costs are charged against the full cohort capital according to the
+Phase 1 contract.
+
+```bash
+python -m unittest tests.test_stock_eagle_250_autonomous_ml_v3_phase2 -v
+python -m ml.stock_eagle_250_autonomous_ml_v3.phase2
+python -m json.tool data/model/stock_eagle_250_autonomous_ml_v3/phase2/qualification.json
+```
+
+The same nine gates remain unchanged. Passing all nine only qualifies V3 for
+construction of an autonomous forward-paper runtime; it does not enable that
+runtime or live execution by itself.
