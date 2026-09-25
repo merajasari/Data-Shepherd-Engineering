@@ -74,6 +74,55 @@ class CryptoForwardDashboardTest(unittest.TestCase):
             self.assertEqual(len(payload["probability_points"]), 1)
 
 
+    def test_v5_pending_decision_appears_as_flat_progress_point(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "manifest.json"
+            state = root / "state.json"
+            status = root / "status.json"
+            journal = root / "events.jsonl"
+            manifest.write_text(json.dumps({
+                "preregistered_observation_start_utc": "2026-09-23T07:00:00+00:00",
+                "first_eligible_decision_utc": "2026-09-24T00:00:00+00:00",
+            }))
+            state.write_text(json.dumps({
+                "paper_equity": 100_000.0,
+                "selected_regime": "CASH",
+                "last_decision_utc": "2026-09-24T00:00:00+00:00",
+                "pending_decisions": [{
+                    "decision_timestamp_utc": "2026-09-24T00:00:00+00:00",
+                    "target_weights": {"CASH": 1.0},
+                }],
+                "weights": {"CASH": 1.0},
+            }))
+            status.write_text(json.dumps({
+                "status": "ok", "mode": "CLEAN_FORWARD", "contract_verified": True,
+                "brokerage_orders": False,
+            }))
+            journal.write_text(json.dumps({
+                "event_type": "DECISION",
+                "decision_timestamp_utc": "2026-09-24T00:00:00+00:00",
+                "selected_regime": "CASH",
+                "model_id": "ridge",
+                "top_ranked_assets": [],
+                "target_weights": {"CASH": 1.0},
+            }) + "\n")
+            with patch.multiple(
+                dashboard, V5_MANIFEST_PATH=manifest, V5_STATE_PATH=state,
+                V5_STATUS_PATH=status, V5_JOURNAL_PATH=journal,
+            ):
+                payload = dashboard._v5_forward_performance()
+            self.assertEqual(payload["decision_count"], 1)
+            self.assertEqual(payload["realized_count"], 0)
+            self.assertEqual(payload["pending_count"], 1)
+            self.assertEqual(payload["net_paper_pnl_dollars"], 0.0)
+            self.assertEqual(payload["next_pending_realization_utc"], "2026-09-27T00:00:00+00:00")
+            self.assertEqual(len(payload["chart_points"]), 2)
+            self.assertEqual(payload["chart_points"][0]["event_status"], "CLEAN_FORWARD_BOUNDARY")
+            self.assertEqual(payload["chart_points"][1]["event_status"], "PENDING_REALIZATION")
+            self.assertEqual(payload["chart_points"][1]["candidate"], 100_000.0)
+            self.assertEqual(payload["chart_points"][1]["baseline"], 100_000.0)
+
     def test_gap_error_preserves_heartbeat_observability(self):
         with tempfile.TemporaryDirectory() as directory:
             status_path = Path(directory) / "status.json"

@@ -82,6 +82,21 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertNotIn("XRP V1 Forward", service[service.index("def _operational_health"):service.index("def _forward_evaluation_readiness")])
         self.assertIn("initPaperCountdowns", browser)
 
+    def test_v5_has_v4_style_clean_forward_header_and_paper_account_progress(self):
+        template = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
+        browser = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
+        self.assertIn("CRYPTO V5 V2 · CLEAN FORWARD PAPER EVALUATION", template)
+        self.assertIn("PAPER ACCOUNT PROGRESS", template)
+        self.assertIn("Crypto V5 V2 · $100,000 Paper Account", template)
+        self.assertIn("NET PAPER P/L", template)
+        self.assertIn("PENDING REALIZATIONS", template)
+        self.assertIn("Only completed three-day realizations move paper equity", template)
+        self.assertIn("CURRENT DECISION + LIVE PAPER ALLOCATION", template)
+        self.assertIn("NEXT REALIZATION ELIGIBLE", template.upper())
+        self.assertIn("data-v5-pacific-time", template)
+        self.assertIn("Starting $100K", browser)
+        self.assertIn("formatV5ForwardTimes", browser)
+
     def test_shared_v4_equity_chart_has_rich_pointer_interaction(self):
         template = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
         browser = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")

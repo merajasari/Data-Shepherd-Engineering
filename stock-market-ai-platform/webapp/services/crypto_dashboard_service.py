@@ -750,8 +750,12 @@ def _v5_forward_performance():
     realizations = [row for row in events if row.get("event_type") == "REALIZATION"]
     current_equity = float(state.get("paper_equity", V5_STARTING_PAPER_EQUITY) or V5_STARTING_PAPER_EQUITY)
     chart_points = [{
-        "timestamp": clean_start, "candidate": V5_STARTING_PAPER_EQUITY,
+        "timestamp": clean_start,
+        "candidate": V5_STARTING_PAPER_EQUITY,
+        "baseline": V5_STARTING_PAPER_EQUITY,
         "candidate_drawdown": 0.0,
+        "event_status": "CLEAN_FORWARD_BOUNDARY",
+        "selected_regime": "CASH",
     }]
     return_points = []
     peak = V5_STARTING_PAPER_EQUITY
@@ -760,8 +764,19 @@ def _v5_forward_performance():
         peak = max(peak, equity)
         timestamp = row.get("realized_through_utc") or row.get("decision_timestamp_utc")
         chart_points.append({
-            "timestamp": timestamp, "candidate": equity,
+            "timestamp": timestamp,
+            "candidate": equity,
+            "baseline": V5_STARTING_PAPER_EQUITY,
             "candidate_drawdown": equity / peak - 1.0,
+            "event_status": "REALIZED",
+            "decision_timestamp_utc": row.get("decision_timestamp_utc"),
+            "realized_through_utc": row.get("realized_through_utc"),
+            "selected_regime": row.get("selected_regime"),
+            "target_weights": row.get("target_weights", {}),
+            "asset_returns": row.get("asset_returns", {}),
+            "gross_return": float(row.get("gross_return", 0.0)),
+            "net_return": float(row.get("net_return", 0.0)),
+            "transaction_cost": float(row.get("transaction_cost", 0.0)),
         })
         return_points.append({
             "timestamp": timestamp, "net_return": float(row.get("net_return", 0.0)),
@@ -769,6 +784,57 @@ def _v5_forward_performance():
             "regime": row.get("selected_regime"),
         })
     latest = decisions[-1] if decisions else {}
+    latest_decision_utc = latest.get("decision_timestamp_utc") or state.get("last_decision_utc")
+    latest_realized_utc = (
+        state.get("last_realized_through_utc")
+        or (realizations[-1].get("realized_through_utc") if realizations else None)
+    )
+    pending_decisions = list(state.get("pending_decisions") or [])
+    pending_due = []
+    for pending in pending_decisions:
+        raw = pending.get("decision_timestamp_utc")
+        if not raw:
+            continue
+        try:
+            due = pd.Timestamp(raw)
+            if due.tzinfo is None:
+                due = due.tz_localize("UTC")
+            else:
+                due = due.tz_convert("UTC")
+            pending_due.append(due + pd.Timedelta(3, unit="D"))
+        except Exception:
+            continue
+    next_pending_realization_utc = min(pending_due).isoformat() if pending_due else None
+
+    # A pending decision is genuine forward state even though it has not produced
+    # a 3-day P&L observation yet. Show a flat current-state point only when it
+    # occurs after the latest completed realization, without fabricating a return.
+    if latest_decision_utc:
+        try:
+            decision_ts = pd.Timestamp(latest_decision_utc)
+            if decision_ts.tzinfo is None:
+                decision_ts = decision_ts.tz_localize("UTC")
+            else:
+                decision_ts = decision_ts.tz_convert("UTC")
+            last_ts = pd.Timestamp(chart_points[-1]["timestamp"])
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.tz_localize("UTC")
+            else:
+                last_ts = last_ts.tz_convert("UTC")
+            if decision_ts > last_ts:
+                chart_points.append({
+                    "timestamp": decision_ts.isoformat(),
+                    "candidate": current_equity,
+                    "baseline": V5_STARTING_PAPER_EQUITY,
+                    "candidate_drawdown": current_equity / max(peak, current_equity) - 1.0,
+                    "event_status": "PENDING_REALIZATION",
+                    "decision_timestamp_utc": decision_ts.isoformat(),
+                    "selected_regime": latest.get("selected_regime") or state.get("selected_regime", "CASH"),
+                    "target_weights": latest.get("target_weights", state.get("weights", {"CASH": 1.0})),
+                })
+        except Exception:
+            pass
+
     mode = status.get("mode", "NOT_INSTALLED" if not status else "UNKNOWN")
     return {
         "name": "Crypto V5 Clean Paper V2", "available": bool(status or state or events),
@@ -780,8 +846,12 @@ def _v5_forward_performance():
         "first_eligible_decision_utc": manifest.get(
             "first_eligible_decision_utc", "2026-09-24T00:00:00+00:00"
         ),
+        "latest_decision_utc": latest_decision_utc,
+        "latest_realized_utc": latest_realized_utc,
+        "next_pending_realization_utc": next_pending_realization_utc,
         "starting_equity_dollars": V5_STARTING_PAPER_EQUITY,
         "current_equity_dollars": current_equity,
+        "net_paper_pnl_dollars": current_equity - V5_STARTING_PAPER_EQUITY,
         "candidate_return": current_equity / V5_STARTING_PAPER_EQUITY - 1.0,
         "candidate_max_drawdown": min(
             [point["candidate_drawdown"] for point in chart_points], default=0.0),
@@ -798,7 +868,6 @@ def _v5_forward_performance():
         "paper_only": True, "brokerage_orders": False,
         "automatic_promotion": False, "human_review_required": True,
     }
-
 
 def _xrp_phase7_forward_performance():
     holdout = pd.Timestamp("2026-09-01T00:00:00Z")

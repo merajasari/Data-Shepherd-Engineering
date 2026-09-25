@@ -443,7 +443,7 @@
     forwardLineChart('shared-v2-drawdown',shared.chart_points,[{key:'candidate_drawdown',label:'Shared V4',color:'#39e3a1'},{key:'benchmark_drawdown',label:'Always BTC',color:'#4d8cff'}],{percent:true,height:260});
     forwardBarChart('shared-v2-returns',shared.return_points,[{key:'net_return',label:'Selected sleeve',color:'#39e3a1'},{key:'btc_return',label:'BTC',color:'#4d8cff'}]);
     forwardLineChart('shared-v2-probabilities',shared.probability_points,[{key:'btc',label:'BTC probability',color:'#4d8cff'},{key:'alt',label:'ALT probability',color:'#39e3a1'},{key:'cash',label:'CASH probability',color:'#efc56b'}],{percent:true,height:360});
-    forwardLineChart('v5-forward-equity',v5.chart_points,[{key:'candidate',label:'Crypto V5',color:'#36d8ff'}],{currency:true});
+    forwardLineChart('v5-forward-equity',v5.chart_points,[{key:'candidate',label:'Crypto V5 V2',color:'#36d8ff'},{key:'baseline',label:'Starting $100K',color:'#efc56b'}],{currency:true});
     forwardLineChart('v5-forward-drawdown',v5.chart_points,[{key:'candidate_drawdown',label:'Crypto V5',color:'#ff6680'}],{percent:true,height:260});
     forwardBarChart('v5-forward-returns',v5.return_points,[{key:'net_return',label:'Net return',color:'#36d8ff'},{key:'gross_return',label:'Gross return',color:'#9b65ff'}]);
   }
@@ -504,6 +504,12 @@
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshMarket()});
     refreshMarket();
   }
+  function formatV5ForwardTimes(){
+    document.querySelectorAll('[data-v5-pacific-time]').forEach(node=>{
+      const value=node.dataset.v5PacificTime;
+      if(value)node.textContent=chartStamp(value);
+    });
+  }
   function initPaperCountdowns(){
     const formatDuration=ms=>{const total=Math.max(0,Math.floor(ms/1000)),hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60);return hours?hours+'h '+minutes+'m':minutes+'m'};
     const formatPacific=date=>new Intl.DateTimeFormat(undefined,{timeZone:'America/Los_Angeles',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(date);
@@ -511,5 +517,5 @@
     update();window.setInterval(update,30000);
   }
 
-  setupTabs();setupSharedV4Drilldown();renderForwardCharts();setupSharedV4ActionsSummary();initMarketBoard();initPaperCountdowns();
+  setupTabs();setupSharedV4Drilldown();renderForwardCharts();setupSharedV4ActionsSummary();formatV5ForwardTimes();initMarketBoard();initPaperCountdowns();
 })();
