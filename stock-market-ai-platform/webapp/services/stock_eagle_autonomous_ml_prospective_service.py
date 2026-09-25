@@ -48,7 +48,8 @@ def _read_json(path: Path) -> dict:
         return {}
 
 
-def _read_events(path: Path = JOURNAL_PATH):
+def _read_events(path: Path | None = None):
+    path = JOURNAL_PATH if path is None else Path(path)
     if not path.exists():
         return [], None
     events = []
