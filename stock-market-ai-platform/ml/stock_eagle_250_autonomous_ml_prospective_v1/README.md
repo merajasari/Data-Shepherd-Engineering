@@ -64,3 +64,62 @@ python -m json.tool data/model/stock_eagle_250_autonomous_ml_prospective_v1/phas
 Phase 2 builds and hashes the three fixed pre-boundary snapshots. Phase 3 will
 be the append-only prospective evidence runner and must fail closed before the
 October 1 boundary.
+
+
+## Phase 3: fixed-snapshot prospective journal
+
+Phase 3 binds the exact three snapshot SHA-256 values produced by Phase 2:
+
+```text
+V1  4e2b88904f4c17d7df0552559191bf18735ddc5611ee6550731be108f5281932
+V2  d2c1754a54074958567a18c6c2d45bb21d6a0d000ed6bf3d679f8f945766fca5
+V3  aeecdb9f82082163f65ce6b3bb2645472529faa2507a4e0daa34d5802e6b80de
+```
+
+The runner uses a single append-only JSONL journal for all three candidates.
+Each decision is one `DECISION_BATCH`, so V1/V2/V3 always share the exact same
+prospective decision timestamp. Mechanical lifecycle events are likewise stored
+as `ENTRY_BATCH` and `EXIT_BATCH`.
+
+A decision can be created only on the same New York calendar date as the
+completed source session and only after 16:05 ET. If that decision opportunity
+is missed, it is reported as missed and is never reconstructed later.
+
+The forward clock remains exactly the development clock:
+
+- decision from completed daily features;
+- entry at the next completed session open;
+- exit at the fifth completed session close after the decision;
+- five overlapping cohort sleeves;
+- 10 bps/side primary and 20 bps/side stress accounting;
+- V1/V2 residual capital remains cash;
+- V3 residual capital remains SPY.
+
+Before October 1 the runner can be installed safely: it validates the fixed
+snapshot hashes and reports `WAITING_FOR_PROSPECTIVE_BOUNDARY` without
+reading prospective market sessions or writing decisions.
+
+Run the Phase 3 unit tests and one pre-boundary verification:
+
+```bash
+python -m unittest tests.test_stock_eagle_250_autonomous_ml_prospective_v1_phase3 -v
+python -m ml.stock_eagle_250_autonomous_ml_prospective_v1.phase3
+```
+
+Install the 15-minute fail-closed collector:
+
+```bash
+zsh scripts/mac/install_stock_eagle_autonomous_ml_prospective.sh
+```
+
+Runtime evidence is written only under:
+
+```text
+data/model/stock_eagle_250_autonomous_ml_prospective_v1/phase3/
+  journal.jsonl
+  status.json
+```
+
+The runner never retrains or replaces the fixed snapshots, never alters V1,
+V2, V3, or another model's journal, never automatically chooses a winner, and
+never places brokerage orders.
