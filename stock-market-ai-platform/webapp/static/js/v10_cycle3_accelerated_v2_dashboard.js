@@ -99,7 +99,7 @@
             <div class="a10-live-metric"><span>Official V8 return</span><strong data-a10-live-v8>—</strong></div>
             <div class="a10-live-metric"><span>SPY return</span><strong data-a10-live-spy>—</strong></div>
             <div class="a10-live-metric"><span>Excess vs SPY</span><strong data-a10-live-excess-spy>—</strong></div>
-            <div class="a10-live-metric"><span>Excess vs official V8</span><strong data-a10-live-excess-v8>—</strong></div>
+            <div class="a10-live-metric"><span>Current return gap vs official V8</span><strong data-a10-live-excess-v8>—</strong></div>
           </div>
         </div>
         <div class="a10-live-chart">
