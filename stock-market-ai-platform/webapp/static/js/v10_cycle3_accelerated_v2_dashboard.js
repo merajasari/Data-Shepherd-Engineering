@@ -96,16 +96,16 @@
           <div class="a10-live-sub" data-a10-live-sub>$100,000 start · waiting for current marks</div>
           <div class="a10-live-metrics">
             <div class="a10-live-metric"><span>V10 return</span><strong data-a10-live-return>—</strong></div>
-            <div class="a10-live-metric"><span>V8 control return</span><strong data-a10-live-v8>—</strong></div>
+            <div class="a10-live-metric"><span>Official V8 return</span><strong data-a10-live-v8>—</strong></div>
             <div class="a10-live-metric"><span>SPY return</span><strong data-a10-live-spy>—</strong></div>
             <div class="a10-live-metric"><span>Excess vs SPY</span><strong data-a10-live-excess-spy>—</strong></div>
-            <div class="a10-live-metric"><span>Excess vs V8 control</span><strong data-a10-live-excess-v8>—</strong></div>
+            <div class="a10-live-metric"><span>Excess vs official V8</span><strong data-a10-live-excess-v8>—</strong></div>
           </div>
         </div>
         <div class="a10-live-chart">
-          <div class="a10-live-chart-head"><div><div class="a10-chart-title">Interactive live paper performance</div><div class="a10-chart-subtitle">V10, its paired frozen-V8 control, and SPY share the same $100,000 basis. Hover for exact values.</div></div><div class="a10-live-legend"><span><i style="background:#36d8ff"></i>V10</span><span><i style="background:#efc56b"></i>V8 control</span><span><i style="background:#a78bfa"></i>SPY</span></div></div>
+          <div class="a10-live-chart-head"><div><div class="a10-chart-title">Interactive live paper performance</div><div class="a10-chart-subtitle">V10 and SPY use the accelerated Sep 10 evidence lane. V8 uses the official frozen-V8 holdout shown on the V8 page, with its own Sep 1 boundary. Hover for exact values.</div></div><div class="a10-live-legend"><span><i style="background:#36d8ff"></i>V10</span><span><i style="background:#efc56b"></i>V8 official</span><span><i style="background:#a78bfa"></i>SPY</span></div></div>
           <div class="a10-live-stage"><div class="a10-live-host" data-a10-live-chart></div><div class="a10-live-tooltip" data-a10-live-tooltip></div></div>
-          <div class="a10-live-foot"><span data-a10-live-range>Sep 10 → current mark</span><span>Refreshes every 15 seconds · current marks are not completed evidence</span></div>
+          <div class="a10-live-foot"><span data-a10-live-range>Official forward marks loading…</span><span>Refreshes every 15 seconds · official V8 is read from /api/v8/holdout · current marks are not completed evidence</span></div>
         </div>
       </div>
     </div>
@@ -219,95 +219,189 @@
     node.classList.remove('positive','negative');
     if(value!=null&&Number.isFinite(Number(value)))node.classList.add(Number(value)<0?'negative':'positive');
   };
-  let livePayload=null,liveHits=[],liveWidth=900;
+  let livePayload=null,officialV8Payload=null,liveHits=[],liveRenderedSeries=[],liveWidth=900;
 
-  function livePoints(data) {
+  const finiteNumber = value => Number.isFinite(Number(value));
+  const stamp = value => {
+    const parsed=new Date(value).getTime();
+    return Number.isFinite(parsed)?parsed:null;
+  };
+  const uniqueSeriesPoints = rows => {
+    const sorted=rows
+      .filter(row=>Number.isFinite(row.time)&&Number.isFinite(row.value))
+      .sort((left,right)=>left.time-right.time);
+    return sorted.filter((row,index)=>!index||row.time!==sorted[index-1].time);
+  };
+  const appendCurrentPoint = (rows,timeValue,value,label) => {
+    let time=stamp(timeValue);
+    if(time==null||!finiteNumber(value))return rows;
+    if(rows.length&&time<=rows.at(-1).time)time=rows.at(-1).time+1;
+    rows.push({time,value:Number(value),label});
+    return rows;
+  };
+  const nearestSeriesPoint = (points,time) => points.reduce(
+    (left,right)=>Math.abs(right.time-time)<Math.abs(left.time-time)?right:left
+  );
+
+  function acceleratedLiveSeries(data) {
     const start=Number(data.starting_equity)||NORMALIZED_BASE;
-    const first=new Date(data.first_decision_session_utc||'2026-09-10T00:00:00Z').getTime();
-    const points=[{time:first,v10:start,v8:start,spy:start,label:'Paper-forward start'}];
-    (Array.isArray(data.operational_curve)?data.operational_curve:[]).forEach(row=>{
-      const point={time:new Date(row.timestamp_utc).getTime(),v10:Number(row.v10_normalized),v8:Number(row.v8_normalized),spy:Number(row.spy_normalized),label:'Completed exit'};
-      if([point.time,point.v10,point.v8,point.spy].every(Number.isFinite))points.push(point);
-    });
-    const current={
-      time:new Date(data.valuation_timestamp_utc||data.operational_checked_at_utc||Date.now()).getTime(),
-      v10:Number(data.current_equity),v8:Number(data.current_v8_equity),spy:Number(data.current_spy_equity),
-      label:data.equity_basis==='LIVE_MARK_TO_MARKET'?'Current live mark':'Latest completed value'
+    const boundary=stamp(data.first_decision_session_utc||'2026-09-10T00:00:00Z');
+    const build=(key,currentKey,id,label,color,width)=>{
+      const rows=boundary==null?[]:[{time:boundary,value:start,label:'Accelerated boundary'}];
+      (Array.isArray(data.operational_curve)?data.operational_curve:[]).forEach(row=>{
+        const time=stamp(row.timestamp_utc);
+        if(time!=null&&finiteNumber(row[key])){
+          rows.push({time,value:Number(row[key]),label:'Completed accelerated exit'});
+        }
+      });
+      if(data.equity_basis==='LIVE_MARK_TO_MARKET'){
+        appendCurrentPoint(
+          rows,
+          data.valuation_timestamp_utc||data.operational_checked_at_utc,
+          data[currentKey],
+          'Current accelerated mark'
+        );
+      }
+      return {id,label,color,width,points:uniqueSeriesPoints(rows)};
     };
-    if([current.time,current.v10,current.v8,current.spy].every(Number.isFinite)&&(
-      data.equity_basis==='LIVE_MARK_TO_MARKET'||points.length>1
-    )){
-      if(current.time<=points.at(-1).time)current.time=points.at(-1).time+1;
-      points.push(current);
-    }
-    return points;
+    return [
+      build('v10_normalized','current_equity','v10','V10','#36d8ff',3.8),
+      build('spy_normalized','current_spy_equity','spy','SPY','#a78bfa',2.8),
+    ];
   }
 
-  function renderLiveChart(data) {
+  function officialV8LiveSeries(v8) {
+    if(!v8)return null;
+    const start=finiteNumber(v8.starting_equity)?Number(v8.starting_equity):NORMALIZED_BASE;
+    const boundary=stamp(v8.holdout_start_utc);
+    const rows=boundary==null?[]:[{time:boundary,value:start,label:'Official V8 boundary'}];
+    (Array.isArray(v8.curve)?v8.curve:[]).forEach(row=>{
+      const time=stamp(row.timestamp_utc);
+      if(time!=null&&finiteNumber(row.strategy_normalized)){
+        rows.push({time,value:Number(row.strategy_normalized),label:'Completed V8 cohort'});
+      }
+    });
+    if(v8.equity_basis==='LIVE_MARK_TO_MARKET'){
+      appendCurrentPoint(
+        rows,
+        v8.valuation_timestamp_utc,
+        v8.current_equity,
+        'Current official V8 mark'
+      );
+    } else if(finiteNumber(v8.current_equity)&&rows.length){
+      appendCurrentPoint(
+        rows,
+        v8.valuation_timestamp_utc||rows.at(-1).time+1,
+        v8.current_equity,
+        'Latest official V8 value'
+      );
+    }
+    return {
+      id:'v8',
+      label:'V8 official',
+      color:'#efc56b',
+      width:2.8,
+      points:uniqueSeriesPoints(rows),
+    };
+  }
+
+  function renderLiveChart(data,v8) {
     livePayload=data;
+    officialV8Payload=v8||null;
     const host=section.querySelector('[data-a10-live-chart]');
     if(!host)return;
-    const rows=livePoints(data),H=330,p={l:72,r:158,t:24,b:42};
+
+    const series=acceleratedLiveSeries(data);
+    const official=officialV8LiveSeries(v8);
+    if(official&&official.points.length)series.splice(1,0,official);
+    liveRenderedSeries=series.filter(item=>item.points.length);
+
+    const allPoints=liveRenderedSeries.flatMap(item=>item.points);
+    if(!allPoints.length){
+      host.innerHTML='<div class="a10-placeholder">Waiting for forward paper values.</div>';
+      return;
+    }
+
+    const H=330,p={l:72,r:158,t:24,b:42};
     liveWidth=Math.max(650,Math.round(host.clientWidth||900));
-    const minX=rows[0].time,maxX=Math.max(rows.at(-1).time,minX+86400000);
-    const values=rows.flatMap(row=>[row.v10,row.v8,row.spy,NORMALIZED_BASE]);
+    const minX=Math.min(...allPoints.map(row=>row.time));
+    const rawMaxX=Math.max(...allPoints.map(row=>row.time));
+    const maxX=Math.max(rawMaxX,minX+86400000);
+    const values=[...allPoints.map(row=>row.value),NORMALIZED_BASE];
     const raw=Math.max(...values)-Math.min(...values),pad=Math.max(raw*.18,45);
     const lo=Math.min(...values)-pad,hi=Math.max(...values)+pad;
     const x=value=>p.l+(value-minX)/(maxX-minX)*(liveWidth-p.l-p.r);
     const y=value=>p.t+(hi-value)/(hi-lo)*(H-p.t-p.b);
-    const path=key=>rows.map((row,index)=>`${index?'L':'M'} ${x(row.time).toFixed(1)} ${y(row[key]).toFixed(1)}`).join(' ');
     const grid=Array.from({length:5},(_,index)=>{
       const value=hi-(hi-lo)*index/4,yy=y(value);
       return `<line x1="${p.l}" y1="${yy}" x2="${liveWidth-p.r}" y2="${yy}" stroke="rgba(145,166,194,.15)"/><text x="${p.l-9}" y="${yy+4}" fill="#91a6c2" font-size="10" text-anchor="end">$${Math.round(value).toLocaleString()}</text>`;
     }).join('');
-    const series=[['v10','V10','#36d8ff',3.8],['v8','V8','#efc56b',2.8],['spy','SPY','#a78bfa',2.8]];
-    const lines=series.map(([key,,color,width])=>`<path d="${path(key)}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
-    const dots=series.map(([key,,color])=>rows.map((row,index)=>`<circle cx="${x(row.time)}" cy="${y(row[key])}" r="${index===rows.length-1?4.5:3}" fill="${color}"/>`).join('')).join('');
-    const last=rows.at(-1);
-    const labelRows=series.map(([key,label,color])=>({key,label,color,rawY:y(last[key])})).sort((a,b)=>a.rawY-b.rawY);
-    labelRows.forEach((row,index)=>{
+    const paths=liveRenderedSeries.map(item=>{
+      const path=item.points.map((row,index)=>`${index?'L':'M'} ${x(row.time).toFixed(1)} ${y(row.value).toFixed(1)}`).join(' ');
+      const dots=item.points.map((row,index)=>`<circle cx="${x(row.time)}" cy="${y(row.value)}" r="${index===item.points.length-1?4.5:3}" fill="${item.color}"/>`).join('');
+      return `<path d="${path}" fill="none" stroke="${item.color}" stroke-width="${item.width}" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+    }).join('');
+
+    const ends=liveRenderedSeries.map(item=>{
+      const last=item.points.at(-1);
+      return {item,last,rawY:y(last.value),labelY:y(last.value)};
+    }).sort((a,b)=>a.rawY-b.rawY);
+    ends.forEach((row,index)=>{
       row.labelY=Math.max(p.t+11,Math.min(H-p.b-7,row.rawY));
-      if(index&&row.labelY-labelRows[index-1].labelY<17)row.labelY=labelRows[index-1].labelY+17;
+      if(index&&row.labelY-ends[index-1].labelY<17)row.labelY=ends[index-1].labelY+17;
     });
-    for(let index=labelRows.length-2;index>=0;index--){
-      if(labelRows[index+1].labelY>H-p.b-7)labelRows[index+1].labelY=H-p.b-7;
-      if(labelRows[index+1].labelY-labelRows[index].labelY<17)labelRows[index].labelY=labelRows[index+1].labelY-17;
+    for(let index=ends.length-2;index>=0;index--){
+      if(ends[index+1].labelY>H-p.b-7)ends[index+1].labelY=H-p.b-7;
+      if(ends[index+1].labelY-ends[index].labelY<17)ends[index].labelY=ends[index+1].labelY-17;
     }
-    const endLabels=labelRows.map(row=>`<text x="${Math.min(liveWidth-p.r+8,x(last.time)+9)}" y="${row.labelY}" fill="${row.color}" font-size="11" font-weight="900">${row.label} ${money(last[row.key])}</text>`).join('');
-    liveHits=rows.map(row=>({...row,x:x(row.time),top:Math.min(y(row.v10),y(row.v8),y(row.spy))}));
-    const hasLiveMark=data.equity_basis==='LIVE_MARK_TO_MARKET';
-    const completedExits=Array.isArray(data.operational_curve)?data.operational_curve.length:0;
-    const axisEnd=rows.length>1?dateTime(rows.at(-1).time):'Awaiting first entry';
-    host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live accelerated V10 paper equity compared with the frozen V8 control and SPY">${grid}<line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${lines}${dots}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${dateOnly(minX)}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${axisEnd}</text></svg>`;
-    const rangeStatus=hasLiveMark
-      ? `${completedExits} completed-exit points + current mark`
-      : completedExits
-        ? `${completedExits} completed-exit points · no open cohort`
-        : Number(data.open_cohorts)>0
-          ? `awaiting complete price coverage for ${Number(data.open_cohorts)} open cohort${Number(data.open_cohorts)===1?'':'s'}`
-          : 'awaiting first journaled entry';
-    set('[data-a10-live-range]',`${dateOnly(minX)} → ${axisEnd} · ${rangeStatus}`);
+    const endLabels=ends.map(row=>`<text x="${Math.min(liveWidth-p.r+8,x(row.last.time)+9)}" y="${row.labelY}" fill="${row.item.color}" font-size="11" font-weight="900">${row.item.label} ${money(row.last.value)}</text>`).join('');
+
+    const hitTimes=[...new Set(allPoints.map(row=>row.time))].sort((a,b)=>a-b);
+    liveHits=hitTimes.map(time=>{
+      const nearest=liveRenderedSeries.map(item=>({
+        item,
+        point:nearestSeriesPoint(item.points,time),
+      }));
+      return {
+        time,
+        x:x(time),
+        top:Math.min(...nearest.map(row=>y(row.point.value))),
+      };
+    });
+
+    const firstLabel=dateOnly(minX),lastLabel=dateTime(rawMaxX);
+    host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live V10 accelerated paper equity, official frozen V8 holdout equity, and SPY"><line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${grid}${paths}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${firstLabel}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${lastLabel}</text></svg>`;
+    const officialStatus=official&&official.points.length?'official V8 holdout + accelerated V10/SPY':'accelerated V10/SPY · official V8 unavailable';
+    set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · ${officialStatus}`);
   }
 
   const liveStage=section.querySelector('.a10-live-stage');
   liveStage?.addEventListener('pointermove',event=>{
-    if(!liveHits.length)return;
+    if(!liveHits.length||!liveRenderedSeries.length)return;
     const host=section.querySelector('[data-a10-live-chart]'),tip=section.querySelector('[data-a10-live-tooltip]');
     const rect=host.getBoundingClientRect(),px=(event.clientX-rect.left)*liveWidth/rect.width;
-    const point=liveHits.reduce((left,right)=>Math.abs(right.x-px)<Math.abs(left.x-px)?right:left);
+    const hit=liveHits.reduce((left,right)=>Math.abs(right.x-px)<Math.abs(left.x-px)?right:left);
     const guide=host.querySelector('[data-a10-hover-line]');
-    guide?.setAttribute('x1',point.x);guide?.setAttribute('x2',point.x);guide?.setAttribute('opacity','1');
-    const start=Number(livePayload?.starting_equity)||NORMALIZED_BASE;
-    tip.innerHTML=`<strong>${point.label} · ${dateTime(point.time)}</strong><div><span>V10</span><b>${money(point.v10)} (${pct4(point.v10/start-1)})</b></div><div><span>V8 control</span><b>${money(point.v8)} (${pct4(point.v8/start-1)})</b></div><div><span>SPY</span><b>${money(point.spy)} (${pct4(point.spy/start-1)})</b></div>`;
-    tip.style.left=`${Math.max(115,Math.min(rect.width-115,point.x/liveWidth*rect.width))}px`;
-    tip.style.top=`${Math.max(118,point.top/H*rect.height)}px`;
+    guide?.setAttribute('x1',hit.x);guide?.setAttribute('x2',hit.x);guide?.setAttribute('opacity','1');
+    const rows=liveRenderedSeries.map(item=>({
+      item,
+      point:nearestSeriesPoint(item.points,hit.time),
+    }));
+    tip.innerHTML=`<strong>Nearest forward values · ${dateTime(hit.time)}</strong>${rows.map(row=>{
+      const start=NORMALIZED_BASE;
+      return `<div><span>${row.item.label}</span><b>${money(row.point.value)} (${pct4(row.point.value/start-1)})</b></div>`;
+    }).join('')}`;
+    tip.style.left=`${Math.max(115,Math.min(rect.width-115,hit.x/liveWidth*rect.width))}px`;
+    tip.style.top=`${Math.max(118,hit.top/H*rect.height)}px`;
     tip.classList.add('show');
   });
   liveStage?.addEventListener('pointerleave',()=>{
     section.querySelector('[data-a10-live-tooltip]')?.classList.remove('show');
     section.querySelector('[data-a10-hover-line]')?.setAttribute('opacity','0');
   });
-  if(window.ResizeObserver)new ResizeObserver(()=>{if(livePayload)renderLiveChart(livePayload);}).observe(section.querySelector('[data-a10-live-chart]'));
+  if(window.ResizeObserver)new ResizeObserver(()=>{
+    if(livePayload)renderLiveChart(livePayload,officialV8Payload);
+  }).observe(section.querySelector('[data-a10-live-chart]'));
 
   function renderEquity(curve) {
     const host = section.querySelector('[data-a10-equity-chart]');
@@ -383,9 +477,14 @@
   }
 
   const NORMALIZED_BASE=100000;
-  function renderDashboard(data) {
+  function renderDashboard(data,officialV8) {
       const current=Number.isFinite(Number(data.current_equity))?Number(data.current_equity):NORMALIZED_BASE;
       const currentReturn=Number.isFinite(Number(data.current_return))?Number(data.current_return):current/NORMALIZED_BASE-1;
+      const officialV8Equity=officialV8&&finiteNumber(officialV8.current_equity)?Number(officialV8.current_equity):null;
+      const officialV8Return=officialV8&&finiteNumber(officialV8.current_return)
+        ? Number(officialV8.current_return)
+        : (officialV8Equity==null?null:officialV8Equity/NORMALIZED_BASE-1);
+      const currentExcessVsOfficialV8=officialV8Return==null?null:currentReturn-officialV8Return;
       const change=current-NORMALIZED_BASE;
       const signedMoney=`${change>=0?'+':'-'}${money(Math.abs(change))}`;
       const open=Number(data.open_cohorts)||0,priced=Number(data.priced_open_cohorts)||0;
@@ -394,17 +493,17 @@
       set('[data-a10-live-change]',data.equity_basis==='LIVE_MARK_TO_MARKET'?`CURRENT MARK · ${signedMoney} (${pct4(currentReturn)})`:statusText(data.equity_basis));
       set('[data-a10-live-sub]',`${money(NORMALIZED_BASE)} start · ${priced}/${open} open cohorts priced${valuation!=='—'?` · marks as of ${valuation}`:''}`);
       set('[data-a10-live-return]',pct4(currentReturn));
-      set('[data-a10-live-v8]',pct4(data.current_v8_return));
+      set('[data-a10-live-v8]',pct4(officialV8Return));
       set('[data-a10-live-spy]',pct4(data.current_spy_return));
-      set('[data-a10-live-excess-v8]',pct4(data.current_excess_vs_v8));
+      set('[data-a10-live-excess-v8]',pct4(currentExcessVsOfficialV8));
       set('[data-a10-live-excess-spy]',pct4(data.current_excess_vs_spy));
       tone('[data-a10-live-change]',currentReturn);
       tone('[data-a10-live-return]',currentReturn);
-      tone('[data-a10-live-v8]',data.current_v8_return);
+      tone('[data-a10-live-v8]',officialV8Return);
       tone('[data-a10-live-spy]',data.current_spy_return);
-      tone('[data-a10-live-excess-v8]',data.current_excess_vs_v8);
+      tone('[data-a10-live-excess-v8]',currentExcessVsOfficialV8);
       tone('[data-a10-live-excess-spy]',data.current_excess_vs_spy);
-      renderLiveChart(data);
+      renderLiveChart(data,officialV8);
       const blocks=Number(data.complete_five_sleeve_blocks)||0;
       const provisional=Number(data.minimum_blocks_for_provisional_review)||8;
       const stronger=Number(data.minimum_blocks_for_stronger_review)||12;
@@ -472,10 +571,22 @@
       set('[data-a10-method]',`The accelerated read-only endpoint could not be reached. No runner was invoked. ${error.message}`);
   }
 
-  function refresh() {
-    fetch('/api/v10/cycle3/accelerated-v2',{credentials:'same-origin',cache:'no-store'})
+  const fetchOfficialV8 = () => {
+    if(window.DataShepherdV8Snapshot?.get){
+      return window.DataShepherdV8Snapshot.get({force:true}).catch(()=>null);
+    }
+    return fetch('/api/v8/holdout',{credentials:'same-origin',cache:'no-store'})
       .then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();})
-      .then(renderDashboard)
+      .catch(()=>null);
+  };
+
+  function refresh() {
+    Promise.all([
+      fetch('/api/v10/cycle3/accelerated-v2',{credentials:'same-origin',cache:'no-store'})
+        .then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}),
+      fetchOfficialV8(),
+    ])
+      .then(([data,officialV8])=>renderDashboard(data,officialV8))
       .catch(renderError);
   }
   refresh();
