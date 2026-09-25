@@ -974,18 +974,75 @@ def _missed_sessions(
     events: list[dict],
     now_utc: datetime,
 ) -> list[str]:
-    recorded = {
+    decisions = {
         _timestamp(row["decision_timestamp_utc"])
         for row in events
         if row.get("event_type") == "DECISION_BATCH"
     }
+    marked = {
+        _timestamp(row["decision_timestamp_utc"])
+        for row in events
+        if row.get("event_type") == "MISSED_DECISION"
+    }
     today = _ny_date(now_utc)
-    return [
-        session.date().isoformat()
+    derived = {
+        session
         for session in prospective_sessions
-        if session not in recorded
+        if session not in decisions
         and session.date() < today
-    ]
+    }
+    return sorted(
+        session.date().isoformat()
+        for session in (marked | derived)
+    )
+
+
+def _record_missed_decisions(
+    *,
+    prospective_sessions: list[pd.Timestamp],
+    events: list[dict],
+    now_utc: datetime,
+    journal_path: Path,
+    contract_sha: str,
+) -> int:
+    decisions = {
+        _timestamp(row["decision_timestamp_utc"])
+        for row in events
+        if row.get("event_type") == "DECISION_BATCH"
+    }
+    already_marked = {
+        _timestamp(row["decision_timestamp_utc"])
+        for row in events
+        if row.get("event_type") == "MISSED_DECISION"
+    }
+    today = _ny_date(now_utc)
+    appended = 0
+
+    for session_index, session in enumerate(prospective_sessions):
+        session = _timestamp(session)
+        if session.date() >= today:
+            continue
+        if session in decisions or session in already_marked:
+            continue
+        event = {
+            "event_type": "MISSED_DECISION",
+            "journal_type":
+                "STOCK_EAGLE_AUTONOMOUS_ML_PROSPECTIVE_V1",
+            "contract_sha256": contract_sha,
+            "decision_timestamp_utc": session.isoformat(),
+            "cohort_offset": int(session_index % SLEEVE_COUNT),
+            "reason":
+                "DECISION_WINDOW_EXPIRED_WITHOUT_DECISION_BATCH",
+            "backfilled_decision": False,
+            "paper_only": True,
+            "brokerage_orders": False,
+            "live_execution_enabled": False,
+            "created_at_utc": now_utc.isoformat(),
+        }
+        if _append_event(event, journal_path):
+            appended += 1
+            already_marked.add(session)
+    return appended
 
 
 def _process_lifecycle(
@@ -1215,12 +1272,19 @@ def run_once(
         now,
         start,
     )
+    appended = _record_missed_decisions(
+        prospective_sessions=prospective_sessions,
+        events=events,
+        now_utc=now,
+        journal_path=journal_path,
+        contract_sha=contract_sha,
+    )
+    events = _read_events(journal_path)
     missed = _missed_sessions(
         prospective_sessions,
         events,
         now,
     )
-    appended = 0
 
     latest_completed = (
         prospective_sessions[-1]
