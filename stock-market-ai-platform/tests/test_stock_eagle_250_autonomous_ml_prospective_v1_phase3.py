@@ -13,6 +13,8 @@ from sklearn.dummy import DummyClassifier, DummyRegressor
 from ml.stock_eagle_250_autonomous_ml_prospective_v1.phase3 import (
     EXPECTED_CANDIDATE_ORDER,
     _append_event,
+    _read_events,
+    _record_missed_decisions,
     _sha256_bytes,
     candidate_realized_return,
     decision_session_allowed_now,
@@ -488,6 +490,61 @@ class StockEagle250AutonomousMLProspectiveV1Phase3Test(
             summary["complete_five_sleeve_blocks"],
             12,
         )
+
+    def test_missed_decision_is_preserved_without_backfill(self):
+        with tempfile.TemporaryDirectory() as temp:
+            journal = Path(temp) / "journal.jsonl"
+            sessions = [
+                pd.Timestamp("2026-10-01", tz="UTC"),
+                pd.Timestamp("2026-10-02", tz="UTC"),
+            ]
+            appended = _record_missed_decisions(
+                prospective_sessions=sessions,
+                events=[],
+                now_utc=datetime(
+                    2026,
+                    10,
+                    2,
+                    18,
+                    0,
+                    tzinfo=timezone.utc,
+                ),
+                journal_path=journal,
+                contract_sha="test-contract",
+            )
+            self.assertEqual(appended, 1)
+
+            events = _read_events(journal)
+            self.assertEqual(
+                events[0]["event_type"],
+                "MISSED_DECISION",
+            )
+            self.assertEqual(
+                events[0]["decision_timestamp_utc"],
+                "2026-10-01T00:00:00+00:00",
+            )
+            self.assertFalse(
+                events[0]["backfilled_decision"]
+            )
+
+            appended_again = _record_missed_decisions(
+                prospective_sessions=sessions,
+                events=events,
+                now_utc=datetime(
+                    2026,
+                    10,
+                    2,
+                    19,
+                    0,
+                    tzinfo=timezone.utc,
+                ),
+                journal_path=journal,
+                contract_sha="test-contract",
+            )
+            self.assertEqual(
+                appended_again,
+                0,
+            )
 
     def test_preboundary_run_does_not_touch_market_loader(self):
         contract = copy.deepcopy(load_contract())
