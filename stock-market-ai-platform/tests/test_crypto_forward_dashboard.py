@@ -122,6 +122,13 @@ class CryptoForwardDashboardTest(unittest.TestCase):
             self.assertEqual(payload["chart_points"][1]["event_status"], "PENDING_REALIZATION")
             self.assertEqual(payload["chart_points"][1]["candidate"], 100_000.0)
             self.assertEqual(payload["chart_points"][1]["baseline"], 100_000.0)
+            self.assertEqual(len(payload["action_history"]), 1)
+            action = payload["action_history"][0]
+            self.assertEqual(action["status"], "PENDING_REALIZATION")
+            self.assertEqual(action["realization_due_utc"], "2026-09-27T00:00:00+00:00")
+            self.assertEqual(action["bought_assets"], [])
+            self.assertEqual(action["sold_assets"], [])
+            self.assertEqual(action["target_weights"], {"CASH": 1.0})
 
     def test_gap_error_preserves_heartbeat_observability(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -189,6 +196,15 @@ class CryptoForwardDashboardTest(unittest.TestCase):
             self.assertEqual(payload["current_equity_dollars"], 102_500.0)
             self.assertTrue(payload["contract_verified"])
             self.assertFalse(payload["brokerage_orders"])
+            self.assertEqual(len(payload["action_history"]), 1)
+            action = payload["action_history"][0]
+            self.assertEqual(action["status"], "REALIZED")
+            self.assertEqual(
+                {row["product_id"] for row in action["bought_assets"]},
+                {"BTC-USD", "ETH-USD"},
+            )
+            self.assertEqual(action["sold_assets"], [])
+            self.assertAlmostEqual(action["net_return"], 0.025)
 
 
 if __name__ == "__main__":

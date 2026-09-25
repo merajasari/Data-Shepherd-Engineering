@@ -8,6 +8,7 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let marketQuotes={},marketFilter='all',marketSort='change',marketSearch='',marketTimer=null,marketInFlight=false,marketLastSuccess=null,marketFailures=0;
   let sharedV4ChartRows=[],sharedV4SummaryHours=24;
+  let v5ForwardData={},v5SummaryRange='30';
 
   function sharedV4Activity(row){
     const before=String(row.executed_label_before||'CASH').toUpperCase();
@@ -311,6 +312,135 @@
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!modal.hidden)closeSharedV4ActionsSummary()});
   }
 
+
+  const v5RangeLabel=range=>({latest:'latest decision','7':'last week','30':'last month','90':'last 3 months','180':'last 6 months','365':'last year',all:'all recorded V5 decisions'}[String(range)]||String(range));
+
+  function v5PositiveWeights(weights,includeCash=true){
+    return Object.entries(weights||{})
+      .map(([product_id,weight])=>({product_id,weight:Number(weight)}))
+      .filter(item=>Number.isFinite(item.weight)&&item.weight>1e-9&&(includeCash||item.product_id!=='CASH'))
+      .sort((a,b)=>b.weight-a.weight);
+  }
+
+  function v5WeightList(weights){
+    const items=v5PositiveWeights(weights,true);
+    return items.length
+      ? items.map(item=>'<span class="chip">'+esc(item.product_id)+' · '+(item.weight*100).toFixed(1)+'%</span>').join('')
+      : '<span class="muted">No positive paper weight</span>';
+  }
+
+  function v5ChangeList(items,emptyText){
+    if(!Array.isArray(items)||!items.length)return '<span class="muted">'+esc(emptyText)+'</span>';
+    return items.map(item=>{
+      const delta=Number(item.weight_change);
+      return '<span class="chip">'+esc(item.product_id)+' · '+(delta>=0?'+':'')+(delta*100).toFixed(1)+' pts</span>';
+    }).join('');
+  }
+
+  function v5RankedList(items){
+    if(!Array.isArray(items)||!items.length)return '<span class="muted">No ranking rows recorded</span>';
+    return items.map((item,index)=>'<span class="chip">#'+(index+1)+' '+esc(item.product_id)+' · '+(Number(item.predicted_score)||0).toFixed(4)+'</span>').join('');
+  }
+
+  function v5SummaryHtml(range){
+    const history=(Array.isArray(v5ForwardData.action_history)?v5ForwardData.action_history:[])
+      .filter(row=>row&&Number.isFinite(Date.parse(row.decision_timestamp_utc)))
+      .map(row=>({...row,_decisionT:Date.parse(row.decision_timestamp_utc)}))
+      .sort((a,b)=>a._decisionT-b._decisionT);
+    if(!history.length)return '<div class="actions-summary-empty">No Crypto V5 paper decisions are recorded yet. This summary will populate directly from the clean-forward V5 journal.</div>';
+
+    const latestT=history[history.length-1]._decisionT;
+    let rows;
+    if(String(range)==='latest')rows=[history[history.length-1]];
+    else if(String(range)==='all')rows=[...history];
+    else{
+      const days=Math.max(1,Number(range)||30),cutoff=latestT-days*86400e3;
+      rows=history.filter(row=>row._decisionT>cutoff&&row._decisionT<=latestT);
+    }
+    if(!rows.length)return '<div class="actions-summary-empty">No V5 decisions fall inside this selected range.</div>';
+
+    const realized=rows.filter(row=>row.status==='REALIZED'),pending=rows.filter(row=>row.status!=='REALIZED');
+    const allocationChanges=rows.filter(row=>Array.isArray(row.weight_changes)&&row.weight_changes.length).length;
+    const buyEvents=rows.filter(row=>Array.isArray(row.bought_assets)&&row.bought_assets.length).length;
+    const sellEvents=rows.filter(row=>Array.isArray(row.sold_assets)&&row.sold_assets.length).length;
+    const last=rows[rows.length-1];
+
+    const buyStats=new Map(),sellStats=new Map();
+    const accumulate=(map,items)=>{(items||[]).forEach(item=>{const name=String(item.product_id||'');if(!name)return;const entry=map.get(name)||{events:0,points:0};entry.events+=1;entry.points+=Math.abs(Number(item.weight_change)||0);map.set(name,entry)})};
+    rows.forEach(row=>{accumulate(buyStats,row.bought_assets);accumulate(sellStats,row.sold_assets)});
+    const actionStats=(map,empty)=>map.size
+      ? [...map.entries()].sort((a,b)=>b[1].points-a[1].points).map(([name,item])=>'<span class="chip">'+esc(name)+' · '+item.events+' decision'+(item.events===1?'':'s')+' · '+(item.points*100).toFixed(1)+' pts</span>').join('')
+      : '<span class="muted">'+esc(empty)+'</span>';
+
+    let performance='<div class="notice">No completed three-day realization falls inside this range yet. Pending decisions are shown in the timeline, but they do not create paper P/L until realization.</div>';
+    if(realized.length){
+      const compound=realized.reduce((growth,row)=>Number.isFinite(+row.net_return)?growth*(1+ +row.net_return):growth,1)-1;
+      const first=realized[0],final=realized[realized.length-1];
+      const start=Number(first.paper_equity_before),end=Number(final.paper_equity_after);
+      const pnl=Number.isFinite(start)&&Number.isFinite(end)?end-start:NaN;
+      const costs=realized.reduce((sum,row)=>sum+(Number(row.transaction_cost)||0),0);
+      performance='<div class="chart-drilldown-grid"><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Completed realizations</span><b>'+realized.length+'</b></div><div class="chart-drilldown-row"><span>Compounded net return</span><b class="'+(compound<0?'negative':'positive')+'">'+signedPct(compound)+'</b></div><div class="chart-drilldown-row"><span>Paper P/L across realized rows</span><b class="'+(pnl<0?'negative':'positive')+'">'+signedMoney2(pnl)+'</b></div></div><div class="chart-drilldown-group"><div class="chart-drilldown-row"><span>Ending realized equity</span><b>'+money2(end)+'</b></div><div class="chart-drilldown-row"><span>Applied transaction costs</span><b>'+money2(costs)+'</b></div><div class="chart-drilldown-row"><span>Latest realized through</span><b>'+esc(chartStamp(final.realized_through_utc))+'</b></div></div></div>';
+    }
+
+    const timeline=[...rows].reverse().map(row=>{
+      const buys=v5ChangeList(row.bought_assets,'No crypto paper weight increased');
+      const sells=v5ChangeList(row.sold_assets,'No crypto paper weight decreased');
+      const target=v5WeightList(row.target_weights);
+      const ranks=v5RankedList(row.top_ranked_assets);
+      const turnover=Number(row.turnover),confidence=Number(row.confidence),estimatedCost=Number(row.estimated_transaction_cost);
+      const realizedRow=row.status==='REALIZED';
+      const statusTone=realizedRow?'positive':'gold';
+      const net=Number(row.net_return),gross=Number(row.gross_return);
+      const assetReturns=Object.entries(row.asset_returns||{}).filter(([,value])=>Number.isFinite(+value)).map(([name,value])=>'<span class="chip">'+esc(name)+' · '+signedPct(+value)+'</span>').join('')||'<span class="muted">No realized asset returns yet</span>';
+      const outcome=realizedRow
+        ? '<section class="chart-drilldown-group"><h3>Three-day realized outcome</h3><div class="chart-drilldown-row"><span>Gross return</span><b class="'+(gross<0?'negative':'positive')+'">'+signedPct(gross)+'</b></div><div class="chart-drilldown-row"><span>Net return</span><b class="'+(net<0?'negative':'positive')+'">'+signedPct(net)+'</b></div><div class="chart-drilldown-row"><span>Applied transaction cost</span><b>'+money2(row.transaction_cost)+'</b></div><div class="chart-drilldown-row"><span>Paper equity after</span><b>'+money2(row.paper_equity_after)+'</b></div><div class="actions-summary-chips" style="margin-top:10px">'+assetReturns+'</div></section>'
+        : '<section class="chart-drilldown-group"><h3>Three-day outcome</h3><div class="notice">PENDING REALIZATION · eligible '+esc(chartStamp(row.realization_due_utc))+'. No unrealized return is counted in V5 paper equity.</div></section>';
+
+      const action=(Array.isArray(row.bought_assets)&&row.bought_assets.length)||(Array.isArray(row.sold_assets)&&row.sold_assets.length)
+        ? 'Paper allocation changed'
+        : 'No crypto allocation change';
+      return '<details class="actions-summary-hour"><summary><div><strong>'+esc(chartStamp(row.decision_timestamp_utc))+'</strong><span>V5 three-day decision</span></div><div><strong>'+esc(action)+'</strong><span>'+esc(row.selected_regime||'—')+' · '+esc(row.status||'—')+'</span></div><div><strong class="'+statusTone+'">'+(realizedRow?signedPct(net):'PENDING')+'</strong><span>'+(realizedRow?'Net 3-day result':'Awaiting realization')+'</span></div><div><strong>'+money2(realizedRow?row.paper_equity_after:row.paper_equity_before)+'</strong><span>Paper equity</span></div></summary><div class="actions-summary-hour-body"><div class="chart-drilldown-grid"><section class="chart-drilldown-group"><h3>Paper allocation action</h3><div class="chart-drilldown-row"><span>Bought / increased</span><b></b></div><div class="actions-summary-chips">'+buys+'</div><div class="chart-drilldown-row"><span>Sold / decreased</span><b></b></div><div class="actions-summary-chips">'+sells+'</div><div class="chart-drilldown-row"><span>Target paper allocation</span><b></b></div><div class="actions-summary-chips">'+target+'</div></section><section class="chart-drilldown-group"><h3>Decision evidence</h3><div class="chart-drilldown-row"><span>Proposed regime</span><b>'+esc(row.proposed_regime||'—')+'</b></div><div class="chart-drilldown-row"><span>Selected regime</span><b>'+esc(row.selected_regime||'—')+'</b></div><div class="chart-drilldown-row"><span>Regime switched</span><b>'+(row.regime_switched?'YES':'NO')+'</b></div><div class="chart-drilldown-row"><span>Confidence</span><b>'+(Number.isFinite(confidence)?(confidence*100).toFixed(1)+'%':'—')+'</b></div><div class="chart-drilldown-row"><span>Turnover</span><b>'+(Number.isFinite(turnover)?(turnover*100).toFixed(1)+'%':'—')+'</b></div><div class="chart-drilldown-row"><span>Estimated transaction cost</span><b>'+(Number.isFinite(estimatedCost)?money2(estimatedCost):'—')+'</b></div><div class="chart-drilldown-row"><span>Real orders</span><b>NO · PAPER ONLY</b></div></section></div><section class="actions-summary-section"><h3>Top-ranked assets at decision</h3><p class="muted">Ranking does not mean purchase. A coin is counted as bought only when its V5 target paper weight actually increased.</p><div class="actions-summary-chips">'+ranks+'</div></section>'+outcome+'</div></details>';
+    }).join('');
+
+    const currentWeights=v5WeightList(last.target_weights);
+    const noTradeNotice=(buyEvents===0&&sellEvents===0)
+      ? '<div class="notice"><strong>No crypto coins were bought or sold in this selected range.</strong> V5 may still rank assets while remaining in CASH or keeping the same target allocation.</div>'
+      : '<div class="notice">Bought/Sold below refers only to V5 paper target-weight changes recorded at decision boundaries. Real brokerage orders remain OFF.</div>';
+
+    return '<div class="notice"><strong>Range:</strong> '+esc(v5RangeLabel(range))+' ending at the latest V5 decision, '+esc(chartStamp(last.decision_timestamp_utc))+'. '+rows.length+' decision'+(rows.length===1?'':'s')+' in this window.</div>'+
+      '<div class="actions-summary-kpis"><div class="metric"><span>DECISIONS</span><strong>'+rows.length+'</strong></div><div class="metric"><span>REALIZED</span><strong>'+realized.length+'</strong></div><div class="metric"><span>PENDING</span><strong>'+pending.length+'</strong></div><div class="metric"><span>ALLOCATION CHANGES</span><strong>'+allocationChanges+'</strong></div><div class="metric"><span>BUY EVENTS</span><strong>'+buyEvents+'</strong></div><div class="metric"><span>SELL EVENTS</span><strong>'+sellEvents+'</strong></div></div>'+
+      noTradeNotice+
+      '<div class="actions-summary-section"><h3>Coin actions in selected range</h3><div class="chart-drilldown-grid"><div class="chart-drilldown-group"><h3>Bought / increased paper weight</h3><div class="actions-summary-chips">'+actionStats(buyStats,'None in this range')+'</div></div><div class="chart-drilldown-group"><h3>Sold / decreased paper weight</h3><div class="actions-summary-chips">'+actionStats(sellStats,'None in this range')+'</div></div></div></div>'+
+      '<div class="actions-summary-section"><h3>Latest target paper allocation in selected range</h3><div class="actions-summary-chips">'+currentWeights+'</div></div>'+
+      '<div class="actions-summary-section"><h3>Realized performance in selected range</h3>'+performance+'</div>'+
+      '<div class="actions-summary-section"><h3>V5 decision timeline</h3><p class="muted">Newest first. Pending decisions show their scheduled three-day realization boundary; completed decisions show actual journaled outcomes.</p>'+timeline+'</div>'+
+      '<div class="chart-drilldown-foot">This is a read-only view of Crypto V5 clean-forward evidence. Top-ranked assets are not treated as purchases unless their target paper weight increased. No broker orders are created by this dashboard.</div>';
+  }
+
+  function renderV5ActionsSummary(){
+    const modal=document.getElementById('v5-actions-summary');if(!modal)return;
+    const content=modal.querySelector('[data-v5-summary-content]');if(content)content.innerHTML=v5SummaryHtml(v5SummaryRange);
+    modal.querySelectorAll('[data-v5-range]').forEach(button=>{const active=button.dataset.v5Range===String(v5SummaryRange);button.classList.toggle('active',active);button.setAttribute('aria-pressed',active?'true':'false')});
+  }
+
+  function openV5ActionsSummary(){
+    const modal=document.getElementById('v5-actions-summary');if(!modal)return;
+    renderV5ActionsSummary();modal.hidden=false;modal.setAttribute('aria-hidden','false');document.body.classList.add('chart-drilldown-open');
+    window.requestAnimationFrame(()=>modal.querySelector('[data-v5-range="30"]')?.focus());
+  }
+
+  function closeV5ActionsSummary(){
+    const modal=document.getElementById('v5-actions-summary');if(!modal||modal.hidden)return;
+    modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('chart-drilldown-open');
+  }
+
+  function setupV5ActionsSummary(){
+    const modal=document.getElementById('v5-actions-summary'),open=document.querySelector('[data-v5-summary-open]');if(!modal||!open)return;
+    open.addEventListener('click',openV5ActionsSummary);
+    modal.addEventListener('click',event=>{const range=event.target.closest('[data-v5-range]');if(range){v5SummaryRange=range.dataset.v5Range||'30';renderV5ActionsSummary();return}if(event.target.closest('[data-v5-summary-close]'))closeV5ActionsSummary()});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!modal.hidden)closeV5ActionsSummary()});
+  }
+
   function setupTabs(){const tabs=[...document.querySelectorAll('[data-crypto-tab]')],panels=[...document.querySelectorAll('[data-crypto-panel]')];const show=id=>{tabs.forEach(t=>{const on=t.dataset.cryptoTab===id;t.classList.toggle('active',on);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1});panels.forEach(p=>p.hidden=p.dataset.cryptoPanel!==id);history.replaceState(null,'',id==='overview'?location.pathname:`#${id}`)};tabs.forEach((t,i)=>{t.onclick=()=>show(t.dataset.cryptoTab);t.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[n].focus();show(tabs[n].dataset.cryptoTab)}});const initial=location.hash.slice(1);show(tabs.some(t=>t.dataset.cryptoTab===initial)?initial:'overview')}
 
   function forwardLineChart(id,rows,definitions,{percent=false,currency=false,height=430,interactive=false,hourlySlots=false,drilldown=false}={}){
@@ -439,6 +569,7 @@
     const source=document.getElementById('crypto-forward-chart-data');if(!source)return;let data;try{data=JSON.parse(source.textContent)}catch{return}
     const shared=data.shared_v2||{},v5=data.v5||{};
     sharedV4ChartRows=Array.isArray(shared.chart_points)?shared.chart_points:[];
+    v5ForwardData=v5;
     forwardLineChart('shared-v2-equity',sharedV4ChartRows,[{key:'candidate',label:'Shared V4',color:'#39e3a1'},{key:'benchmark',label:'Always BTC',color:'#4d8cff'}],{currency:true,interactive:true,hourlySlots:true,drilldown:true});
     forwardLineChart('shared-v2-drawdown',shared.chart_points,[{key:'candidate_drawdown',label:'Shared V4',color:'#39e3a1'},{key:'benchmark_drawdown',label:'Always BTC',color:'#4d8cff'}],{percent:true,height:260});
     forwardBarChart('shared-v2-returns',shared.return_points,[{key:'net_return',label:'Selected sleeve',color:'#39e3a1'},{key:'btc_return',label:'BTC',color:'#4d8cff'}]);
@@ -517,5 +648,5 @@
     update();window.setInterval(update,30000);
   }
 
-  setupTabs();setupSharedV4Drilldown();renderForwardCharts();setupSharedV4ActionsSummary();formatV5ForwardTimes();initMarketBoard();initPaperCountdowns();
+  setupTabs();setupSharedV4Drilldown();renderForwardCharts();setupSharedV4ActionsSummary();setupV5ActionsSummary();formatV5ForwardTimes();initMarketBoard();initPaperCountdowns();
 })();

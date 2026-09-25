@@ -746,8 +746,14 @@ def _v5_forward_performance():
         "preregistered_observation_start_utc",
         manifest.get("preregistered_start_utc", "2026-09-23T07:00:00+00:00"),
     )
-    decisions = [row for row in events if row.get("event_type") == "DECISION"]
-    realizations = [row for row in events if row.get("event_type") == "REALIZATION"]
+    decisions = sorted(
+        [row for row in events if row.get("event_type") == "DECISION"],
+        key=lambda item: item.get("decision_timestamp_utc", ""),
+    )
+    realizations = sorted(
+        [row for row in events if row.get("event_type") == "REALIZATION"],
+        key=lambda item: item.get("realized_through_utc", item.get("decision_timestamp_utc", "")),
+    )
     current_equity = float(state.get("paper_equity", V5_STARTING_PAPER_EQUITY) or V5_STARTING_PAPER_EQUITY)
     chart_points = [{
         "timestamp": clean_start,
@@ -783,6 +789,116 @@ def _v5_forward_performance():
             "gross_return": float(row.get("gross_return", 0.0)),
             "regime": row.get("selected_regime"),
         })
+    def _decision_key(value):
+        if not value:
+            return ""
+        try:
+            timestamp = pd.Timestamp(value)
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.tz_localize("UTC")
+            else:
+                timestamp = timestamp.tz_convert("UTC")
+            return timestamp.isoformat()
+        except Exception:
+            return str(value)
+
+    realization_by_decision = {
+        _decision_key(row.get("decision_timestamp_utc")): row
+        for row in realizations
+    }
+    action_history = []
+    previous_weights = {"CASH": 1.0}
+    for decision in decisions:
+        decision_timestamp = decision.get("decision_timestamp_utc")
+        realization = realization_by_decision.get(_decision_key(decision_timestamp))
+        raw_weights = decision.get("target_weights") or previous_weights
+        target_weights = {
+            str(asset): float(weight or 0.0)
+            for asset, weight in raw_weights.items()
+        }
+        changes = []
+        bought_assets = []
+        sold_assets = []
+        for asset in sorted(set(previous_weights) | set(target_weights)):
+            before = float(previous_weights.get(asset, 0.0) or 0.0)
+            after = float(target_weights.get(asset, 0.0) or 0.0)
+            delta = after - before
+            if abs(delta) <= 1e-12:
+                continue
+            change = {
+                "product_id": asset,
+                "weight_before": before,
+                "weight_after": after,
+                "weight_change": delta,
+            }
+            changes.append(change)
+            if asset != "CASH" and delta > 0:
+                bought_assets.append(change)
+            elif asset != "CASH" and delta < 0:
+                sold_assets.append(change)
+
+        due_utc = None
+        if decision_timestamp:
+            try:
+                due = pd.Timestamp(decision_timestamp)
+                if due.tzinfo is None:
+                    due = due.tz_localize("UTC")
+                else:
+                    due = due.tz_convert("UTC")
+                due_utc = (
+                    due + pd.Timedelta(
+                        int(decision.get("horizon_days", 3) or 3), unit="D"
+                    )
+                ).isoformat()
+            except Exception:
+                pass
+
+        action_history.append({
+            "decision_id": decision.get("decision_id"),
+            "decision_timestamp_utc": decision_timestamp,
+            "realization_due_utc": due_utc,
+            "realized_through_utc": (
+                realization.get("realized_through_utc") if realization else None
+            ),
+            "status": "REALIZED" if realization else "PENDING_REALIZATION",
+            "proposed_regime": decision.get("proposed_regime"),
+            "selected_regime": decision.get("selected_regime"),
+            "regime_switched": bool(decision.get("regime_switched", False)),
+            "confidence": decision.get("confidence"),
+            "target_weights": target_weights,
+            "weight_changes": changes,
+            "bought_assets": bought_assets,
+            "sold_assets": sold_assets,
+            "top_ranked_assets": decision.get("top_ranked_assets", []),
+            "allocation_scores": decision.get("allocation_scores", {}),
+            "turnover": float(decision.get("turnover", 0.0) or 0.0),
+            "estimated_transaction_cost": float(
+                decision.get("estimated_transaction_cost", 0.0) or 0.0
+            ),
+            "paper_equity_before": float(
+                decision.get("paper_equity_before", V5_STARTING_PAPER_EQUITY)
+                or V5_STARTING_PAPER_EQUITY
+            ),
+            "gross_return": (
+                float(realization.get("gross_return", 0.0) or 0.0)
+                if realization else None
+            ),
+            "net_return": (
+                float(realization.get("net_return", 0.0) or 0.0)
+                if realization else None
+            ),
+            "transaction_cost": (
+                float(realization.get("transaction_cost", 0.0) or 0.0)
+                if realization else None
+            ),
+            "paper_equity_after": (
+                float(realization.get("paper_equity_after", 0.0) or 0.0)
+                if realization else None
+            ),
+            "asset_returns": realization.get("asset_returns", {}) if realization else {},
+        })
+        previous_weights = target_weights
+
     latest = decisions[-1] if decisions else {}
     latest_decision_utc = latest.get("decision_timestamp_utc") or state.get("last_decision_utc")
     latest_realized_utc = (
@@ -864,6 +980,7 @@ def _v5_forward_performance():
         "turnover": latest.get("turnover"), "cost_bps": 25.0,
         "model_id": latest.get("model_id", "ridge"), "horizon_days": 3,
         "top_n": 3, "chart_points": chart_points, "return_points": return_points,
+        "action_history": action_history,
         "contract_verified": bool(status.get("contract_verified", False)) if status else False,
         "paper_only": True, "brokerage_orders": False,
         "automatic_promotion": False, "human_review_required": True,

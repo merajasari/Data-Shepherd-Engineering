@@ -53,6 +53,7 @@
   <h2>Risk-Controlled Three-Day Top-3 Allocator</h2>
   <p class="muted">Frozen dual-layer Ridge model, completed Coinbase daily candles, three-day decisions and realizations, Top-3 ALT ranking, and an isolated $100,000 clean-forward paper account.</p>
   <div class="mode">{{ v5.mode }}</div>
+  <div class="actions-summary-launch"><button type="button" class="control" data-v5-summary-open aria-label="Open Crypto V5 Actions Summary">Actions Summery</button></div>
   <div class="grid metrics v5-eval-metrics" style="margin-top:18px">
     <div class="metric"><span>STARTING PAPER MONEY</span><strong>${{ '{:,.0f}'.format(v5.starting_equity_dollars) }}</strong></div>
     <div class="metric"><span>CURRENT PAPER EQUITY</span><strong class="{{ 'positive' if v5.current_equity_dollars >= v5.starting_equity_dollars else 'negative' }}">${{ '{:,.2f}'.format(v5.current_equity_dollars) }}</strong></div>
@@ -69,6 +70,30 @@
     <div class="notice"><strong>Frozen contract:</strong> Ridge · three-day horizon · Top-3 ALT basket · 25-bps round-trip cost · 60% turnover cap · no automatic promotion. The missed V1 lane remains archived and contributes no V2 evidence.</div>
   </div>
 </section>
+
+<div id="v5-actions-summary" class="chart-drilldown" hidden aria-hidden="true">
+  <div class="chart-drilldown-backdrop" data-v5-summary-close></div>
+  <section class="chart-drilldown-panel actions-summary-panel" role="dialog" aria-modal="true" aria-labelledby="v5-actions-summary-title">
+    <div class="chart-drilldown-head">
+      <div>
+        <div class="eyebrow">CRYPTO V5 · ACTIONS SUMMARY</div>
+        <h2 id="v5-actions-summary-title">Three-day paper activity history</h2>
+        <p class="muted">Read-only V5 decision and realization history. Coin Bought/Sold labels represent paper target-weight increases or decreases, never brokerage fills.</p>
+      </div>
+      <button type="button" class="chart-drilldown-close" data-v5-summary-close aria-label="Close Crypto V5 actions summary">×</button>
+    </div>
+    <div class="actions-summary-range" role="group" aria-label="Crypto V5 actions summary time range">
+      <button type="button" class="control" data-v5-range="latest">Latest decision</button>
+      <button type="button" class="control" data-v5-range="7">1 week</button>
+      <button type="button" class="control active" data-v5-range="30" aria-pressed="true">1 month</button>
+      <button type="button" class="control" data-v5-range="90">3 months</button>
+      <button type="button" class="control" data-v5-range="180">6 months</button>
+      <button type="button" class="control" data-v5-range="365">1 year</button>
+      <button type="button" class="control" data-v5-range="all">All</button>
+    </div>
+    <div data-v5-summary-content></div>
+  </section>
+</div>
 
 <section class="card">
   <div class="eyebrow">PAPER ACCOUNT PROGRESS</div>

@@ -97,6 +97,27 @@ class CryptoDashboardContractTest(unittest.TestCase):
         self.assertIn("Starting $100K", browser)
         self.assertIn("formatV5ForwardTimes", browser)
 
+    def test_v5_actions_summary_uses_v5_decision_history(self):
+        template = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
+        browser = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
+        service = (ROOT / "webapp/services/crypto_dashboard_service.py").read_text(encoding="utf-8")
+        self.assertIn('data-v5-summary-open', template)
+        self.assertIn("Actions Summery", template)
+        self.assertIn('id="v5-actions-summary"', template)
+        for value in ("latest", "7", "30", "90", "180", "365", "all"):
+            self.assertIn(f'data-v5-range="{value}"', template)
+        self.assertIn("CRYPTO V5 · ACTIONS SUMMARY", template)
+        self.assertIn("v5SummaryRange='30'", browser)
+        self.assertIn("function v5SummaryHtml", browser)
+        self.assertIn("Coin actions in selected range", browser)
+        self.assertIn("No crypto coins were bought or sold in this selected range.", browser)
+        self.assertIn("Ranking does not mean purchase.", browser)
+        self.assertIn("V5 decision timeline", browser)
+        self.assertIn("setupV5ActionsSummary", browser)
+        self.assertIn('"action_history": action_history', service)
+        self.assertIn('"bought_assets": bought_assets', service)
+        self.assertIn('"sold_assets": sold_assets', service)
+
     def test_shared_v4_equity_chart_has_rich_pointer_interaction(self):
         template = (ROOT / "webapp/templates/crypto_model_research.html").read_text(encoding="utf-8")
         browser = (ROOT / "webapp/static/js/crypto_model_research.js").read_text(encoding="utf-8")
