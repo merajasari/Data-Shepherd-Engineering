@@ -1,0 +1,121 @@
+{
+  "contract_id": "STOCK_EAGLE_250_AUTONOMOUS_ML_PROSPECTIVE_V1_PHASE1",
+  "display_name": "StockEagle250 Autonomous ML Prospective Comparison V1",
+  "model_id": "stock_eagle_250_autonomous_ml_prospective_v1",
+  "research_version": "stock_eagle_250_autonomous_ml_prospective_v1_oct2026",
+  "created_at_utc": "2026-09-25T00:00:00+00:00",
+  "created_before_prospective_results": true,
+  "classification": "PREREGISTERED_READ_ONLY_PROSPECTIVE_COMPARISON_NOT_LIVE",
+  "scientific_rationale": {
+    "reason": "V1, V2, and V3 were developed sequentially on the same 14 development folds. Further architecture tuning before an untouched evaluation would increase development-sample adaptation risk.",
+    "objective": "Compare the three already-defined learned architectures on identical unseen October 2026+ decision sessions before considering another architecture generation.",
+    "development_result_selection_prohibited": true
+  },
+  "candidate_snapshots": [
+    {
+      "candidate_id": "autonomous_ml_v1",
+      "research_version": "stock_eagle_250_autonomous_ml_v1",
+      "phase1_contract_path": "ml/stock_eagle_250_autonomous_ml_v1/phase1_contract.json",
+      "phase2_code_path": "ml/stock_eagle_250_autonomous_ml_v1/phase2.py",
+      "phase1_contract_git_blob_sha1": "a6633dfc7b75141c01659861049e7046fc6debb1",
+      "phase2_code_git_blob_sha1": "829d1cea734b09e61954ae37c3704e02722c1114",
+      "development_status_required": "REJECT_DEVELOPMENT_CANDIDATE",
+      "development_gates_passed_required": 8,
+      "development_gates_total_required": 9,
+      "development_failed_gates_required": [
+        "worst_fold_maximum_drawdown_gte"
+      ]
+    },
+    {
+      "candidate_id": "autonomous_ml_v2",
+      "research_version": "stock_eagle_250_autonomous_ml_v2_tail_aware",
+      "phase1_contract_path": "ml/stock_eagle_250_autonomous_ml_v2/phase1_contract.json",
+      "phase2_code_path": "ml/stock_eagle_250_autonomous_ml_v2/phase2.py",
+      "phase1_contract_git_blob_sha1": "3e9332720f36d10d780fea5b656a2f429c7c8e56",
+      "phase2_code_git_blob_sha1": "d596e88a80efceedfa02aa94711bf1b74681d0ad",
+      "development_status_required": "REJECT_DEVELOPMENT_CANDIDATE",
+      "development_gates_passed_required": 8,
+      "development_gates_total_required": 9,
+      "development_failed_gates_required": [
+        "positive_excess_vs_spy_fold_fraction_gte"
+      ]
+    },
+    {
+      "candidate_id": "autonomous_ml_v3",
+      "research_version": "stock_eagle_250_autonomous_ml_v3_benchmark_relative",
+      "phase1_contract_path": "ml/stock_eagle_250_autonomous_ml_v3/phase1_contract.json",
+      "phase2_code_path": "ml/stock_eagle_250_autonomous_ml_v3/phase2.py",
+      "phase1_contract_git_blob_sha1": "dafe6f3777f3875c98fec690b5cbeb8d052be9d8",
+      "phase2_code_git_blob_sha1": "c4770572158323badb0adc4f917d27ee5db667e2",
+      "development_status_required": "REJECT_DEVELOPMENT_CANDIDATE",
+      "development_gates_passed_required": 6,
+      "development_gates_total_required": 9,
+      "development_failed_gates_required": [
+        "median_fold_excess_vs_spy_gt_zero",
+        "positive_excess_vs_spy_fold_fraction_gte",
+        "worst_fold_maximum_drawdown_gte"
+      ]
+    }
+  ],
+  "snapshot_build": {
+    "source": "data/model/stock_eagle_250/phase2/research_panel.parquet",
+    "development_decision_end_utc": "2026-09-15T00:00:00+00:00",
+    "maximum_training_target_endpoint_utc": "2026-09-22T00:00:00+00:00",
+    "sealed_guard_band_start_utc": "2026-09-23T00:00:00+00:00",
+    "prospective_start_utc": "2026-10-01T00:00:00+00:00",
+    "use_all_authorized_model_eligible_development_rows": true,
+    "fit_each_candidate_with_its_existing_fixed_training_code": true,
+    "candidate_search": false,
+    "hyperparameter_search": false,
+    "feature_search": false,
+    "threshold_search": false,
+    "quantile_search": false,
+    "post_snapshot_retraining_during_evaluation": false,
+    "snapshot_sha256_required": true,
+    "training_cutoff_required": true,
+    "source_sha256_required": true
+  },
+  "prospective_protocol": {
+    "first_eligible_decision_session_utc": "2026-10-01T00:00:00+00:00",
+    "same_decision_clock_required_for_all_candidates": true,
+    "late_decision_backfill": false,
+    "append_only_evidence": true,
+    "entry": "next_completed_session_open",
+    "exit": "fifth_completed_session_close",
+    "overlapping_cohorts": 5,
+    "starting_equity": 100000,
+    "minimum_completed_cohorts_for_formal_review_per_candidate": 60,
+    "minimum_complete_five_sleeve_blocks_for_formal_review": 12,
+    "formal_review_requires_identical_completed_decision_set": true,
+    "early_results_are_descriptive_only": true,
+    "automatic_winner_selection": false,
+    "automatic_model_promotion": false,
+    "new_architecture_from_results_before_formal_review": false,
+    "brokerage_orders": false,
+    "live_execution_enabled": false
+  },
+  "prospective_metrics": [
+    "normalized_equity",
+    "total_net_return",
+    "matched_spy_return",
+    "excess_vs_spy",
+    "positive_net_return_cohort_fraction",
+    "positive_excess_vs_spy_cohort_fraction",
+    "maximum_drawdown",
+    "stress_20bps_net_return",
+    "mean_active_weight_when_applicable",
+    "completed_cohorts",
+    "complete_five_sleeve_blocks"
+  ],
+  "guardrails": {
+    "september_23_through_30_training_use": false,
+    "september_23_through_30_evaluation_use": false,
+    "october_1_plus_read_before_prospective_runner": false,
+    "modify_v1": false,
+    "modify_v2": false,
+    "modify_v3": false,
+    "modify_existing_forward_journals": false,
+    "automatic_promotion": false,
+    "real_orders": false
+  }
+}
