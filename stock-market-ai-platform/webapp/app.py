@@ -48,6 +48,7 @@ def get_v5_shadow_comparison(*a,**k):return _lazy("webapp.services.v5_shadow_por
 def get_v5_shadow_history(*a,**k):return _lazy("webapp.services.v5_shadow_history_service","get_v5_shadow_history",*a,**k)
 def get_v4_realtime_equity_history(*a,**k):return _lazy("webapp.services.v4_realtime_equity_journal_service","get_v4_realtime_equity_history",*a,**k)
 def get_v4_reconstructed_history(*a,**k):return _lazy("webapp.services.v4_reconstructed_history_service","get_v4_reconstructed_history",*a,**k)
+def get_stock_eagle_autonomous_ml_prospective_dashboard(*a,**k):return _lazy("webapp.services.stock_eagle_autonomous_ml_prospective_service","get_stock_eagle_autonomous_ml_prospective_dashboard",*a,**k)
 app=Flask(__name__); app.secret_key=os.environ.get("FLASK_SECRET_KEY")
 if not app.secret_key: raise RuntimeError("FLASK_SECRET_KEY is not configured")
 app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=timedelta(hours=12)); initialize_account_store()
@@ -75,7 +76,7 @@ def inject_dashboard_modules(response):
             shared=['<script src="/static/js/v8_holdout_snapshot.js" defer></script>','<script src="/static/js/dashboard_layout.js" defer></script>','<script src="/static/js/market_history_chart.js" defer></script>','<script src="/static/js/primary_stock_spotlight.js" defer></script>','<script src="/static/js/top_live_stock_comparison.js" defer></script>','<script src="/static/js/company_name_tooltip_enhancer.js" defer></script>']
             scripts.extend(shared)
             if request.args.get("view")!="live":
-                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v10_confirmation_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_accelerated_v2_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_holdout_monitor.js" defer></script>','<script src="/static/js/model_research_tabs.js" defer></script>','<script src="/static/js/overview_live_paper_dashboard.js" defer></script>','<script src="/static/js/v14_ml_ai_dashboard.js" defer></script>','<script src="/static/js/v15_intraday_v7_dashboard.js" defer></script>','<script src="/static/js/v13_regime_overlay_status.js" defer></script>','<script src="/static/js/v8_stream_health_visual.js" defer></script>'])
+                scripts.extend(['<script src="/static/js/v4_equity_chart.js" defer></script>','<script src="/static/js/v4_pnl_attribution.js" defer></script>','<script src="/static/js/v10_confirmation_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_accelerated_v2_dashboard.js" defer></script>','<script src="/static/js/v10_cycle3_holdout_monitor.js" defer></script>','<script src="/static/js/model_research_tabs.js" defer></script>','<script src="/static/js/overview_live_paper_dashboard.js" defer></script>','<script src="/static/js/v14_ml_ai_dashboard.js" defer></script>','<script src="/static/js/v15_intraday_v7_dashboard.js" defer></script>','<script src="/static/js/stock_eagle_autonomous_ml_prospective_dashboard.js" defer></script>','<script src="/static/js/v13_regime_overlay_status.js" defer></script>','<script src="/static/js/v8_stream_health_visual.js" defer></script>'])
         if marker in html:
             for script in scripts:
                 if script not in html: html=html.replace(marker,script+"\n"+marker,1)
@@ -395,5 +396,11 @@ def api_v13_regime_overlay():
     response=jsonify(get_v13_regime_overlay_dashboard())
     response.headers["Cache-Control"]="private, max-age=5"
     response.headers["X-Data-Serving-Path"]="lightweight-files; no-historical-reconstruction-load"
+    return response
+@app.get("/api/stock-eagle/autonomous-ml/prospective-v1")
+def api_stock_eagle_autonomous_ml_prospective_v1():
+    response=jsonify(get_stock_eagle_autonomous_ml_prospective_dashboard())
+    response.headers["Cache-Control"]="private, max-age=5"
+    response.headers["X-Data-Serving-Path"]="lightweight-status-journal-and-snapshot-manifest-only; no-runner; no-network; no-retraining"
     return response
 if __name__=="__main__":app.run(host="0.0.0.0",port=5000,debug=False)
