@@ -122,10 +122,13 @@ def source_frame():
                 else f"ALT{asset_index:02d}-USD"
             )
 
+            # Keep synthetic market medians safely away from zero so
+            # the fixture contains both RISK_OFF and RISK_ON days without
+            # relying on floating-point representation of an exact zero.
             raw_target = (
-                -0.09
+                -0.12
                 + 0.02 * asset_index
-                + 0.01 * day_index
+                + 0.04 * day_index
             )
 
             row = {
