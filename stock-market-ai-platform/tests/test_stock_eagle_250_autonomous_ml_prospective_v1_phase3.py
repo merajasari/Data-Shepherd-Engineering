@@ -166,10 +166,21 @@ class StockEagle250AutonomousMLProspectiveV1Phase3Test(
     def test_snapshot_manifest_must_match_fixed_hashes(self):
         contract = load_contract()
         rows = []
+        research_versions = {
+            "autonomous_ml_v1":
+                "stock_eagle_250_autonomous_ml_v1",
+            "autonomous_ml_v2":
+                "stock_eagle_250_autonomous_ml_v2_tail_aware",
+            "autonomous_ml_v3":
+                "stock_eagle_250_autonomous_ml_v3_benchmark_relative",
+        }
         for fixed in contract["fixed_snapshots"]:
+            candidate_id = fixed["candidate_id"]
             rows.append({
                 "candidate_id":
-                    fixed["candidate_id"],
+                    candidate_id,
+                "research_version":
+                    research_versions[candidate_id],
                 "snapshot_sha256":
                     fixed["snapshot_sha256"],
                 "learned_component_count":
@@ -180,6 +191,9 @@ class StockEagle250AutonomousMLProspectiveV1Phase3Test(
                     fixed["training_cutoff_utc"],
                 "meta_oos_cutoff_utc":
                     fixed["meta_oos_cutoff_utc"],
+                "feature_count": 1,
+                "meta_feature_count":
+                    8 if candidate_id == "autonomous_ml_v1" else 12,
             })
         manifest = _synthetic_manifest(
             contract,
@@ -486,10 +500,32 @@ class StockEagle250AutonomousMLProspectiveV1Phase3Test(
 
             for fixed in contract["fixed_snapshots"]:
                 candidate_id = fixed["candidate_id"]
+                research_versions = {
+                    "autonomous_ml_v1":
+                        "stock_eagle_250_autonomous_ml_v1",
+                    "autonomous_ml_v2":
+                        "stock_eagle_250_autonomous_ml_v2_tail_aware",
+                    "autonomous_ml_v3":
+                        "stock_eagle_250_autonomous_ml_v3_benchmark_relative",
+                }
+                meta_count = (
+                    8
+                    if candidate_id == "autonomous_ml_v1"
+                    else 12
+                )
                 payload = {
                     "candidate_id": candidate_id,
+                    "research_version":
+                        research_versions[candidate_id],
                     "feature_columns": ["f1"],
-                    "meta_features": [],
+                    "meta_features": [
+                        f"m{index}"
+                        for index in range(meta_count)
+                    ],
+                    "training_cutoff_utc":
+                        fixed["training_cutoff_utc"],
+                    "meta_oos_cutoff_utc":
+                        fixed["meta_oos_cutoff_utc"],
                     "models": {},
                 }
                 data = pickle.dumps(
@@ -504,6 +540,8 @@ class StockEagle250AutonomousMLProspectiveV1Phase3Test(
                 rows.append({
                     "candidate_id":
                         candidate_id,
+                    "research_version":
+                        research_versions[candidate_id],
                     "snapshot_sha256":
                         sha,
                     "learned_component_count":
@@ -514,6 +552,8 @@ class StockEagle250AutonomousMLProspectiveV1Phase3Test(
                         fixed["training_cutoff_utc"],
                     "meta_oos_cutoff_utc":
                         fixed["meta_oos_cutoff_utc"],
+                    "feature_count": 1,
+                    "meta_feature_count": meta_count,
                 })
 
             manifest = _synthetic_manifest(
