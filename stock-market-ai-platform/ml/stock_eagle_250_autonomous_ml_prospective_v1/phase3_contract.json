@@ -67,8 +67,8 @@
     "snapshot_sha256_required_in_every_decision": true
   },
   "costs": {
-    "primary_bps_per_side": 10.0,
-    "stress_bps_per_side": 20.0,
+    "primary_bps_per_side": 10,
+    "stress_bps_per_side": 20,
     "v1_v2": "cost side scaled by learned active weight, matching development evaluator",
     "v3": "cost side charged to full cohort capital, matching development evaluator"
   },
@@ -80,7 +80,9 @@
     "unique_key": "event_type_plus_decision_timestamp_utc",
     "file_locking": true,
     "fsync_on_append": true,
-    "corrupt_line_behavior": "fail_closed"
+    "corrupt_line_behavior": "fail_closed",
+    "missed_event": "MISSED_DECISION",
+    "missed_event_meaning": "decision window expired without a DECISION_BATCH; marker is evidence only and never reconstructs a trade"
   },
   "formal_review": {
     "minimum_completed_cohorts_per_candidate": 60,
