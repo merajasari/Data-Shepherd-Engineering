@@ -113,6 +113,7 @@ def login_required(view):
         if session.get("must_change_password"): return redirect(url_for("change_member_password"))
         return view(*args,**kwargs)
     return wrapped
+def _dashboard_overview_url(): return url_for("dashboard",_anchor="research-overview")
 def valid_legacy_member_credentials(username,password):
     u=os.environ.get("MEMBER_USERNAME",""); h=os.environ.get("MEMBER_PASSWORD_HASH",""); return bool(u and h and username==u and check_password_hash(h,password))
 def build_stock_dashboard(symbol):
@@ -154,21 +155,21 @@ def complete_account():
         return render_template("verified_account.html",mode="choose_username",setup=setup,credentials=None,error=str(exc)),400
 @app.route("/login",methods=["GET","POST"])
 def login():
-    if request.method=="GET":return redirect(url_for("dashboard" if session.get("authenticated") else "home"))
+    if request.method=="GET":return redirect(_dashboard_overview_url() if session.get("authenticated") else url_for("home"))
     username=request.form.get("username","").strip(); password=request.form.get("password","")
-    if valid_legacy_member_credentials(username,password): session.clear();session.permanent=True;session["authenticated"]=True;session["username"]=username;session["legacy_member"]=True;session["last_activity_utc"]=datetime.now(timezone.utc).isoformat();return redirect(url_for("dashboard"))
+    if valid_legacy_member_credentials(username,password): session.clear();session.permanent=True;session["authenticated"]=True;session["username"]=username;session["legacy_member"]=True;session["last_activity_utc"]=datetime.now(timezone.utc).isoformat();return redirect(_dashboard_overview_url())
     account=authenticate_account(username,password)
     if account:
-        session.clear();session.permanent=True;session["authenticated"]=True;session["username"]=account["username"];session["account_id"]=account["id"];session["must_change_password"]=bool(account["must_change_password"]);session["last_activity_utc"]=datetime.now(timezone.utc).isoformat(); return redirect(url_for("change_member_password" if session["must_change_password"] else "dashboard"))
+        session.clear();session.permanent=True;session["authenticated"]=True;session["username"]=account["username"];session["account_id"]=account["id"];session["must_change_password"]=bool(account["must_change_password"]);session["last_activity_utc"]=datetime.now(timezone.utc).isoformat(); return redirect(url_for("change_member_password") if session["must_change_password"] else _dashboard_overview_url())
     return render_template("landing.html",authenticated=False,login_error="Invalid username or password."),401
 @app.route("/change-password",methods=["GET","POST"])
 def change_member_password():
     if not session.get("authenticated") or not session.get("account_id"):return redirect(url_for("home"))
-    if not session.get("must_change_password"):return redirect(url_for("dashboard"))
+    if not session.get("must_change_password"):return redirect(_dashboard_overview_url())
     if request.method=="GET":return render_template("change_password.html",error=None)
     current_password=request.form.get("current_password","");new_password=request.form.get("new_password","");confirm_password=request.form.get("confirm_password","")
     if new_password!=confirm_password:return render_template("change_password.html",error="New passwords do not match."),400
-    try: change_password(session["account_id"],current_password,new_password);session["must_change_password"]=False;return redirect(url_for("dashboard"))
+    try: change_password(session["account_id"],current_password,new_password);session["must_change_password"]=False;return redirect(_dashboard_overview_url())
     except ValueError as exc:return render_template("change_password.html",error=str(exc)),400
 @app.route("/logout")
 def logout():session.clear();return redirect(url_for("home"))
