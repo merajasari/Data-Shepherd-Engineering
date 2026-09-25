@@ -63,6 +63,17 @@ def _utc_series(values) -> pd.Series:
     return pd.to_datetime(values, utc=True)
 
 
+def file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def validate_phase1_manifest(manifest: dict, contract: dict) -> None:
     problems = []
     if manifest.get("research_version") != RESEARCH_VERSION:
@@ -314,7 +325,7 @@ def run(
     frame, feature_columns = build_model_frame(panel)
     training = validate_training_frame(frame)
 
-    panel_sha256 = sha256(Path(panel_path))
+    panel_sha256 = file_sha256(Path(panel_path))
     snapshot_rows = []
 
     for candidate in contract["candidate_snapshots"]:
@@ -328,6 +339,7 @@ def run(
         path = write_snapshot(
             candidate_id,
             bundle["bytes"],
+            root=Path(output_root) / "snapshots",
         )
         summary = dict(bundle["summary"])
         summary["path"] = str(path)
