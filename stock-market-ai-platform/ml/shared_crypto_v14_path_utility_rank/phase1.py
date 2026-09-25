@@ -188,8 +188,9 @@ def attach_exact_future_path(
             result[
                 "timestamp_utc"
             ]
-            + pd.Timedelta(
-                days=day
+            + pd.to_timedelta(
+                day,
+                unit="D",
             )
         )
 
