@@ -83,7 +83,8 @@ as `ENTRY_BATCH` and `EXIT_BATCH`.
 
 A decision can be created only on the same New York calendar date as the
 completed source session and only after 16:05 ET. If that decision opportunity
-is missed, it is reported as missed and is never reconstructed later.
+is missed, a `MISSED_DECISION` evidence marker is appended and the trading
+decision is never reconstructed later.
 
 The forward clock remains exactly the development clock:
 
