@@ -9,6 +9,7 @@
     {id:'v10', label:'V10 Cycle 3', eyebrow:'V10 · FROZEN CYCLE 3 · ACCELERATED PAPER-FORWARD', title:'V10 Cycle 3 evidence and review runway', note:'Prospective September–December evidence, the independent January confirmation, and rejected legacy V10 research remain visibly separate.'},
     {id:'v14', label:'V14_ML_AI', eyebrow:'V14 · TRAINED MACHINE LEARNING · PAPER-FORWARD', title:'V14 logistic-regression model lab', note:'Learned coefficients, prediction probabilities, model snapshots, paper positions, and genuine forward evidence remain isolated from V8 and V10.'},
     {id:'v15', label:'V15 Intraday', eyebrow:'V15 V7 · INTRADAY ML · PROSPECTIVE PAPER SHADOW', title:'V15 V11 + V14 intraday intelligence', note:'An immutable hybrid ridge model combines completed five-minute V11 features with prior-close V14 context. Only post-September 21 paper-shadow events count as V15 evidence.'},
+    {id:'eagle', label:'Eagle ML Forward', eyebrow:'STOCKEAGLE250 · AUTONOMOUS ML · FIXED-SNAPSHOT PROSPECTIVE', title:'Autonomous ML V1 / V2 / V3 forward comparison', note:'Three immutable learned snapshots share the same Oct. 1+ decision clock. Missed decision windows are preserved, never backfilled; retraining, automatic promotion, brokerage orders, and live execution remain off.'},
     {id:'v13', label:'V13 Dev', eyebrow:'V13 · PREREGISTERED DEVELOPMENT · NOT FROZEN', title:'V13 regime-overlay research', note:'V13 is a preregistered successor hypothesis with activation governed by an explicit short-lived paper-only lease. Its retrospective curve remains on Overview and never counts as fresh evidence.'}
   ];
 
@@ -178,7 +179,7 @@
   });
 
   reconcile();
-  let requested = location.hash.match(/^#research-(overview|v8|v10|v14|v15|v13)$/)?.[1];
+  let requested = location.hash.match(/^#research-(overview|v8|v10|v14|v15|eagle|v13)$/)?.[1];
   if (!requested) { try { requested = sessionStorage.getItem('data-shepherd-research-tab'); } catch (_) {} }
   activate(validTab(requested) ? requested : 'overview', {hash:false,reveal:true});
 
