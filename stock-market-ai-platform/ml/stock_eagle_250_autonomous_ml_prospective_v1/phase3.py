@@ -87,6 +87,15 @@ def _timestamp(value: object) -> pd.Timestamp:
     return parsed.tz_convert("UTC").normalize()
 
 
+def _market_open(timestamp: object) -> datetime:
+    day = _timestamp(timestamp).date()
+    return datetime.combine(
+        day,
+        time(9, 30),
+        tzinfo=NEW_YORK,
+    ).astimezone(timezone.utc)
+
+
 def _market_close(timestamp: object) -> datetime:
     day = _timestamp(timestamp).date()
     return datetime.combine(
@@ -312,14 +321,27 @@ def load_snapshots(
             raise RuntimeError(
                 f"PROSPECTIVE_SNAPSHOT_ID_MISMATCH:{candidate_id}"
             )
-        if tuple(payload.get("feature_columns") or []) != tuple(
-            manifest_row.get("feature_columns") or payload.get("feature_columns") or []
-        ):
-            # Phase 2 manifest intentionally stores only counts, so the
-            # expression above becomes a no-op unless a future manifest binds
-            # the explicit list. The snapshot itself remains hash-bound.
+        feature_columns = list(payload.get("feature_columns") or [])
+        meta_features = list(payload.get("meta_features") or [])
+        if len(feature_columns) != int(manifest_row["feature_count"]):
             raise RuntimeError(
-                f"PROSPECTIVE_FEATURE_BINDING_MISMATCH:{candidate_id}"
+                f"PROSPECTIVE_FEATURE_COUNT_MISMATCH:{candidate_id}"
+            )
+        if len(meta_features) != int(manifest_row["meta_feature_count"]):
+            raise RuntimeError(
+                f"PROSPECTIVE_META_FEATURE_COUNT_MISMATCH:{candidate_id}"
+            )
+        if payload.get("research_version") != manifest_row["research_version"]:
+            raise RuntimeError(
+                f"PROSPECTIVE_RESEARCH_VERSION_MISMATCH:{candidate_id}"
+            )
+        if payload.get("training_cutoff_utc") != manifest_row["training_cutoff_utc"]:
+            raise RuntimeError(
+                f"PROSPECTIVE_TRAINING_CUTOFF_MISMATCH:{candidate_id}"
+            )
+        if payload.get("meta_oos_cutoff_utc") != manifest_row["meta_oos_cutoff_utc"]:
+            raise RuntimeError(
+                f"PROSPECTIVE_META_CUTOFF_MISMATCH:{candidate_id}"
             )
         snapshots[candidate_id] = payload
 
@@ -468,12 +490,11 @@ def build_decision_frame(
         raise RuntimeError("PROSPECTIVE_MODEL_INPUT_NONFINITE")
 
     canonical_rows = []
-    for row in frame.sort_values("symbol").itertuples(index=False):
-        row_map = row._asdict()
+    for _, row in frame.sort_values("symbol").iterrows():
         canonical_rows.append({
-            "symbol": str(row_map["symbol"]),
+            "symbol": str(row["symbol"]),
             "features": [
-                float(row_map[column])
+                float(row[column])
                 for column in feature_columns
             ],
         })
@@ -994,7 +1015,7 @@ def _process_lifecycle(
         if key in existing:
             continue
         entry_ts = _session_after(dates, decision_ts, 1)
-        if entry_ts is None or entry_ts.date() > _ny_date(now_utc):
+        if entry_ts is None or _market_open(entry_ts) > now_utc:
             continue
 
         symbols = sorted({
