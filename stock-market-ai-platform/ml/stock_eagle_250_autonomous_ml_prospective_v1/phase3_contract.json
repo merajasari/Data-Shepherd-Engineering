@@ -1,0 +1,102 @@
+{
+  "contract_id": "STOCK_EAGLE_250_AUTONOMOUS_ML_PROSPECTIVE_V1_PHASE3",
+  "display_name": "StockEagle250 Autonomous ML Prospective Comparison V1",
+  "model_id": "stock_eagle_250_autonomous_ml_prospective_v1",
+  "research_version": "stock_eagle_250_autonomous_ml_prospective_v1_oct2026",
+  "created_at_utc": "2026-09-25T05:30:00+00:00",
+  "created_before_prospective_results": true,
+  "stage": "fixed_snapshot_append_only_prospective_runner",
+  "prospective_start_utc": "2026-10-01T00:00:00+00:00",
+  "decision_capture": {
+    "decision_session": "latest completed US equity session represented by the shared daily feature snapshot",
+    "capture_window": "same New York calendar date after 16:05 ET only",
+    "late_decision_backfill": false,
+    "historical_decision_reconstruction": false,
+    "same_decision_batch_required_for_all_candidates": true
+  },
+  "execution_clock": {
+    "entry": "next completed session open after the recorded decision",
+    "exit": "fifth completed session close after the recorded decision",
+    "overlapping_cohorts": 5,
+    "mechanical_entry_exit_realization_may_be_recorded_when_source_rows_become_available": true
+  },
+  "fixed_source": {
+    "development_panel_sha256": "e27d6377508fd89002541c8841861762e8392ab373de3890d29737f4b875e9ed",
+    "training_rows": 561490,
+    "training_decision_end_utc": "2026-09-15T00:00:00+00:00",
+    "training_target_endpoint_max_utc": "2026-09-22T00:00:00+00:00",
+    "sealed_guard_band_start_utc": "2026-09-23T00:00:00+00:00",
+    "sealed_guard_band_end_exclusive_utc": "2026-10-01T00:00:00+00:00"
+  },
+  "fixed_snapshots": [
+    {
+      "candidate_id": "autonomous_ml_v1",
+      "snapshot_sha256": "4e2b88904f4c17d7df0552559191bf18735ddc5611ee6550731be108f5281932",
+      "learned_component_count": 3,
+      "meta_oos_training_sessions": 2037,
+      "training_cutoff_utc": "2026-09-22T00:00:00+00:00",
+      "meta_oos_cutoff_utc": "2026-09-15T00:00:00+00:00",
+      "allocation_policy": "learned_active_top10_probability_with_residual_cash"
+    },
+    {
+      "candidate_id": "autonomous_ml_v2",
+      "snapshot_sha256": "d2c1754a54074958567a18c6c2d45bb21d6a0d000ed6bf3d679f8f945766fca5",
+      "learned_component_count": 4,
+      "meta_oos_training_sessions": 2037,
+      "training_cutoff_utc": "2026-09-22T00:00:00+00:00",
+      "meta_oos_cutoff_utc": "2026-09-15T00:00:00+00:00",
+      "allocation_policy": "tail_aware_learned_active_top10_probability_with_residual_cash"
+    },
+    {
+      "candidate_id": "autonomous_ml_v3",
+      "snapshot_sha256": "aeecdb9f82082163f65ce6b3bb2645472529faa2507a4e0daa34d5802e6b80de",
+      "learned_component_count": 4,
+      "meta_oos_training_sessions": 2037,
+      "training_cutoff_utc": "2026-09-22T00:00:00+00:00",
+      "meta_oos_cutoff_utc": "2026-09-15T00:00:00+00:00",
+      "allocation_policy": "tail_aware_benchmark_relative_active_probability_with_residual_spy"
+    }
+  ],
+  "decision_input": {
+    "candidate_universe": 250,
+    "minimum_eligible_names": 20,
+    "raw_feature_source": "data/features/stocks/<SYMBOL>/<SYMBOL>_features.parquet",
+    "cross_sectional_rank_features": 26,
+    "sector_one_hot_reindexed_to_snapshot_feature_columns": true,
+    "decision_input_sha256_required": true,
+    "snapshot_sha256_required_in_every_decision": true
+  },
+  "costs": {
+    "primary_bps_per_side": 10.0,
+    "stress_bps_per_side": 20.0,
+    "v1_v2": "cost side scaled by learned active weight, matching development evaluator",
+    "v3": "cost side charged to full cohort capital, matching development evaluator"
+  },
+  "journal": {
+    "format": "append_only_jsonl",
+    "decision_event": "DECISION_BATCH",
+    "entry_event": "ENTRY_BATCH",
+    "exit_event": "EXIT_BATCH",
+    "unique_key": "event_type_plus_decision_timestamp_utc",
+    "file_locking": true,
+    "fsync_on_append": true,
+    "corrupt_line_behavior": "fail_closed"
+  },
+  "formal_review": {
+    "minimum_completed_cohorts_per_candidate": 60,
+    "minimum_complete_five_sleeve_blocks": 12,
+    "identical_completed_decision_set_required": true,
+    "early_results_descriptive_only": true,
+    "automatic_winner_selection": false,
+    "automatic_promotion": false,
+    "new_architecture_before_formal_review": false
+  },
+  "authority": {
+    "paper_only": true,
+    "brokerage_orders": false,
+    "live_execution_enabled": false,
+    "model_retraining_enabled": false,
+    "snapshot_replacement_enabled": false,
+    "existing_model_journal_modification": false
+  }
+}
