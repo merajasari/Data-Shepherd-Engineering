@@ -17,6 +17,19 @@ from spark_feature_transform import transform_to_features_spark
 
 GOLD_PATH = Path("data/gold/stocks")
 SPARK_FEATURE_PATH = Path("data/features_spark/stocks")
+DEFAULT_SPARK_MASTER = "local[*]"
+
+
+def get_spark_master(value=None) -> str:
+    """Resolve the Spark master without changing the established default."""
+
+    raw_value = (
+        os.environ.get("SPARK_MASTER", DEFAULT_SPARK_MASTER)
+        if value is None
+        else value
+    )
+    master = str(raw_value).strip()
+    return master or DEFAULT_SPARK_MASTER
 
 
 def process_stock(
@@ -115,10 +128,13 @@ def main() -> None:
     )
     staging_root.mkdir(parents=True, exist_ok=False)
 
+    spark_master = get_spark_master()
+    print(f"Spark master: {spark_master}")
+
     spark = (
         SparkSession.builder
         .appName("data-shepherd-stock-features")
-        .master("local[*]")
+        .master(spark_master)
         .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
     )

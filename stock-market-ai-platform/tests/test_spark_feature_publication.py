@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -7,7 +8,11 @@ from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = PROJECT_ROOT / "data-ingestion/spark_feature_pipeline.py"
+DATA_INGESTION = PROJECT_ROOT / "data-ingestion"
+if str(DATA_INGESTION) not in sys.path:
+    sys.path.insert(0, str(DATA_INGESTION))
+
+MODULE_PATH = DATA_INGESTION / "spark_feature_pipeline.py"
 
 try:
     spec = importlib.util.spec_from_file_location(
@@ -22,6 +27,26 @@ except ImportError:
 
 @unittest.skipIf(module is None, "pyspark is not installed")
 class SparkFeaturePublicationTests(unittest.TestCase):
+    def test_spark_master_defaults_to_local_all(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(module.get_spark_master(), "local[*]")
+
+    def test_spark_master_can_be_constrained_by_environment(self):
+        with patch.dict(
+            os.environ,
+            {"SPARK_MASTER": "local[1]"},
+            clear=True,
+        ):
+            self.assertEqual(module.get_spark_master(), "local[1]")
+
+    def test_blank_spark_master_preserves_default(self):
+        with patch.dict(
+            os.environ,
+            {"SPARK_MASTER": "   "},
+            clear=True,
+        ):
+            self.assertEqual(module.get_spark_master(), "local[*]")
+
     def test_complete_staging_root_replaces_previous_universe(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
