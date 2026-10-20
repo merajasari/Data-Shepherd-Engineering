@@ -16,6 +16,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_INGESTION = PROJECT_ROOT / "data-ingestion"
@@ -23,7 +25,11 @@ DATA_INGESTION = PROJECT_ROOT / "data-ingestion"
 if str(DATA_INGESTION) not in sys.path:
     sys.path.insert(0, str(DATA_INGESTION))
 
-from feature_source import get_feature_backend  # noqa: E402
+from feature_source import (  # noqa: E402
+    feature_dataset_exists,
+    get_feature_backend,
+    get_feature_dataset_path,
+)
 from ml.run_v5_data_refresh import (  # noqa: E402
     REQUEST_LEDGER_PATH,
     QuotaTrackingTiingoClient,
@@ -34,6 +40,7 @@ from ml.run_v5_data_refresh import (  # noqa: E402
 from tiingo_stock250_incremental import (  # noqa: E402
     DATA_SYMBOL_COUNT,
     INVESTABLE_CANDIDATE_COUNT,
+    contracted_symbols,
     run_incremental_refresh,
 )
 from silver_pipeline import process_stock as process_silver_stock  # noqa: E402
@@ -57,6 +64,205 @@ def run_command(args: list[str]) -> None:
         cwd=PROJECT_ROOT,
         env=env,
         check=True,
+    )
+
+
+def _latest_numeric_timestamp(
+    path: Path,
+    *,
+    parquet: bool,
+) -> int | None:
+    if not path.exists() or path.stat().st_size == 0:
+        return None
+
+    if parquet:
+        frame = pd.read_parquet(
+            path,
+            columns=["timestamp"],
+        )
+    else:
+        frame = pd.read_csv(
+            path,
+            usecols=["timestamp"],
+        )
+
+    values = pd.to_numeric(
+        frame["timestamp"],
+        errors="coerce",
+    ).dropna()
+
+    if values.empty:
+        return None
+
+    return int(values.max())
+
+
+def validate_price_layers(
+    symbols,
+    expected_timestamp_ms: int | None = None,
+    project_root: Path = PROJECT_ROOT,
+) -> None:
+    """Require Bronze, Silver and Gold to agree for every requested symbol."""
+
+    failures = []
+
+    for symbol in list(
+        dict.fromkeys(
+            symbols or []
+        )
+    ):
+        bronze = (
+            project_root
+            / "data/bronze/stocks"
+            / symbol
+            / f"{symbol}_prices.csv"
+        )
+
+        silver = (
+            project_root
+            / "data/silver/stocks"
+            / symbol
+            / f"{symbol}_prices.parquet"
+        )
+
+        gold = (
+            project_root
+            / "data/gold/stocks"
+            / symbol
+            / f"{symbol}_prices.parquet"
+        )
+
+        try:
+            bronze_latest = _latest_numeric_timestamp(
+                bronze,
+                parquet=False,
+            )
+
+            silver_latest = _latest_numeric_timestamp(
+                silver,
+                parquet=True,
+            )
+
+            gold_latest = _latest_numeric_timestamp(
+                gold,
+                parquet=True,
+            )
+
+        except Exception as exc:
+            failures.append(
+                f"{symbol}: read error: {exc}"
+            )
+            continue
+
+        if (
+            bronze_latest is None
+            or silver_latest is None
+            or gold_latest is None
+        ):
+            failures.append(
+                f"{symbol}: missing/empty layer "
+                f"bronze={bronze_latest} "
+                f"silver={silver_latest} "
+                f"gold={gold_latest}"
+            )
+            continue
+
+        if not (
+            bronze_latest
+            == silver_latest
+            == gold_latest
+        ):
+            failures.append(
+                f"{symbol}: layer mismatch "
+                f"bronze={bronze_latest} "
+                f"silver={silver_latest} "
+                f"gold={gold_latest}"
+            )
+            continue
+
+        if (
+            expected_timestamp_ms is not None
+            and bronze_latest < expected_timestamp_ms
+        ):
+            failures.append(
+                f"{symbol}: latest={bronze_latest} "
+                f"target={expected_timestamp_ms}"
+            )
+
+    if failures:
+        raise RuntimeError(
+            "Stock-250 price-layer validation failed: "
+            + "; ".join(failures)
+        )
+
+    print(
+        "Price-layer validation passed for "
+        f"{len(list(dict.fromkeys(symbols or [])))} symbol(s)."
+    )
+
+
+def validate_spark_feature_freshness(
+    target_timestamp_ms: int,
+    project_root: Path = PROJECT_ROOT,
+) -> None:
+    """Require all 251 Spark feature datasets to reach the target session."""
+
+    failures = []
+
+    for symbol in contracted_symbols():
+        path = get_feature_dataset_path(
+            symbol,
+            project_root=project_root,
+        )
+
+        if not feature_dataset_exists(path):
+            failures.append(
+                f"{symbol}: feature dataset missing"
+            )
+            continue
+
+        try:
+            frame = pd.read_parquet(
+                path,
+                columns=["timestamp_utc"],
+            )
+
+            values = pd.to_datetime(
+                frame["timestamp_utc"],
+                utc=True,
+                errors="coerce",
+            ).dropna()
+
+            if values.empty:
+                failures.append(
+                    f"{symbol}: no valid feature timestamp"
+                )
+                continue
+
+            latest_ms = int(
+                values.max().timestamp() * 1000
+            )
+
+            if latest_ms < target_timestamp_ms:
+                failures.append(
+                    f"{symbol}: latest={latest_ms} "
+                    f"target={target_timestamp_ms}"
+                )
+
+        except Exception as exc:
+            failures.append(
+                f"{symbol}: feature read error: {exc}"
+            )
+
+    if failures:
+        raise RuntimeError(
+            "Stock-250 Spark freshness validation failed: "
+            + "; ".join(failures)
+        )
+
+    print(
+        "Spark freshness validation passed: "
+        "251/251 data symbols at target."
     )
 
 
@@ -100,8 +306,10 @@ def propagate_price_layers(symbols) -> None:
         )
 
 
-def rebuild_and_validate_spark_features() -> None:
-    """Atomically rebuild the shared Spark features and validate all outputs."""
+def rebuild_and_validate_spark_features(
+    target_timestamp_ms: int,
+) -> None:
+    """Atomically rebuild and prove freshness of all Spark outputs."""
 
     if get_feature_backend() != "spark":
         raise RuntimeError(
@@ -126,6 +334,10 @@ def rebuild_and_validate_spark_features() -> None:
             "data-ingestion/"
             "validate_spark_feature_outputs.py",
         ]
+    )
+
+    validate_spark_feature_freshness(
+        target_timestamp_ms,
     )
 
 
@@ -218,11 +430,17 @@ def run_stock250_refresh(
         f"{state['complete']}"
     )
 
+    updated_symbols = state.get(
+        "updated_symbols",
+        [],
+    )
+
     propagate_price_layers(
-        state.get(
-            "updated_symbols",
-            [],
-        )
+        updated_symbols
+    )
+
+    validate_price_layers(
+        updated_symbols
     )
 
     if not state["complete"]:
@@ -246,7 +464,15 @@ def run_stock250_refresh(
 
         return "bronze_partial"
 
-    rebuild_and_validate_spark_features()
+    validate_price_layers(
+        contracted_symbols(),
+        expected_timestamp_ms=
+            state["target_timestamp_ms"],
+    )
+
+    rebuild_and_validate_spark_features(
+        state["target_timestamp_ms"],
+    )
 
     print(
         "Stock-250 Bronze/Silver/Gold/Spark "

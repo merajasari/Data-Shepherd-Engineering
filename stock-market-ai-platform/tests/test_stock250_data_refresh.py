@@ -56,6 +56,10 @@ class Stock250DataRefreshTests(
     )
     @patch.object(
         module,
+        "validate_price_layers",
+    )
+    @patch.object(
+        module,
         "propagate_price_layers",
     )
     @patch.object(
@@ -77,10 +81,12 @@ class Stock250DataRefreshTests(
         _budget,
         _prune,
         propagate,
+        validate,
         rebuild,
     ):
         refresh.return_value = {
             "target_date_utc": "2026-10-19",
+            "target_timestamp_ms": 1792368000000,
             "requests_used": 151,
             "updated_symbols": [
                 "ABNB",
@@ -110,11 +116,22 @@ class Stock250DataRefreshTests(
             ]
         )
 
+        validate.assert_called_once_with(
+            [
+                "ABNB",
+                "ACN",
+            ]
+        )
+
         rebuild.assert_not_called()
 
     @patch.object(
         module,
         "rebuild_and_validate_spark_features",
+    )
+    @patch.object(
+        module,
+        "validate_price_layers",
     )
     @patch.object(
         module,
@@ -139,10 +156,12 @@ class Stock250DataRefreshTests(
         _budget,
         _prune,
         propagate,
+        validate,
         rebuild,
     ):
         refresh.return_value = {
             "target_date_utc": "2026-10-19",
+            "target_timestamp_ms": 1792368000000,
             "requests_used": 151,
             "updated_symbols": [
                 "ABNB",
@@ -171,7 +190,14 @@ class Stock250DataRefreshTests(
             ]
         )
 
-        rebuild.assert_called_once_with()
+        self.assertGreaterEqual(
+            validate.call_count,
+            2,
+        )
+
+        rebuild.assert_called_once_with(
+            1792368000000
+        )
 
         self.assertFalse(
             hasattr(
@@ -201,3 +227,73 @@ class Stock250DataRefreshTests(
 
 if __name__ == "__main__":
     unittest.main()
+
+class Stock250LayerValidationTests(unittest.TestCase):
+    def test_price_layer_validation_requires_matching_latest_timestamp(self):
+        import pandas as pd
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            symbol = "TEST"
+            timestamp = 1792368000000
+
+            bronze = (
+                root
+                / "data/bronze/stocks"
+                / symbol
+            )
+            silver = (
+                root
+                / "data/silver/stocks"
+                / symbol
+            )
+            gold = (
+                root
+                / "data/gold/stocks"
+                / symbol
+            )
+
+            bronze.mkdir(parents=True)
+            silver.mkdir(parents=True)
+            gold.mkdir(parents=True)
+
+            pd.DataFrame(
+                {"timestamp": [timestamp]}
+            ).to_csv(
+                bronze / f"{symbol}_prices.csv",
+                index=False,
+            )
+
+            frame = pd.DataFrame(
+                {"timestamp": [timestamp]}
+            )
+
+            frame.to_parquet(
+                silver / f"{symbol}_prices.parquet",
+                index=False,
+            )
+
+            frame.to_parquet(
+                gold / f"{symbol}_prices.parquet",
+                index=False,
+            )
+
+            module.validate_price_layers(
+                [symbol],
+                expected_timestamp_ms=timestamp,
+                project_root=root,
+            )
+
+            pd.DataFrame(
+                {"timestamp": [timestamp - 86400000]}
+            ).to_parquet(
+                gold / f"{symbol}_prices.parquet",
+                index=False,
+            )
+
+            with self.assertRaises(RuntimeError):
+                module.validate_price_layers(
+                    [symbol],
+                    expected_timestamp_ms=timestamp,
+                    project_root=root,
+                )
