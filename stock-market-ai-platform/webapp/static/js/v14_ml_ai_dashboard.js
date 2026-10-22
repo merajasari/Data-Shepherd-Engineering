@@ -86,6 +86,16 @@
         @media(max-width:1100px){#${panelId} .v14-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}#${panelId} .v14-split,#${panelId} .v14-charts{grid-template-columns:1fr}}
         @media(max-width:700px){#${panelId} .v14-head,#${panelId} .v14-chart-head,#${panelId} .v14-section-head{flex-direction:column;align-items:flex-start}#${panelId} .v14-metrics,#${panelId} .v14-progress-grid,#${panelId} .v14-integrity .v14-grid{grid-template-columns:1fr 1fr}#${panelId} .v14-mini-grid{grid-template-columns:1fr}#${panelId} .v14-chart-stage{height:280px}}
         @media(max-width:440px){#${panelId} .v14-metrics,#${panelId} .v14-progress-grid,#${panelId} .v14-integrity .v14-grid{grid-template-columns:1fr}}
+
+        /* Match V10's framed paper-equity and chart workspace. */
+        #${panelId} .v14-split{grid-template-columns:minmax(300px,.62fr) minmax(0,1.38fr);gap:18px;align-items:stretch;padding:18px;border:1px solid rgba(54,216,255,.3);border-radius:16px;background:linear-gradient(145deg,rgba(8,34,47,.76),rgba(7,16,31,.74));box-shadow:none}
+        #${panelId} .v14-split>div:first-child{min-width:0;padding:18px;border:1px solid rgba(57,227,161,.3);border-radius:14px;background:rgba(7,16,31,.42)}
+        #${panelId} .v14-split>div:last-child{min-width:0;padding:14px;border:1px solid rgba(145,166,194,.14);border-radius:14px;background:rgba(7,16,31,.38)}
+        #${panelId} .v14-split .v14-mini-grid .v14-metric{padding:10px;border:1px solid rgba(145,166,194,.14);border-radius:10px;background:rgba(7,16,31,.35)}
+        #${panelId} .v14-split .v14-mini-grid .v14-metric span{font-size:9px;font-weight:800;letter-spacing:.07em}
+        #${panelId} .v14-split .v14-mini-grid .v14-metric strong{margin-top:4px;font-size:13px}
+        @media(max-width:1050px){#${panelId} .v14-split{grid-template-columns:minmax(0,1fr)}}
+        @media(max-width:700px){#${panelId} .v14-split .v14-mini-grid{grid-template-columns:minmax(0,1fr)}}
       </style>
       <section class="v14-card v14-hero">
         <div class="v14-head"><div><div class="label">GENUINE TRAINED MACHINE LEARNING · ISOLATED PAPER-FORWARD LANE</div><h2>V14 Logistic Regression Intelligence</h2><p class="muted">Every eligible session retrains from historical labels, records the learned model, ranks the frozen 100-stock universe, and follows an auditable Top-10 paper portfolio.</p></div><div class="v14-badge waiting" data-v14-state>LOADING MODEL STATE</div></div>
@@ -244,3 +254,4 @@
   document.addEventListener('visibilitychange',()=>{const section=document.getElementById(panelId);if(section&&!document.hidden)load(section)});
   mount();
 })();
+
