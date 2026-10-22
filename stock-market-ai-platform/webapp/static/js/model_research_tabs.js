@@ -45,6 +45,7 @@
     pane.setAttribute('aria-labelledby', `model-research-tab-${model.id}`);
     pane.hidden = index !== 0;
     pane.innerHTML = `<div class="model-research-pane-head"><div class="label">${model.eyebrow}</div><h2>${model.title}</h2><p class="muted">${model.note}</p></div><div class="model-research-pane-content" data-research-content="${model.id}"></div>`;
+    if (model.id === 'v14') pane.querySelector('.model-research-pane-head')?.remove();
     panels.appendChild(pane);
   });
 
