@@ -88,6 +88,16 @@
         @media(max-width:1100px){#${panelId} .v15-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}#${panelId} .v15-split,#${panelId} .v15-charts{grid-template-columns:1fr}}
         @media(max-width:760px){#${panelId} .v15-head,#${panelId} .v15-chart-head,#${panelId} .v15-section-head{flex-direction:column;align-items:flex-start}#${panelId} .v15-metrics,#${panelId} .v15-progress-grid,#${panelId} .v15-integrity .v15-grid,#${panelId} .v15-gates{grid-template-columns:1fr 1fr}#${panelId} .v15-mini-grid{grid-template-columns:1fr}#${panelId} .v15-chart-stage{height:290px}}
         @media(max-width:480px){#${panelId} .v15-metrics,#${panelId} .v15-progress-grid,#${panelId} .v15-integrity .v15-grid,#${panelId} .v15-gates{grid-template-columns:1fr}#${panelId} .v15-equity{font-size:clamp(1.8rem,10vw,2.55rem)}}
+
+        /* Match V10's framed paper-equity and chart workspace. */
+        #${panelId} .v15-split{grid-template-columns:minmax(300px,.62fr) minmax(0,1.38fr);gap:18px;align-items:stretch;padding:18px;border:1px solid rgba(54,216,255,.3);border-radius:16px;background:linear-gradient(145deg,rgba(8,34,47,.76),rgba(7,16,31,.74));box-shadow:none}
+        #${panelId} .v15-split>div:first-child{min-width:0;padding:18px;border:1px solid rgba(57,227,161,.3);border-radius:14px;background:rgba(7,16,31,.42)}
+        #${panelId} .v15-split>div:last-child{min-width:0;padding:14px;border:1px solid rgba(145,166,194,.14);border-radius:14px;background:rgba(7,16,31,.38)}
+        #${panelId} .v15-split .v15-mini-grid .v15-metric{padding:10px;border:1px solid rgba(145,166,194,.14);border-radius:10px;background:rgba(7,16,31,.35)}
+        #${panelId} .v15-split .v15-mini-grid .v15-metric span{font-size:9px;font-weight:800;letter-spacing:.07em}
+        #${panelId} .v15-split .v15-mini-grid .v15-metric strong{margin-top:4px;font-size:13px}
+        @media(max-width:1050px){#${panelId} .v15-split{grid-template-columns:minmax(0,1fr)}}
+        @media(max-width:700px){#${panelId} .v15-split .v15-mini-grid{grid-template-columns:minmax(0,1fr)}}
       </style>
       <section class="v15-card v15-hero">
         <div class="v15-head"><div><div class="label">PREREGISTERED INTRADAY MACHINE LEARNING · PROSPECTIVE PAPER SHADOW</div><h2>V15 V7 Intraday Hybrid Intelligence</h2><p class="muted">An immutable return-regression model combines completed V11 five-minute market structure with prior-close V14 context, then selectively follows a risk-scaled two-hour paper lifecycle.</p></div><div class="v15-badge waiting" data-v15-state>LOADING V15 STATE</div></div>
@@ -243,3 +253,4 @@
   document.addEventListener('visibilitychange',()=>{const section=document.getElementById(panelId);if(section&&!document.hidden)load(section)});
   mount();
 })();
+
