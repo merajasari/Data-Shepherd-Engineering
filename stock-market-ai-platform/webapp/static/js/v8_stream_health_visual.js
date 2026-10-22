@@ -76,7 +76,7 @@
   const metricGrid = document.querySelector('.v4-dashboard .v4-small-metrics');
   const modelResearchView = new URLSearchParams(window.location.search).get('view') !== 'live';
   if (equityCard && metricGrid && modelResearchView) {
-    equityCard.innerHTML = `<div class="label">V8 CURRENT PORTFOLIO EQUITY</div><div class="big" id="v8-summary-equity">Loading…</div><div id="v8-summary-gain" class="v4-gain">READING OPEN V8 POSITIONS</div><div class="muted" id="v8-summary-starting" style="margin-top:6px">$100,000 frozen starting capital</div>`;
+    equityCard.innerHTML = `<div class="label">V8 CURRENT PAPER EQUITY</div><div class="big" id="v8-summary-equity">Loading…</div><div id="v8-summary-gain" class="v4-gain">READING OPEN V8 POSITIONS</div><div class="muted" id="v8-summary-starting" style="margin-top:6px">$100,000 frozen starting capital</div>`;
     metricGrid.innerHTML = `
       <div class="metric"><span>V8 TOTAL RETURN SINCE HOLDOUT START</span><strong id="v8-summary-return">—</strong></div>
       <div class="metric"><span>V8 COMPLETED-COHORT RETURN</span><strong id="v8-summary-forward">—</strong></div>
@@ -95,7 +95,38 @@
       <div class="v8-live-chart-legend"><div class="v8-live-chart-key"><i style="background:#36d8ff"></i>V8 <strong data-v8-chart-value>—</strong></div><div class="v8-live-chart-key"><i style="background:#a988ff"></i>SPY <strong data-spy-chart-value>—</strong></div><div class="v8-live-chart-key">EXCESS <strong data-excess-chart-value>—</strong></div></div>
       <div class="v8-live-chart-stage"><div class="v8-live-chart-plot" role="img" aria-label="Live V8 portfolio equity compared with SPY"></div><div class="v8-live-chart-tooltip"></div></div>
       <div class="v8-live-chart-foot"><span data-v8-chart-range>Holdout start → current mark</span><span>Refreshes every 15 seconds · completed points remain official evidence only</span></div>`;
-    equityCard.insertAdjacentElement('beforebegin',liveChart);
+    // Keep the existing equity and chart nodes so refreshes and hover handlers
+    // continue using the same authoritative V8 snapshot and element IDs.
+    const summary = equityCard.parentElement;
+    const liveGrid = summary?.closest('.v4-main');
+    if (liveGrid && summary.parentElement === liveGrid) {
+      liveGrid.classList.add('v8-forward-live');
+      summary.classList.add('v8-forward-summary');
+      liveGrid.appendChild(liveChart);
+      const layoutStyle = document.createElement('style');
+      layoutStyle.id = 'v8-forward-live-layout-style';
+      layoutStyle.textContent = `
+        .v4-dashboard .v4-main.v8-forward-live{display:grid;grid-template-columns:minmax(300px,.62fr) minmax(0,1.38fr);gap:18px;align-items:stretch;margin-top:16px;padding:18px;border:1px solid rgba(54,216,255,.3);border-radius:16px;background:linear-gradient(145deg,rgba(8,34,47,.76),rgba(7,16,31,.74))}
+        .v8-forward-live>.v8-forward-summary{min-width:0;padding:18px;border:1px solid rgba(57,227,161,.3);border-radius:14px;background:rgba(7,16,31,.42)}
+        .v8-forward-summary .v4-equity-card{padding:0;border:0;border-radius:0;background:none;text-align:left}
+        .v8-forward-summary .v4-equity-card .big{margin:8px 0 0;font-size:clamp(1.85rem,3vw,3.25rem);font-weight:950;line-height:1.05;letter-spacing:-.035em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+        .v8-forward-summary .v4-gain{margin-top:4px;font-size:1.05rem;font-weight:900}
+        .v8-forward-summary #v8-summary-starting{font-size:11px;line-height:1.5}
+        .v8-forward-summary .v4-small-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
+        .v8-forward-summary .v4-small-metrics .metric{min-width:0;padding:10px;border:1px solid rgba(145,166,194,.14);border-radius:10px;background:rgba(7,16,31,.35)}
+        .v8-forward-summary .v4-small-metrics .metric:last-child{grid-column:auto}
+        .v8-forward-summary .v4-small-metrics .metric span{font-size:9px;letter-spacing:.07em}
+        .v8-forward-summary .v4-small-metrics .metric strong{margin-top:4px;font-size:13px;overflow-wrap:anywhere}
+        .v8-forward-live>.v8-live-chart{min-width:0;margin:0;padding:14px;border:1px solid rgba(145,166,194,.14);border-radius:14px;background:rgba(7,16,31,.38)}
+        .v8-forward-live .v8-live-chart-tooltip{min-width:0;width:min(205px,100%);overflow-wrap:anywhere;left:50%}
+        @media(max-width:1050px){.v4-dashboard .v4-main.v8-forward-live{grid-template-columns:minmax(0,1fr)}}
+        @media(max-width:700px){.v8-forward-summary .v4-small-metrics{grid-template-columns:minmax(0,1fr)}.v4-dashboard .v4-main.v8-forward-live{padding:12px;gap:12px}.v8-forward-live>.v8-forward-summary{padding:14px}}
+      `;
+      document.getElementById(layoutStyle.id)?.remove();
+      document.head.appendChild(layoutStyle);
+    } else {
+      equityCard.insertAdjacentElement('beforebegin',liveChart);
+    }
     const chartPlot=liveChart.querySelector('.v8-live-chart-plot');
     const chartStage=liveChart.querySelector('.v8-live-chart-stage');
     const chartTip=liveChart.querySelector('.v8-live-chart-tooltip');
@@ -117,6 +148,8 @@
     };
     const drawChart=d=>{
       chartPayload=d;
+      chartTip.classList.remove('show');
+      chartTip.style.left='50%';
       const points=chartPoints(d),height=330,margin={top:22,right:145,bottom:42,left:80};
       chartWidth=Math.max(620,Math.round(chartPlot.clientWidth||900));
       const minX=points[0].time,maxX=Math.max(points.at(-1).time,minX+86400000);
@@ -148,7 +181,8 @@
       const point=chartHits.reduce((a,b)=>Math.abs(b.x-px)<Math.abs(a.x-px)?b:a),screenX=point.x/chartWidth*rect.width,start=Number(chartPayload?.starting_equity)||100000;
       const guide=chartPlot.querySelector('[data-hover-line]');guide.setAttribute('x1',point.x);guide.setAttribute('x2',point.x);guide.setAttribute('opacity','1');
       chartTip.innerHTML=`<strong>${point.label} · ${chartDate(point.time,true)}</strong><div><span>V8 equity</span><b>${chartMoney(point.v8)}</b></div><div><span>SPY equity</span><b>${chartMoney(point.spy)}</b></div><div><span>V8 return</span><b>${chartPct(point.v8/start-1)}</b></div><div><span>Excess</span><b>${chartPct((point.v8-point.spy)/start)}</b></div>`;
-      chartTip.style.left=`${Math.max(110,Math.min(rect.width-110,screenX))}px`;chartTip.style.top=`${Math.max(105,point.top)}px`;chartTip.classList.add('show');
+      const tipHalf=Math.min(rect.width,chartTip.offsetWidth||205)/2;
+      chartTip.style.left=`${Math.max(tipHalf,Math.min(rect.width-tipHalf,screenX))}px`;chartTip.style.top=`${Math.max(105,point.top)}px`;chartTip.classList.add('show');
     };
     chartStage.onpointerleave=()=>{chartTip.classList.remove('show');const guide=chartPlot.querySelector('[data-hover-line]');if(guide)guide.setAttribute('opacity','0');};
     if(window.ResizeObserver)new ResizeObserver(()=>{if(chartPayload)drawChart(chartPayload);}).observe(chartPlot);
@@ -209,3 +243,4 @@
     setInterval(()=>refreshV8Equity(true),15000);
   }
 })();
+
