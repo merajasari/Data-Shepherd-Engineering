@@ -1,15 +1,10 @@
-"""Autonomous clean forward paper service for frozen Crypto V5.
+"""Frozen Crypto V5 clean forward paper service, recovery lane V3.
 
-The V1 lane missed its preregistered observation boundary and remains preserved
-without evidence.  This V2 lane begins observing at 2026-09-23 07:00 UTC
-(midnight Pacific).  Because V5 uses completed UTC daily candles, the first
-admissible V2 decision is 2026-09-24 00:00 UTC.  No earlier decision is imported
-or reconstructed.
-
-Every decision and realization is appended to an immutable hash-chained JSONL
-journal.  The service has no brokerage client, never places orders, never
-promotes the model, and fails closed if its first or any later required decision
-boundary is missed.
+V1 and V2 remain untouched. V3 must initialize before 2026-10-24 00:00
+UTC and observes from that boundary. Its first decision uses the daily candle
+labelled 2026-10-24, available only after it closes on 2026-10-25.
+Existing frozen model, three-day scoring/realization mechanics and no-backfill
+policy are unchanged. No brokerage orders are placed.
 """
 from __future__ import annotations
 
@@ -42,19 +37,19 @@ from ml.crypto_v5.phase5 import (
 )
 
 
-ARCHIVED_ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v1"
-ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v2"
+ARCHIVED_ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v2"
+ROOT = CONTRACT_PATH.parent.parent / "phase5" / "clean_forward_v3"
 STATE_PATH = ROOT / "paper_state.json"
 STATUS_PATH = ROOT / "forward_service_status.json"
 JOURNAL_PATH = ROOT / "paper_events.jsonl"
 MANIFEST_PATH = ROOT / "clean_lane_manifest.json"
 LOCK_PATH = ROOT / "forward_service.lock"
 
-ARCHIVED_LANE_ID = "crypto_v5_clean_forward_v1"
-LANE_ID = "crypto_v5_clean_forward_v2"
-LANE_NAME = "Crypto V5 Clean Paper V2"
-OBSERVATION_START_UTC = pd.Timestamp("2026-09-23T07:00:00Z")
-FIRST_ELIGIBLE_DECISION_UTC = pd.Timestamp("2026-09-24T00:00:00Z")
+ARCHIVED_LANE_ID = "crypto_v5_clean_forward_v2"
+LANE_ID = "crypto_v5_clean_forward_v3"
+LANE_NAME = "Crypto V5 Clean Paper V3"
+OBSERVATION_START_UTC = pd.Timestamp("2026-10-24T00:00:00Z")
+FIRST_ELIGIBLE_DECISION_UTC = pd.Timestamp("2026-10-24T00:00:00Z")
 DEFAULT_POLL_SECONDS = 300
 
 
@@ -238,7 +233,7 @@ def _next_required_decision(state: dict) -> pd.Timestamp:
 def _status(now: pd.Timestamp, mode: str, action: str, state: dict, **extra) -> dict:
     payload = {
         "generated_at_utc": now.isoformat(),
-        "status": "ok",
+        "status": "error" if mode.startswith("FAIL_CLOSED") else "ok",
         "mode": mode,
         "action": action,
         "lane_id": LANE_ID,
@@ -303,7 +298,7 @@ def run_once(as_of_utc=None) -> dict:
 
     models = {name: joblib.load(path) for name, path in ARTIFACT_PATHS.items()}
     decision = score_snapshot(allocation, ranking, models, state, decision_timestamp)
-    decision_id = f"crypto_v5_clean_v2:{decision_timestamp.isoformat()}"
+    decision_id = f"crypto_v5_clean_v3:{decision_timestamp.isoformat()}"
     event = _append_event({
         "event_type": "DECISION",
         "decision_id": decision_id,

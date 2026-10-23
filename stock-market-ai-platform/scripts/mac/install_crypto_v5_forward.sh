@@ -9,7 +9,7 @@ UID_VALUE="$(id -u)"
 DOMAIN="gui/$UID_VALUE"
 LOGDIR="$PROJECT/logs"
 PHASE4="$PROJECT/data/research/crypto_ten_year/reconstruction/crypto_v5/phase4"
-CLEAN="$PROJECT/data/research/crypto_ten_year/reconstruction/crypto_v5/phase5/clean_forward_v2"
+CLEAN="$PROJECT/data/research/crypto_ten_year/reconstruction/crypto_v5/phase5/clean_forward_v3"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOGDIR"
 
@@ -89,12 +89,12 @@ fi
 STATUS="$CLEAN/forward_service_status.json"
 RUNNING_PID="$(launchctl print "$DOMAIN/$LABEL" | awk '/pid =/{print $3; exit}')"
 if [[ -z "$RUNNING_PID" ]]; then
-  echo "Crypto V5 V2 LaunchAgent has no running PID." >&2
+  echo "Crypto V5 V3 LaunchAgent has no running PID." >&2
   exit 1
 fi
 case "$RUNNING_PID" in
   *[!0-9]*)
-    echo "Crypto V5 V2 LaunchAgent returned a non-numeric PID: $RUNNING_PID" >&2
+    echo "Crypto V5 V3 LaunchAgent returned a non-numeric PID: $RUNNING_PID" >&2
     exit 1
     ;;
 esac
@@ -120,27 +120,27 @@ from pathlib import Path
 path = Path(sys.argv[1])
 expected_pid = int(sys.argv[2])
 if not path.exists():
-    raise SystemExit(f"Crypto V5 V2 heartbeat was not created: {path}")
+    raise SystemExit(f"Crypto V5 V3 heartbeat was not created: {path}")
 payload = json.loads(path.read_text(encoding="utf-8"))
 if payload.get("status") != "ok":
-    raise SystemExit(f"Crypto V5 V2 heartbeat is not healthy: {payload}")
-if payload.get("lane_id") != "crypto_v5_clean_forward_v2":
+    raise SystemExit(f"Crypto V5 V3 heartbeat is not healthy: {payload}")
+if payload.get("lane_id") != "crypto_v5_clean_forward_v3":
     raise SystemExit(f"Unexpected Crypto V5 lane: {payload.get('lane_id')}")
 if payload.get("contract_verified") is not True:
-    raise SystemExit("Crypto V5 V2 contract verification failed")
+    raise SystemExit("Crypto V5 V3 contract verification failed")
 if int(payload.get("service_pid", -1)) != expected_pid:
     raise SystemExit(
-        f"Crypto V5 V2 heartbeat PID {payload.get('service_pid')} "
+        f"Crypto V5 V3 heartbeat PID {payload.get('service_pid')} "
         f"does not match LaunchAgent PID {expected_pid}"
     )
-print(f"Crypto V5 V2 persistent heartbeat: VERIFIED (PID {expected_pid})")
+print(f"Crypto V5 V3 persistent heartbeat: VERIFIED (PID {expected_pid})")
 PY
 
 echo "Installed $LABEL"
-echo "Lane: Crypto V5 Clean Paper V2"
-echo "Archived lane preserved: Crypto V5 Clean Paper V1"
-echo "Observation begins: 2026-09-23 07:00 UTC / 2026-09-23 00:00 Pacific"
-echo "First eligible completed daily decision: 2026-09-24 00:00 UTC / 2026-09-23 17:00 Pacific"
+echo "Lane: Crypto V5 Clean Paper V3"
+echo "Archived lane preserved: Crypto V5 Clean Paper V2"
+echo "Observation begins: 2026-10-24 00:00 UTC / 2026-10-23 17:00 Pacific"
+echo "First eligible candle label: 2026-10-24 00:00 UTC; closes 2026-10-25 00:00 UTC / 2026-10-24 17:00 Pacific"
 echo "Starting paper equity: USD 100,000"
 echo "Decision cadence: every 3 completed UTC daily candles"
 echo "Late or missed decision policy: FAIL CLOSED, NO BACKFILL"

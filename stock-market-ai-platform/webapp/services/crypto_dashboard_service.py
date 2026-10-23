@@ -31,8 +31,8 @@ V2_INTERRUPTED_JOURNAL_PATH = V2_PHASE5_ROOT / "forward_journal.csv"
 V2_POLICY_SUMMARY_PATH = V2_PHASE4_ROOT / "policy_summary.csv"
 V2_PHASE4_MANIFEST_PATH = V2_PHASE4_ROOT / "manifest.json"
 V5_PHASE5_ROOT = Path("data/research/crypto_ten_year/reconstruction/crypto_v5/phase5")
-V5_ARCHIVED_ROOT = V5_PHASE5_ROOT / "clean_forward_v1"
-V5_CLEAN_ROOT = V5_PHASE5_ROOT / "clean_forward_v2"
+V5_ARCHIVED_ROOT = V5_PHASE5_ROOT / "clean_forward_v2"
+V5_CLEAN_ROOT = V5_PHASE5_ROOT / "clean_forward_v3"
 V5_STATUS_PATH = V5_CLEAN_ROOT / "forward_service_status.json"
 V5_STATE_PATH = V5_CLEAN_ROOT / "paper_state.json"
 V5_JOURNAL_PATH = V5_CLEAN_ROOT / "paper_events.jsonl"
@@ -201,7 +201,7 @@ def _operational_health():
     services = [
         _service_health("15m Reconciler", RECONCILE_STATUS_PATH, reconcile, 45),
         _service_health("Shared Crypto V5", V2_STATUS_PATH, v2, 90, v2_error),
-        _service_health("Crypto V5 V2", V5_STATUS_PATH, v5, 30, v5_error),
+        _service_health("Crypto V5 V3", V5_STATUS_PATH, v5, 30, v5_error),
         {
             "name": "Web Dashboard",
             "status": "HEALTHY",
@@ -744,7 +744,7 @@ def _v5_forward_performance():
     events = _read_jsonl(V5_JOURNAL_PATH)
     clean_start = manifest.get(
         "preregistered_observation_start_utc",
-        manifest.get("preregistered_start_utc", "2026-09-23T07:00:00+00:00"),
+        manifest.get("preregistered_start_utc", "2026-10-24T00:00:00+00:00"),
     )
     decisions = sorted(
         [row for row in events if row.get("event_type") == "DECISION"],
@@ -953,14 +953,14 @@ def _v5_forward_performance():
 
     mode = status.get("mode", "NOT_INSTALLED" if not status else "UNKNOWN")
     return {
-        "name": "Crypto V5 Clean Paper V2", "available": bool(status or state or events),
-        "archived_lane_name": "Crypto V5 Clean Paper V1",
+        "name": "Crypto V5 Clean Paper V3", "available": bool(status or state or events),
+        "archived_lane_name": "Crypto V5 Clean Paper V2",
         "archived_lane_mutated": False,
         "status": status.get("status", "not_started"), "mode": mode,
         "action": status.get("action"), "generated_at_utc": status.get("generated_at_utc"),
         "clean_start_utc": clean_start,
         "first_eligible_decision_utc": manifest.get(
-            "first_eligible_decision_utc", "2026-09-24T00:00:00+00:00"
+            "first_eligible_decision_utc", "2026-10-24T00:00:00+00:00"
         ),
         "latest_decision_utc": latest_decision_utc,
         "latest_realized_utc": latest_realized_utc,
@@ -1010,7 +1010,7 @@ def _future_forward_performance():
         "shared_v2": _shared_v2_forward_performance(),
         "crypto_v5": _v5_forward_performance(),
         "xrp_phase7": _xrp_phase7_forward_performance(),
-        "note": "XRP retains its Sep 1 evidence boundary. Shared V2 Clean Forward V2 and interrupted V3 are preserved read-only. V5 begins at the separately preregistered Sep 24 07:00 UTC boundary with fresh state and a $100,000 paper basis. No backfill, tuning, automatic promotion, or real brokerage orders.",
+        "note": "XRP retains its Sep 1 evidence boundary. Shared V2 Clean Forward V2 and interrupted V3 are preserved read-only. Crypto V5 Clean Paper V3 observes from Oct 24 00:00 UTC with a fresh $100,000 paper basis; its first daily candle closes Oct 25 00:00 UTC. Earlier Crypto V5 lanes are preserved separately. No backfill, tuning, automatic promotion, or real brokerage orders.",
     }
 
 

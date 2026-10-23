@@ -86,6 +86,42 @@ class CryptoV5ForwardServiceTest(unittest.TestCase):
                 self.assertEqual(event["previous_event_hash"], "decision-hash")
                 self.assertFalse(event["brokerage_orders"])
 
+    def test_recovery_initialization_preserves_archived_v2(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "clean_forward_v3"
+            archived = root.parent / "clean_forward_v2"
+            archived.mkdir()
+            evidence = archived / "paper_events.jsonl"
+            evidence.write_text('{"preserved": true}\n')
+            with self._paths(root), patch.object(service, "ARCHIVED_ROOT", archived):
+                manifest, state = service._ensure_lane(
+                    pd.Timestamp("2026-10-23T16:00:00Z"), "contract-hash")
+                self.assertEqual(service.LANE_ID, "crypto_v5_clean_forward_v3")
+                self.assertEqual(manifest["supersedes_missed_lane_id"],
+                                 "crypto_v5_clean_forward_v2")
+                self.assertEqual(evidence.read_text(), '{"preserved": true}\n')
+                self.assertEqual(state["decision_count"], 0)
+                self.assertEqual(service.JOURNAL_PATH.read_text(), "")
+
+    def test_missed_decision_reports_error_and_does_not_score(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "clean_forward_v3"
+            state = service._initial_state("contract-hash")
+            latest = service.FIRST_ELIGIBLE_DECISION_UTC + pd.Timedelta(days=1)
+            with self._paths(root), \
+                 patch.object(service, "verify_contract"), \
+                 patch.object(service, "_sha256", return_value="contract-hash"), \
+                 patch.object(service, "_ensure_lane", return_value=({}, state)), \
+                 patch.object(service, "load_completed_bronze", return_value=(pd.DataFrame(), latest)), \
+                 patch.object(service, "build_snapshot", return_value=(None, None, latest)), \
+                 patch.object(service, "score_snapshot") as score:
+                result = service.run_once(latest + pd.Timedelta(days=1))
+                self.assertEqual(result["status"], "error")
+                self.assertEqual(result["mode"], "FAIL_CLOSED_MISSED_DECISION")
+                self.assertEqual(result["decision_count"], 0)
+                score.assert_not_called()
+                self.assertFalse(service.JOURNAL_PATH.exists())
+
     def test_decision_clock_is_three_days_and_never_backfilled(self):
         state = {"last_decision_utc": None}
         self.assertEqual(service._next_required_decision(state), service.FIRST_ELIGIBLE_DECISION_UTC)

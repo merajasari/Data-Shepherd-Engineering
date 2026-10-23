@@ -188,8 +188,8 @@ class CryptoForwardDashboardTest(unittest.TestCase):
                 V5_STATUS_PATH=status, V5_JOURNAL_PATH=journal,
             ):
                 payload = dashboard._v5_forward_performance()
-            self.assertEqual(payload["name"], "Crypto V5 Clean Paper V2")
-            self.assertEqual(payload["archived_lane_name"], "Crypto V5 Clean Paper V1")
+            self.assertEqual(payload["name"], "Crypto V5 Clean Paper V3")
+            self.assertEqual(payload["archived_lane_name"], "Crypto V5 Clean Paper V2")
             self.assertFalse(payload["archived_lane_mutated"])
             self.assertEqual(payload["decision_count"], 1)
             self.assertEqual(payload["realized_count"], 1)
