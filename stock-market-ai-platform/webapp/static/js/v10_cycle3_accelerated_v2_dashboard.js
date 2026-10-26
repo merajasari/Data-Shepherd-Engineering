@@ -247,7 +247,7 @@
     node.classList.remove('positive','negative');
     if(value!=null&&Number.isFinite(Number(value)))node.classList.add(Number(value)<0?'negative':'positive');
   };
-  let livePayload=null,officialV8Payload=null,liveHits=[],liveRenderedSeries=[],liveWidth=900;
+  let livePayload=null,officialV8Payload=null,liveHits=[],liveRenderedSeries=[],liveSeriesGeometry=[],liveWidth=900;
 
   const finiteNumber = value => Number.isFinite(Number(value));
   const stamp = value => {
@@ -376,10 +376,11 @@
       const value=hi-(hi-lo)*index/4,yy=y(value);
       return `<line x1="${p.l}" y1="${yy}" x2="${liveWidth-p.r}" y2="${yy}" stroke="rgba(145,166,194,.15)"/><text x="${p.l-9}" y="${yy+4}" fill="#91a6c2" font-size="10" text-anchor="end">$${Math.round(value).toLocaleString()}</text>`;
     }).join('');
+    liveSeriesGeometry=liveRenderedSeries.map(item=>({...item,points:item.points.map(point=>({point,x:x(point.time),y:y(point.value)}))}));
     const paths=liveRenderedSeries.map(item=>{
       const path=item.points.map((row,index)=>`${index?'L':'M'} ${x(row.time).toFixed(1)} ${y(row.value).toFixed(1)}`).join(' ');
-      const dots=item.points.map((row,index)=>`<circle cx="${x(row.time)}" cy="${y(row.value)}" r="${index===item.points.length-1?4.5:3}" fill="${item.color}"/>`).join('');
-      return `<path d="${path}" fill="none" stroke="${item.color}" stroke-width="${item.width}" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+      const dots=item.points.map((row,index)=>`<circle data-paper-series="${item.id}" cx="${x(row.time)}" cy="${y(row.value)}" r="${index===item.points.length-1?4.5:3}" fill="${item.color}"/>`).join('');
+      return `<path data-paper-series="${item.id}" d="${path}" fill="none" stroke="${item.color}" stroke-width="${item.width}" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
     }).join('');
 
     const ends=liveRenderedSeries.map(item=>{
@@ -432,6 +433,33 @@
     popupStyle.textContent='.paper-performance-tip{position:fixed;z-index:12000;box-sizing:border-box;width:360px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;padding:14px 16px;border:1px solid rgba(129,162,205,.5);border-radius:12px;background:#081526;box-shadow:0 12px 35px rgba(0,0,0,.45);color:#f2f6ff;font:12px/1.5 system-ui,sans-serif;pointer-events:none;opacity:0;visibility:hidden}.paper-performance-tip.show{opacity:1;visibility:visible}.paper-performance-tip strong{display:block;margin-bottom:6px}.paper-performance-tip .paper-tip-row{display:flex;justify-content:space-between;gap:16px;margin:4px 0}.paper-performance-tip b{text-align:right}.paper-performance-tip small{display:block;color:#91a6c2;margin-top:6px}.paper-performance-tip hr{border:0;border-top:1px solid #244261;margin:10px 0}';
     document.head.appendChild(popupStyle);
   }
+
+  // Select the actual line in screen pixels, including the space between its dots.
+  function pickPaperSeries(svg,series,event){
+    const matrix=svg?.getScreenCTM();
+    if(!matrix)return null;
+    const target=event.target?.closest?.('[data-paper-series]')?.dataset.paperSeries;
+    const screen=node=>({x:matrix.a*node.x+matrix.c*node.y+matrix.e,y:matrix.b*node.x+matrix.d*node.y+matrix.f});
+    let best=null;
+    const consider=(item,node,distance)=>{
+      if(distance<=18&&(!best||distance<best.distance))best={item,node,point:node.point,distance};
+    };
+    for(const item of series){
+      if(target&&item.id!==target)continue;
+      for(let index=0;index<item.points.length;index++){
+        const node=item.points[index],p=screen(node);
+        consider(item,node,Math.hypot(event.clientX-p.x,event.clientY-p.y));
+        if(!index)continue;
+        const previous=item.points[index-1],a=screen(previous);
+        const dx=p.x-a.x,dy=p.y-a.y,length=dx*dx+dy*dy;
+        const t=length?Math.max(0,Math.min(1,((event.clientX-a.x)*dx+(event.clientY-a.y)*dy)/length)):0;
+        const distance=Math.hypot(event.clientX-(a.x+t*dx),event.clientY-(a.y+t*dy));
+        consider(item,t<.5?previous:node,distance);
+      }
+    }
+    return best;
+  }
+
   function placePaperTooltip(tip,event){
     tip.classList.add('show');
     const width=tip.offsetWidth,height=tip.offsetHeight;
@@ -452,34 +480,28 @@
     section.querySelector('[data-a10-hover-line]')?.setAttribute('opacity','0');
   };
   const inspectLivePoint=event=>{
-    if(liveTipPinned||!liveHits.length||!liveRenderedSeries.length)return;
+    if(liveTipPinned)return;
     const host=section.querySelector('[data-a10-live-chart]');
-    const rect=host.getBoundingClientRect(),px=(event.clientX-rect.left)*liveWidth/rect.width;
-    const hit=liveHits.reduce((left,right)=>Math.abs(right.x-px)<Math.abs(left.x-px)?right:left);
+    const hit=pickPaperSeries(host.querySelector('svg'),liveSeriesGeometry,event);
+    if(!hit){clearLiveTip();return;}
+    const point=hit.point,gain=point.value-NORMALIZED_BASE;
     const guide=host.querySelector('[data-a10-hover-line]');
-    guide?.setAttribute('x1',hit.x);guide?.setAttribute('x2',hit.x);guide?.setAttribute('opacity','1');
-    const rows=liveRenderedSeries.map(item=>({item,point:nearestSeriesPoint(item.points,hit.time)}));
+    guide?.setAttribute('x1',hit.node.x);guide?.setAttribute('x2',hit.node.x);guide?.setAttribute('opacity','1');
     const dollarChange=value=>(value>=0?'+':'−')+money(Math.abs(value));
-    liveTooltip.innerHTML=`<strong>Paper performance · ${dateTime(hit.time)}</strong><small>Nearest available observation for each series; actual dates are shown below.</small>${rows.map(row=>{
-      const start=NORMALIZED_BASE,gain=row.point.value-start;
-      return `<hr><strong>${row.item.label} · ${money(row.point.value)}</strong>
-        <small>${dateTime(row.point.time)} · ${row.point.label}${row.point.sourceTime?' · source '+dateTime(row.point.sourceTime):''}</small>
-        <div class="paper-tip-row"><span>Gain / loss</span><b>${dollarChange(gain)}</b></div>
-        <div class="paper-tip-row"><span>Return from original basis</span><b>${pct4(gain/start)}</b></div>`;
-    }).join('')}`;
-    const v10=rows.find(row=>row.item.id==='v10'),spy=rows.find(row=>row.item.id==='spy');
-    if(v10&&spy&&Math.abs(v10.point.time-spy.point.time)<=300000){
-      const edge=v10.point.value-spy.point.value;
-      liveTooltip.innerHTML+=`<hr><div class="paper-tip-row"><span>V10 − SPY</span><b>${dollarChange(edge)} · ${(edge/NORMALIZED_BASE*100).toFixed(2)} pp</b></div>`;
-    }
-    liveTooltip.innerHTML+='<small>$100,000 original basis. V8 and V10 have different evidence boundaries. Saved/current marks are not completed exits.</small><small>Click or tap to pin · Esc to dismiss.</small>';
+    liveTooltip.innerHTML=`<strong style="color:${hit.item.color}">${hit.item.label} · ${dateTime(point.time)}</strong>
+      <small>${point.label}${point.sourceTime?' · source '+dateTime(point.sourceTime):''}</small>
+      <div class="paper-tip-row"><span>Paper equity</span><b>${money(point.value)}</b></div>
+      <div class="paper-tip-row"><span>Gain / loss</span><b>${dollarChange(gain)}</b></div>
+      <div class="paper-tip-row"><span>Return from original basis</span><b>${pct4(gain/NORMALIZED_BASE)}</b></div>
+      <small>Original basis: ${money(NORMALIZED_BASE)}. Saved/current marks are display valuations, not completed exits.</small>
+      <small>Click or tap to pin · Esc to dismiss.</small>`;
     placePaperTooltip(liveTooltip,event);
   };
   liveStage?.addEventListener('pointermove',inspectLivePoint);
   liveStage?.addEventListener('pointerleave',()=>{if(!liveTipPinned)clearLiveTip();});
   liveStage?.addEventListener('click',event=>{
     if(liveTipPinned){liveTipPinned=false;clearLiveTip();}
-    else{inspectLivePoint(event);liveTipPinned=true;}
+    else{inspectLivePoint(event);liveTipPinned=liveTooltip.classList.contains('show');}
   });
   document.addEventListener('keydown',event=>{if(event.key==='Escape'){liveTipPinned=false;clearLiveTip();}});
   window.addEventListener('scroll',()=>{liveTipPinned=false;clearLiveTip();},{passive:true});
