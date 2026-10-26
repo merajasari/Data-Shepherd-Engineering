@@ -6,6 +6,8 @@ loads reconstructed history, modifies V8, or reaches a brokerage interface.
 """
 from __future__ import annotations
 
+from webapp.services.cohort_interaction_projection import project_cohort_events
+
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
@@ -897,6 +899,7 @@ def get_v10_cycle3_accelerated_dashboard() -> dict[str, object]:
         ),
         "entries": sum(event.get("event_type") == "ENTRY" for event in events),
         "journal_events": len(events),
+        "cohort_event_history": project_cohort_events(events),
         **summary,
         **current_valuation,
         **review,
