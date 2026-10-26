@@ -9,7 +9,8 @@ import subprocess
 import tempfile
 
 BASE = "27c49fffa94b42fd34d96203adec7d6f125005a2"
-HEAD = "9362c37cc2f545f0b1019ea2b7ff2a445c9120a4"
+HEAD = "4b74679e77ea6861d887ad4cfcb8892e81e93506"
+HOVER_BASE = "9362c37cc2f545f0b1019ea2b7ff2a445c9120a4"
 HISTORY_BASE = "60c876bf903a42e4be26d7e041fb44bef94eb343"
 PREFIX = "stock-market-ai-platform/"
 JS = ("v8_stream_health_visual.js", "v10_cycle3_accelerated_v2_dashboard.js")
@@ -51,10 +52,11 @@ def main():
         relative = "webapp/static/js/" + name
         path = root / PREFIX / relative
         current = path.read_text()
-        if "paper-performance-tooltip-style" in current:
+        if "paper-performance-tooltip-style" in current and "minX+60000" in current:
             prepared.append((path, current))
             continue
-        base_ref = HISTORY_BASE if "loadPaperHistory" in current else BASE
+        base_ref = (HOVER_BASE if "paper-performance-tooltip-style" in current
+                    else HISTORY_BASE if "loadPaperHistory" in current else BASE)
         before, after = source(base_ref, relative), source(HEAD, relative)
         if name.startswith("v8"):
             # This entire handler is intentionally replaced; keep unrelated layout edits.
