@@ -135,6 +135,33 @@
     popupStyle.textContent='.paper-performance-tip{position:fixed;z-index:12000;box-sizing:border-box;width:360px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;padding:14px 16px;border:1px solid rgba(129,162,205,.5);border-radius:12px;background:#081526;box-shadow:0 12px 35px rgba(0,0,0,.45);color:#f2f6ff;font:12px/1.5 system-ui,sans-serif;pointer-events:none;opacity:0;visibility:hidden}.paper-performance-tip.show{opacity:1;visibility:visible}.paper-performance-tip strong{display:block;margin-bottom:6px}.paper-performance-tip .paper-tip-row{display:flex;justify-content:space-between;gap:16px;margin:4px 0}.paper-performance-tip b{text-align:right}.paper-performance-tip small{display:block;color:#91a6c2;margin-top:6px}.paper-performance-tip hr{border:0;border-top:1px solid #244261;margin:10px 0}';
     document.head.appendChild(popupStyle);
   }
+
+  // Select the actual line in screen pixels, including the space between its dots.
+  function pickPaperSeries(svg,series,event){
+    const matrix=svg?.getScreenCTM();
+    if(!matrix)return null;
+    const target=event.target?.closest?.('[data-paper-series]')?.dataset.paperSeries;
+    const screen=node=>({x:matrix.a*node.x+matrix.c*node.y+matrix.e,y:matrix.b*node.x+matrix.d*node.y+matrix.f});
+    let best=null;
+    const consider=(item,node,distance)=>{
+      if(distance<=18&&(!best||distance<best.distance))best={item,node,point:node.point,distance};
+    };
+    for(const item of series){
+      if(target&&item.id!==target)continue;
+      for(let index=0;index<item.points.length;index++){
+        const node=item.points[index],p=screen(node);
+        consider(item,node,Math.hypot(event.clientX-p.x,event.clientY-p.y));
+        if(!index)continue;
+        const previous=item.points[index-1],a=screen(previous);
+        const dx=p.x-a.x,dy=p.y-a.y,length=dx*dx+dy*dy;
+        const t=length?Math.max(0,Math.min(1,((event.clientX-a.x)*dx+(event.clientY-a.y)*dy)/length)):0;
+        const distance=Math.hypot(event.clientX-(a.x+t*dx),event.clientY-(a.y+t*dy));
+        consider(item,t<.5?previous:node,distance);
+      }
+    }
+    return best;
+  }
+
   function placePaperTooltip(tip,event){
     tip.classList.add('show');
     const width=tip.offsetWidth,height=tip.offsetHeight;
@@ -148,7 +175,7 @@
     chartTip.setAttribute('role','tooltip');
     document.body.appendChild(chartTip);
     let chartTipPinned=false;
-    let chartPayload=null,chartHits=[],chartWidth=900;
+    let chartPayload=null,chartHits=[],chartSeriesGeometry=[],chartWidth=900;
     const chartMoney=v=>Number(v).toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
     const chartPct=v=>`${Number(v)>=0?'+':''}${(Number(v)*100).toFixed(4)}%`;
     const chartDate=(v,time=false)=>new Date(v).toLocaleString(undefined,time?{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Los_Angeles',timeZoneName:'short'}:{month:'short',day:'numeric',timeZone:'America/Los_Angeles'});
@@ -182,14 +209,16 @@
       const y=v=>margin.top+(maxY-v)/(maxY-minY)*(height-margin.top-margin.bottom);
       const line=key=>points.map((p,i)=>`${i?'L':'M'} ${x(p.time).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
       const grid=Array.from({length:5},(_,i)=>{const value=maxY-(maxY-minY)*i/4,py=y(value);return `<line x1="${margin.left}" y1="${py}" x2="${chartWidth-margin.right}" y2="${py}" stroke="rgba(129,162,205,.14)"/><text x="${margin.left-10}" y="${py+4}" text-anchor="end" fill="#91a6c2" font-size="11">$${Math.round(value).toLocaleString()}</text>`;}).join('');
-      const dots=points.map((p,i)=>`<circle cx="${x(p.time)}" cy="${y(p.v8)}" r="${i===points.length-1?5:3}" fill="#36d8ff"/><circle cx="${x(p.time)}" cy="${y(p.spy)}" r="${i===points.length-1?5:3}" fill="#a988ff"/>`).join('');
+      const dots=points.map((p,i)=>`<circle cx="${x(p.time)}" cy="${y(p.v8)}" data-paper-series="v8" r="${i===points.length-1?5:3}" fill="#36d8ff"/><circle cx="${x(p.time)}" cy="${y(p.spy)}" data-paper-series="spy" r="${i===points.length-1?5:3}" fill="#a988ff"/>`).join('');
       const lastPoint=points.at(-1);
       let v8LabelY=Math.max(margin.top+12,Math.min(height-margin.bottom-8,y(lastPoint.v8)-8));
       let spyLabelY=Math.max(margin.top+12,Math.min(height-margin.bottom-8,y(lastPoint.spy)+16));
       if(Math.abs(v8LabelY-spyLabelY)<16)spyLabelY=Math.min(height-margin.bottom-8,v8LabelY+18);
       const endpointLabels=`<text x="${Math.min(chartWidth-margin.right+8,x(lastPoint.time)+10)}" y="${v8LabelY}" fill="#36d8ff" font-size="12" font-weight="900">V8 ${chartMoney(lastPoint.v8)}</text><text x="${Math.min(chartWidth-margin.right+8,x(lastPoint.time)+10)}" y="${spyLabelY}" fill="#a988ff" font-size="12" font-weight="900">SPY ${chartMoney(lastPoint.spy)}</text>`;
       chartHits=points.map(p=>({...p,x:x(p.time),top:Math.min(y(p.v8),y(p.spy))}));
-      chartPlot.innerHTML=`<svg viewBox="0 0 ${chartWidth} ${height}" aria-hidden="true">${grid}<line x1="${margin.left}" y1="${y(100000)}" x2="${chartWidth-margin.right}" y2="${y(100000)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/><path d="${line('spy')}" fill="none" stroke="#a988ff" stroke-width="3"/><path d="${line('v8')}" fill="none" stroke="#36d8ff" stroke-width="4"/>${dots}${endpointLabels}<line data-hover-line x1="0" y1="${margin.top}" x2="0" y2="${height-margin.bottom}" stroke="rgba(242,246,255,.5)" stroke-dasharray="3 4" opacity="0"/><text x="${margin.left}" y="${height-10}" fill="#91a6c2" font-size="11">${chartDate(minX)}</text><text x="${chartWidth-margin.right}" y="${height-10}" text-anchor="end" fill="#91a6c2" font-size="11">${chartDate(maxX)}</text></svg>`;
+      chartSeriesGeometry=[{id:'v8',label:'V8',key:'v8',color:'#36d8ff'},{id:'spy',label:'SPY',key:'spy',color:'#a988ff'}]
+        .map(item=>({...item,points:points.map(row=>({x:x(row.time),y:y(row[item.key]),point:{time:row.time,value:row[item.key],label:row.label}}))}));
+      chartPlot.innerHTML=`<svg viewBox="0 0 ${chartWidth} ${height}" aria-hidden="true">${grid}<line x1="${margin.left}" y1="${y(100000)}" x2="${chartWidth-margin.right}" y2="${y(100000)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/><path data-paper-series="spy" d="${line('spy')}" fill="none" stroke="#a988ff" stroke-width="3"/><path data-paper-series="v8" d="${line('v8')}" fill="none" stroke="#36d8ff" stroke-width="4"/>${dots}${endpointLabels}<line data-hover-line x1="0" y1="${margin.top}" x2="0" y2="${height-margin.bottom}" stroke="rgba(242,246,255,.5)" stroke-dasharray="3 4" opacity="0"/><text x="${margin.left}" y="${height-10}" fill="#91a6c2" font-size="11">${chartDate(minX)}</text><text x="${chartWidth-margin.right}" y="${height-10}" text-anchor="end" fill="#91a6c2" font-size="11">${chartDate(maxX)}</text></svg>`;
       const last=points.at(-1),start=Number(d.starting_equity)||100000,v8Return=last.v8/start-1,spyReturn=last.spy/start-1,excess=v8Return-spyReturn;
       const v8Node=liveChart.querySelector('[data-v8-chart-value]'),spyNode=liveChart.querySelector('[data-spy-chart-value]'),excessNode=liveChart.querySelector('[data-excess-chart-value]');
       v8Node.textContent=`${chartMoney(last.v8)} (${chartPct(v8Return)})`;spyNode.textContent=`${chartMoney(last.spy)} (${chartPct(spyReturn)})`;excessNode.textContent=chartPct(excess);
@@ -208,23 +237,20 @@
       if(chartPayload)drawChart(chartPayload);
     });
     chartStage.onpointermove=event=>{
-      if(chartTipPinned||!chartHits.length)return;
-      const rect=chartPlot.getBoundingClientRect(),px=(event.clientX-rect.left)*chartWidth/rect.width;
-      const point=chartHits.reduce((a,b)=>Math.abs(b.x-px)<Math.abs(a.x-px)?b:a);
-      const start=Number(chartPayload?.starting_equity)||100000;
+      if(chartTipPinned)return;
+      const hit=pickPaperSeries(chartPlot.querySelector('svg'),chartSeriesGeometry,event);
+      if(!hit){clearChartTip();return;}
+      const point=hit.point,start=Number(chartPayload?.starting_equity)||100000;
       const guide=chartPlot.querySelector('[data-hover-line]');
-      guide?.setAttribute('x1',point.x);guide?.setAttribute('x2',point.x);guide?.setAttribute('opacity','1');
-      const gain=point.v8-start,spyGain=point.spy-start;
+      guide?.setAttribute('x1',hit.node.x);guide?.setAttribute('x2',hit.node.x);guide?.setAttribute('opacity','1');
+      const gain=point.value-start;
       const dollarChange=value=>(value>=0?'+':'−')+chartMoney(Math.abs(value));
-      chartTip.innerHTML=`<strong>V8 vs SPY · ${chartDate(point.time,true)}</strong><small>${point.label}</small>
-        <div class="paper-tip-row"><span>V8 paper equity</span><b>${chartMoney(point.v8)}</b></div>
-        <div class="paper-tip-row"><span>V8 gain / loss</span><b>${dollarChange(gain)}</b></div>
-        <div class="paper-tip-row"><span>V8 return</span><b>${chartPct(gain/start)}</b></div><hr>
-        <div class="paper-tip-row"><span>SPY equity</span><b>${chartMoney(point.spy)}</b></div>
-        <div class="paper-tip-row"><span>SPY gain / loss</span><b>${dollarChange(spyGain)}</b></div>
-        <div class="paper-tip-row"><span>SPY return</span><b>${chartPct(spyGain/start)}</b></div>
-        <div class="paper-tip-row"><span>V8 − SPY</span><b>${dollarChange(point.v8-point.spy)} · ${((point.v8-point.spy)/start*100).toFixed(2)} pp</b></div>
-        <small>Returns use the original ${chartMoney(start)} basis. Saved/current marks are display valuations, not completed exits.</small>
+      chartTip.innerHTML=`<strong style="color:${hit.item.color}">${hit.item.label} · ${chartDate(point.time,true)}</strong>
+        <small>${point.label}</small>
+        <div class="paper-tip-row"><span>Paper equity</span><b>${chartMoney(point.value)}</b></div>
+        <div class="paper-tip-row"><span>Gain / loss</span><b>${dollarChange(gain)}</b></div>
+        <div class="paper-tip-row"><span>Return from original basis</span><b>${chartPct(gain/start)}</b></div>
+        <small>Original basis: ${chartMoney(start)}. Saved/current marks are display valuations, not completed exits.</small>
         <small>Click or tap to pin · Esc to dismiss.</small>`;
       placePaperTooltip(chartTip,event);
     };
@@ -232,7 +258,7 @@
     chartStage.onpointerleave=()=>{if(!chartTipPinned)clearChartTip();};
     chartStage.addEventListener('click',event=>{
       if(chartTipPinned){chartTipPinned=false;clearChartTip();}
-      else{chartStage.onpointermove(event);chartTipPinned=true;}
+      else{chartStage.onpointermove(event);chartTipPinned=chartTip.classList.contains('show');}
     });
     document.addEventListener('keydown',event=>{if(event.key==='Escape'){chartTipPinned=false;clearChartTip();}});
     window.addEventListener('scroll',()=>{chartTipPinned=false;clearChartTip();},{passive:true});
