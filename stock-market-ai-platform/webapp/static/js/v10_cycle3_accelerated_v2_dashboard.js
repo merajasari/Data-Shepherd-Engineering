@@ -8,12 +8,21 @@
     document.querySelector('footer');
   if (!anchor) return;
 
+
+  // Rolling display windows end at the newest supplied observation; values stay on their original basis.
+  const performanceRanges=[["24h",1],["48h",2],["72h",3],["1w",7],["2w",14],["1m",30],["3m",90],["6m",180],["1y",365],["5y",1825],["Max",null]];
+  let performanceRange='Max';
+  const rangeStart=end=>performanceRange==='Max'?-Infinity:end-performanceRanges.find(row=>row[0]===performanceRange)[1]*86400000;
+  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Rolling windows use available forward observations only · 1m = 30 days · Max = all recorded history.</div>';
+
   const section = document.createElement('section');
   section.id = panelId;
   section.className = 'panel';
   section.style.marginTop = '18px';
   section.innerHTML = `
-    <style>
+    <style>    .performance-range-controls{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}.performance-range-controls button{padding:7px 10px;border:1px solid rgba(120,155,205,.3);border-radius:9px;background:#0d1c31;color:#91a6c2;font:inherit;font-size:.72rem;font-weight:850;cursor:pointer}.performance-range-controls button[aria-pressed=true]{background:linear-gradient(90deg,#36d8ff,#39e3a1);color:#06151d;border-color:transparent}.performance-range-controls button:focus-visible{outline:2px solid #f2f6ff;outline-offset:2px}.performance-range-note{color:#91a6c2;font-size:.68rem;line-height:1.5}
+
+
       #${panelId}{overflow:hidden}
       #${panelId} .a10-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
       #${panelId} .a10-head h2{margin-bottom:7px}
@@ -104,7 +113,8 @@
         </div>
         <div class="a10-live-chart">
           <div class="a10-live-chart-head"><div><div class="a10-chart-title">Interactive live paper performance</div><div class="a10-chart-subtitle">V10 and SPY use the accelerated Sep 10 evidence lane. V8 uses the official frozen-V8 holdout shown on the V8 page, with its own Sep 1 boundary. Hover for exact values.</div></div><div class="a10-live-legend"><span><i style="background:#36d8ff"></i>V10</span><span><i style="background:#efc56b"></i>V8 official</span><span><i style="background:#a78bfa"></i>SPY</span></div></div>
-          <div class="a10-live-stage"><div class="a10-live-host" data-a10-live-chart></div><div class="a10-live-tooltip" data-a10-live-tooltip></div></div>
+          ${rangeButtons()}
+      <div class="a10-live-stage"><div class="a10-live-host" data-a10-live-chart></div><div class="a10-live-tooltip" data-a10-live-tooltip></div></div>
           <div class="a10-live-foot"><span data-a10-live-range>Official forward marks loading…</span><span>Refreshes every 15 seconds · official V8 is read from /api/v8/holdout · current marks are not completed evidence</span></div>
         </div>
       </div>
@@ -314,7 +324,9 @@
     const series=acceleratedLiveSeries(data);
     const official=officialV8LiveSeries(v8);
     if(official&&official.points.length)series.splice(1,0,official);
-    liveRenderedSeries=series.filter(item=>item.points.length);
+    const newest=Math.max(...series.flatMap(item=>item.points.map(point=>point.time)));
+    const cutoff=rangeStart(newest);
+    liveRenderedSeries=series.map(item=>({...item,points:item.points.filter(point=>point.time>=cutoff)})).filter(item=>item.points.length);
 
     const allPoints=liveRenderedSeries.flatMap(item=>item.points);
     if(!allPoints.length){
@@ -375,6 +387,14 @@
     set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · ${officialStatus}`);
   }
 
+  section.addEventListener('click',event=>{
+    const button=event.target.closest('[data-performance-range]');
+    if(!button)return;
+    performanceRange=button.dataset.performanceRange;
+    section.querySelectorAll('[data-performance-range]').forEach(node=>node.setAttribute('aria-pressed',String(node===button)));
+    section.querySelector('[data-a10-live-tooltip]')?.classList.remove('show');
+    if(livePayload)renderLiveChart(livePayload,officialV8Payload);
+  });
   const liveStage=section.querySelector('.a10-live-stage');
   liveStage?.addEventListener('pointermove',event=>{
     if(!liveHits.length||!liveRenderedSeries.length)return;
