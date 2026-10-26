@@ -175,7 +175,7 @@
       const cutoff=rangeStart(allPoints.at(-1).time);
       const points=allPoints.filter(point=>point.time>=cutoff),height=330,margin={top:22,right:145,bottom:42,left:80};
       chartWidth=Math.max(620,Math.round(chartPlot.clientWidth||900));
-      const minX=points[0].time,maxX=Math.max(points.at(-1).time,minX+86400000);
+      const minX=points[0].time,maxX=Math.max(points.at(-1).time,minX+60000);
       const all=points.flatMap(p=>[p.v8,p.spy,100000]),raw=Math.max(...all)-Math.min(...all),pad=Math.max(raw*.18,45);
       const minY=Math.min(...all)-pad,maxY=Math.max(...all)+pad;
       const x=v=>margin.left+(v-minX)/(maxX-minX)*(chartWidth-margin.left-margin.right);
@@ -196,7 +196,7 @@
       chartTone(v8Node,v8Return);chartTone(spyNode,spyReturn);chartTone(excessNode,excess);
       const open=Number(d.open_cohorts||0),priced=Number(d.priced_open_cohorts||0);
       liveChart.querySelector('[data-v8-chart-badge]').textContent=d.equity_basis==='LIVE_MARK_TO_MARKET'?`LIVE MARK · ${priced}/${open} COHORTS`:`${Number(d.completed_cohorts||0)} COMPLETED COHORTS`;
-      liveChart.querySelector('[data-v8-chart-range]').textContent=`${points.length<2?'Only one observation in this window; more saved marks are needed. ':''}${chartDate(minX)} → ${chartDate(maxX,true)} · ${points.length} available points · completed exits + observed marks + current value`;
+      liveChart.querySelector('[data-v8-chart-range]').textContent=`${points.length<2?'Only one observation in this window; more saved marks are needed. ':''}${chartDate(minX,true)} → ${chartDate(points.at(-1).time,true)} · Axis fits available observations (${performanceRange} selected) · ${points.length} available points · completed exits + observed marks + current value`;
     };
     liveChart.addEventListener('click',event=>{
       const button=event.target.closest('[data-performance-range]');
