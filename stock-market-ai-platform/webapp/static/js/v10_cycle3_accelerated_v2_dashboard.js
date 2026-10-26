@@ -366,7 +366,7 @@
     liveWidth=Math.max(650,Math.round(host.clientWidth||900));
     const minX=Math.min(...allPoints.map(row=>row.time));
     const rawMaxX=Math.max(...allPoints.map(row=>row.time));
-    const maxX=Math.max(rawMaxX,minX+86400000);
+    const maxX=Math.max(rawMaxX,minX+60000);
     const values=[...allPoints.map(row=>row.value),NORMALIZED_BASE];
     const raw=Math.max(...values)-Math.min(...values),pad=Math.max(raw*.18,45);
     const lo=Math.min(...values)-pad,hi=Math.max(...values)+pad;
@@ -409,10 +409,10 @@
       };
     });
 
-    const firstLabel=dateOnly(minX),lastLabel=dateTime(rawMaxX);
+    const firstLabel=rawMaxX-minX<86400000?dateTime(minX):dateOnly(minX),lastLabel=dateTime(rawMaxX);
     host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live V10 accelerated paper equity, official frozen V8 holdout equity, and SPY"><line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${grid}${paths}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${firstLabel}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${lastLabel}</text></svg>`;
     const officialStatus=official&&official.points.length?'official V8 holdout + accelerated V10/SPY':'accelerated V10/SPY · official V8 unavailable';
-    set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · ${officialStatus}${liveRenderedSeries.every(item=>item.points.length<2)?' · Only one observation per series in this window; saved marks will accumulate.':''}`);
+    set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · Axis fits available observations (${performanceRange} selected) · ${officialStatus}${liveRenderedSeries.every(item=>item.points.length<2)?' · Only one observation per series in this window; saved marks will accumulate.':''}`);
   }
 
   section.addEventListener('click',event=>{
