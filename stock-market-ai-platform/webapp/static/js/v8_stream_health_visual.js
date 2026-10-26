@@ -92,7 +92,25 @@
   const performanceRanges=[["24h",1],["48h",2],["72h",3],["1w",7],["2w",14],["1m",30],["3m",90],["6m",180],["1y",365],["5y",1825],["Max",null]];
   let performanceRange='Max';
   const rangeStart=end=>performanceRange==='Max'?-Infinity:end-performanceRanges.find(row=>row[0]===performanceRange)[1]*86400000;
-  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Rolling windows use available forward observations only · 1m = 30 days · Max = all recorded history.</div>';
+  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Saved marks are sampled every 5 minutes when source valuations change · 1m = 30 days · older marks are thinned for display.</div>';
+
+
+  // Display-only observations are recorded independently of the official journals.
+  let paperHistory={v8:[],v10:[]};
+  async function loadPaperHistory(){
+    const cache=window.DataShepherdPaperHistory||(window.DataShepherdPaperHistory={at:0,payload:null,pending:null});
+    if(!cache.pending&&Date.now()-cache.at>30000){
+      cache.at=Date.now();
+      cache.pending=fetch('/static/generated/stock_paper_equity_history.json',{credentials:'same-origin',cache:'no-store'})
+        .then(response=>{if(!response.ok)throw Error('History unavailable');return response.json();})
+        .then(data=>{cache.payload=data;})
+        .catch(()=>{}).finally(()=>{cache.pending=null;});
+    }
+    if(cache.pending)await cache.pending;
+    paperHistory=cache.payload||{v8:[],v10:[]};
+  }
+  const observedRows=(model,payload)=>(Array.isArray(paperHistory[model])?paperHistory[model]:[])
+    .filter(row=>row.frozen_sha256===payload.frozen_sha256&&(!payload.contract_sha256||row.contract_sha256===payload.contract_sha256));
 
     const priorLiveChart=document.getElementById('v8-live-chart');
     if(priorLiveChart)priorLiveChart.remove();
@@ -109,7 +127,55 @@
     const chartPlot=liveChart.querySelector('.v8-live-chart-plot');
     const chartStage=liveChart.querySelector('.v8-live-chart-stage');
     const chartTip=liveChart.querySelector('.v8-live-chart-tooltip');
-    let chartPayload=null,chartHits=[],chartWidth=900;
+
+  // Put the popup outside clipped chart containers and keep it inside the viewport.
+  if(!document.getElementById('paper-performance-tooltip-style')){
+    const popupStyle=document.createElement('style');
+    popupStyle.id='paper-performance-tooltip-style';
+    popupStyle.textContent='.paper-performance-tip{position:fixed;z-index:12000;box-sizing:border-box;width:360px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;padding:14px 16px;border:1px solid rgba(129,162,205,.5);border-radius:12px;background:#081526;box-shadow:0 12px 35px rgba(0,0,0,.45);color:#f2f6ff;font:12px/1.5 system-ui,sans-serif;pointer-events:none;opacity:0;visibility:hidden}.paper-performance-tip.show{opacity:1;visibility:visible}.paper-performance-tip strong{display:block;margin-bottom:6px}.paper-performance-tip .paper-tip-row{display:flex;justify-content:space-between;gap:16px;margin:4px 0}.paper-performance-tip b{text-align:right}.paper-performance-tip small{display:block;color:#91a6c2;margin-top:6px}.paper-performance-tip hr{border:0;border-top:1px solid #244261;margin:10px 0}';
+    document.head.appendChild(popupStyle);
+  }
+
+  // Select the actual line in screen pixels, including the space between its dots.
+  function pickPaperSeries(svg,series,event){
+    const matrix=svg?.getScreenCTM();
+    if(!matrix)return null;
+    const target=event.target?.closest?.('[data-paper-series]')?.dataset.paperSeries;
+    const screen=node=>({x:matrix.a*node.x+matrix.c*node.y+matrix.e,y:matrix.b*node.x+matrix.d*node.y+matrix.f});
+    let best=null;
+    const consider=(item,node,distance)=>{
+      if(distance<=18&&(!best||distance<best.distance))best={item,node,point:node.point,distance};
+    };
+    for(const item of series){
+      if(target&&item.id!==target)continue;
+      for(let index=0;index<item.points.length;index++){
+        const node=item.points[index],p=screen(node);
+        consider(item,node,Math.hypot(event.clientX-p.x,event.clientY-p.y));
+        if(!index)continue;
+        const previous=item.points[index-1],a=screen(previous);
+        const dx=p.x-a.x,dy=p.y-a.y,length=dx*dx+dy*dy;
+        const t=length?Math.max(0,Math.min(1,((event.clientX-a.x)*dx+(event.clientY-a.y)*dy)/length)):0;
+        const distance=Math.hypot(event.clientX-(a.x+t*dx),event.clientY-(a.y+t*dy));
+        consider(item,t<.5?previous:node,distance);
+      }
+    }
+    return best;
+  }
+
+  function placePaperTooltip(tip,event){
+    tip.classList.add('show');
+    const width=tip.offsetWidth,height=tip.offsetHeight;
+    const x=event.clientX+16+width<=window.innerWidth-12?event.clientX+16:event.clientX-width-16;
+    const y=event.clientY+16+height<=window.innerHeight-12?event.clientY+16:event.clientY-height-16;
+    tip.style.left=Math.max(12,Math.min(window.innerWidth-width-12,x))+'px';
+    tip.style.top=Math.max(12,Math.min(window.innerHeight-height-12,y))+'px';
+  }
+
+    chartTip.className='paper-performance-tip';
+    chartTip.setAttribute('role','tooltip');
+    document.body.appendChild(chartTip);
+    let chartTipPinned=false;
+    let chartPayload=null,chartHits=[],chartSeriesGeometry=[],chartWidth=900;
     const chartMoney=v=>Number(v).toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
     const chartPct=v=>`${Number(v)>=0?'+':''}${(Number(v)*100).toFixed(4)}%`;
     const chartDate=(v,time=false)=>new Date(v).toLocaleString(undefined,time?{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Los_Angeles',timeZoneName:'short'}:{month:'short',day:'numeric',timeZone:'America/Los_Angeles'});
@@ -121,6 +187,11 @@
         const point={time:new Date(row.timestamp_utc).getTime(),v8:Number(row.strategy_normalized),spy:Number(row.spy_normalized),label:'Completed cohort'};
         if(Object.values(point).slice(0,3).every(Number.isFinite))points.push(point);
       });
+      observedRows('v8',d).forEach(row=>{
+        const point={time:Date.parse(row.timestamp_utc),v8:Number(row.strategy_normalized),spy:Number(row.spy_normalized),label:'Observed paper valuation · source '+chartDate(row.valuation_timestamp_utc||row.timestamp_utc,true)};
+        if([point.time,point.v8,point.spy].every(Number.isFinite))points.push(point);
+      });
+      points.sort((a,b)=>a.time-b.time);
       const live={time:new Date(d.valuation_timestamp_utc||Date.now()).getTime(),v8:Number(d.current_equity),spy:Number(d.current_spy_equity),label:d.equity_basis==='LIVE_MARK_TO_MARKET'?'Current live mark':'Latest completed value'};
       if(Number.isFinite(live.time)&&Number.isFinite(live.v8)&&Number.isFinite(live.spy)){if(live.time<=points.at(-1).time)live.time=points.at(-1).time+1;points.push(live);}
       return points;
@@ -131,46 +202,68 @@
       const cutoff=rangeStart(allPoints.at(-1).time);
       const points=allPoints.filter(point=>point.time>=cutoff),height=330,margin={top:22,right:145,bottom:42,left:80};
       chartWidth=Math.max(620,Math.round(chartPlot.clientWidth||900));
-      const minX=points[0].time,maxX=Math.max(points.at(-1).time,minX+86400000);
+      const minX=points[0].time,maxX=Math.max(points.at(-1).time,minX+60000);
       const all=points.flatMap(p=>[p.v8,p.spy,100000]),raw=Math.max(...all)-Math.min(...all),pad=Math.max(raw*.18,45);
       const minY=Math.min(...all)-pad,maxY=Math.max(...all)+pad;
       const x=v=>margin.left+(v-minX)/(maxX-minX)*(chartWidth-margin.left-margin.right);
       const y=v=>margin.top+(maxY-v)/(maxY-minY)*(height-margin.top-margin.bottom);
       const line=key=>points.map((p,i)=>`${i?'L':'M'} ${x(p.time).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
       const grid=Array.from({length:5},(_,i)=>{const value=maxY-(maxY-minY)*i/4,py=y(value);return `<line x1="${margin.left}" y1="${py}" x2="${chartWidth-margin.right}" y2="${py}" stroke="rgba(129,162,205,.14)"/><text x="${margin.left-10}" y="${py+4}" text-anchor="end" fill="#91a6c2" font-size="11">$${Math.round(value).toLocaleString()}</text>`;}).join('');
-      const dots=points.map((p,i)=>`<circle cx="${x(p.time)}" cy="${y(p.v8)}" r="${i===points.length-1?5:3}" fill="#36d8ff"/><circle cx="${x(p.time)}" cy="${y(p.spy)}" r="${i===points.length-1?5:3}" fill="#a988ff"/>`).join('');
+      const dots=points.map((p,i)=>`<circle cx="${x(p.time)}" cy="${y(p.v8)}" data-paper-series="v8" r="${i===points.length-1?5:3}" fill="#36d8ff"/><circle cx="${x(p.time)}" cy="${y(p.spy)}" data-paper-series="spy" r="${i===points.length-1?5:3}" fill="#a988ff"/>`).join('');
       const lastPoint=points.at(-1);
       let v8LabelY=Math.max(margin.top+12,Math.min(height-margin.bottom-8,y(lastPoint.v8)-8));
       let spyLabelY=Math.max(margin.top+12,Math.min(height-margin.bottom-8,y(lastPoint.spy)+16));
       if(Math.abs(v8LabelY-spyLabelY)<16)spyLabelY=Math.min(height-margin.bottom-8,v8LabelY+18);
       const endpointLabels=`<text x="${Math.min(chartWidth-margin.right+8,x(lastPoint.time)+10)}" y="${v8LabelY}" fill="#36d8ff" font-size="12" font-weight="900">V8 ${chartMoney(lastPoint.v8)}</text><text x="${Math.min(chartWidth-margin.right+8,x(lastPoint.time)+10)}" y="${spyLabelY}" fill="#a988ff" font-size="12" font-weight="900">SPY ${chartMoney(lastPoint.spy)}</text>`;
       chartHits=points.map(p=>({...p,x:x(p.time),top:Math.min(y(p.v8),y(p.spy))}));
-      chartPlot.innerHTML=`<svg viewBox="0 0 ${chartWidth} ${height}" aria-hidden="true">${grid}<line x1="${margin.left}" y1="${y(100000)}" x2="${chartWidth-margin.right}" y2="${y(100000)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/><path d="${line('spy')}" fill="none" stroke="#a988ff" stroke-width="3"/><path d="${line('v8')}" fill="none" stroke="#36d8ff" stroke-width="4"/>${dots}${endpointLabels}<line data-hover-line x1="0" y1="${margin.top}" x2="0" y2="${height-margin.bottom}" stroke="rgba(242,246,255,.5)" stroke-dasharray="3 4" opacity="0"/><text x="${margin.left}" y="${height-10}" fill="#91a6c2" font-size="11">${chartDate(minX)}</text><text x="${chartWidth-margin.right}" y="${height-10}" text-anchor="end" fill="#91a6c2" font-size="11">${chartDate(maxX)}</text></svg>`;
+      chartSeriesGeometry=[{id:'v8',label:'V8',key:'v8',color:'#36d8ff'},{id:'spy',label:'SPY',key:'spy',color:'#a988ff'}]
+        .map(item=>({...item,points:points.map(row=>({x:x(row.time),y:y(row[item.key]),point:{time:row.time,value:row[item.key],label:row.label}}))}));
+      chartPlot.innerHTML=`<svg viewBox="0 0 ${chartWidth} ${height}" aria-hidden="true">${grid}<line x1="${margin.left}" y1="${y(100000)}" x2="${chartWidth-margin.right}" y2="${y(100000)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/><path data-paper-series="spy" d="${line('spy')}" fill="none" stroke="#a988ff" stroke-width="3"/><path data-paper-series="v8" d="${line('v8')}" fill="none" stroke="#36d8ff" stroke-width="4"/>${dots}${endpointLabels}<line data-hover-line x1="0" y1="${margin.top}" x2="0" y2="${height-margin.bottom}" stroke="rgba(242,246,255,.5)" stroke-dasharray="3 4" opacity="0"/><text x="${margin.left}" y="${height-10}" fill="#91a6c2" font-size="11">${chartDate(minX)}</text><text x="${chartWidth-margin.right}" y="${height-10}" text-anchor="end" fill="#91a6c2" font-size="11">${chartDate(maxX)}</text></svg>`;
       const last=points.at(-1),start=Number(d.starting_equity)||100000,v8Return=last.v8/start-1,spyReturn=last.spy/start-1,excess=v8Return-spyReturn;
       const v8Node=liveChart.querySelector('[data-v8-chart-value]'),spyNode=liveChart.querySelector('[data-spy-chart-value]'),excessNode=liveChart.querySelector('[data-excess-chart-value]');
       v8Node.textContent=`${chartMoney(last.v8)} (${chartPct(v8Return)})`;spyNode.textContent=`${chartMoney(last.spy)} (${chartPct(spyReturn)})`;excessNode.textContent=chartPct(excess);
       chartTone(v8Node,v8Return);chartTone(spyNode,spyReturn);chartTone(excessNode,excess);
       const open=Number(d.open_cohorts||0),priced=Number(d.priced_open_cohorts||0);
       liveChart.querySelector('[data-v8-chart-badge]').textContent=d.equity_basis==='LIVE_MARK_TO_MARKET'?`LIVE MARK · ${priced}/${open} COHORTS`:`${Number(d.completed_cohorts||0)} COMPLETED COHORTS`;
-      liveChart.querySelector('[data-v8-chart-range]').textContent=`${chartDate(minX)} → ${chartDate(maxX,true)} · ${Math.max(0,points.length-2)} official exit points + current mark`;
+      liveChart.querySelector('[data-v8-chart-range]').textContent=`${points.length<2?'Only one observation in this window; more saved marks are needed. ':''}${chartDate(minX,true)} → ${chartDate(points.at(-1).time,true)} · Axis fits available observations (${performanceRange} selected) · ${points.length} available points · completed exits + observed marks + current value`;
     };
     liveChart.addEventListener('click',event=>{
       const button=event.target.closest('[data-performance-range]');
       if(!button)return;
       performanceRange=button.dataset.performanceRange;
+      chartTipPinned=false;
       liveChart.querySelectorAll('[data-performance-range]').forEach(node=>node.setAttribute('aria-pressed',String(node===button)));
       chartTip.classList.remove('show');
       if(chartPayload)drawChart(chartPayload);
     });
     chartStage.onpointermove=event=>{
-      if(!chartHits.length)return;
-      const rect=chartPlot.getBoundingClientRect(),px=(event.clientX-rect.left)*chartWidth/rect.width;
-      const point=chartHits.reduce((a,b)=>Math.abs(b.x-px)<Math.abs(a.x-px)?b:a),screenX=point.x/chartWidth*rect.width,start=Number(chartPayload?.starting_equity)||100000;
-      const guide=chartPlot.querySelector('[data-hover-line]');guide.setAttribute('x1',point.x);guide.setAttribute('x2',point.x);guide.setAttribute('opacity','1');
-      chartTip.innerHTML=`<strong>${point.label} · ${chartDate(point.time,true)}</strong><div><span>V8 equity</span><b>${chartMoney(point.v8)}</b></div><div><span>SPY equity</span><b>${chartMoney(point.spy)}</b></div><div><span>V8 return</span><b>${chartPct(point.v8/start-1)}</b></div><div><span>Excess</span><b>${chartPct((point.v8-point.spy)/start)}</b></div>`;
-      chartTip.style.left=`${Math.max(110,Math.min(rect.width-110,screenX))}px`;chartTip.style.top=`${Math.max(105,point.top)}px`;chartTip.classList.add('show');
+      if(chartTipPinned)return;
+      const hit=pickPaperSeries(chartPlot.querySelector('svg'),chartSeriesGeometry,event);
+      if(!hit){clearChartTip();return;}
+      const point=hit.point,start=Number(chartPayload?.starting_equity)||100000;
+      const guide=chartPlot.querySelector('[data-hover-line]');
+      guide?.setAttribute('x1',hit.node.x);guide?.setAttribute('x2',hit.node.x);guide?.setAttribute('opacity','1');
+      const gain=point.value-start;
+      const dollarChange=value=>(value>=0?'+':'−')+chartMoney(Math.abs(value));
+      chartTip.innerHTML=`<strong style="color:${hit.item.color}">${hit.item.label} · ${chartDate(point.time,true)}</strong>
+        <small>${point.label}</small>
+        <div class="paper-tip-row"><span>Paper equity</span><b>${chartMoney(point.value)}</b></div>
+        <div class="paper-tip-row"><span>Gain / loss</span><b>${dollarChange(gain)}</b></div>
+        <div class="paper-tip-row"><span>Return from original basis</span><b>${chartPct(gain/start)}</b></div>
+        <small>Original basis: ${chartMoney(start)}. Saved/current marks are display valuations, not completed exits.</small>
+        <small>Click or tap to pin · Esc to dismiss.</small>`;
+      placePaperTooltip(chartTip,event);
     };
-    chartStage.onpointerleave=()=>{chartTip.classList.remove('show');const guide=chartPlot.querySelector('[data-hover-line]');if(guide)guide.setAttribute('opacity','0');};
+    const clearChartTip=()=>{chartTip.classList.remove('show');chartPlot.querySelector('[data-hover-line]')?.setAttribute('opacity','0');};
+    chartStage.onpointerleave=()=>{if(!chartTipPinned)clearChartTip();};
+    chartStage.addEventListener('click',event=>{
+      if(chartTipPinned){chartTipPinned=false;clearChartTip();}
+      else{chartStage.onpointermove(event);chartTipPinned=chartTip.classList.contains('show');}
+    });
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'){chartTipPinned=false;clearChartTip();}});
+    window.addEventListener('scroll',()=>{chartTipPinned=false;clearChartTip();},{passive:true});
+    document.addEventListener('click',event=>{if(!chartStage.contains(event.target)){chartTipPinned=false;clearChartTip();}});
+    window.addEventListener('resize',()=>{chartTipPinned=false;clearChartTip();});
     if(window.ResizeObserver)new ResizeObserver(()=>{if(chartPayload)drawChart(chartPayload);}).observe(chartPlot);
 
     const money = v => '$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -189,7 +282,7 @@
 
     const refreshV8Equity = async (force=false) => {
       try {
-        const d=await getSnapshot(force);
+        const [d]=await Promise.all([getSnapshot(force),loadPaperHistory()]);
         const completed=Number(d.completed_cohorts||0),open=Number(d.open_cohorts||0);
         const equity=finite(d.current_equity)?Number(d.current_equity):100000;
         const ret=finite(d.current_return)?Number(d.current_return):equity/100000-1;
