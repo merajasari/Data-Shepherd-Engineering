@@ -1,6 +1,8 @@
 """Lightweight read-only dashboard service for the V14 ML/AI candidate."""
 from __future__ import annotations
 
+from webapp.services.cohort_interaction_projection import project_cohort_events
+
 from datetime import datetime, timezone
 import json
 import math
@@ -529,6 +531,7 @@ def get_v14_ml_ai_dashboard():
         "ranked_universe_count": len(rankings),
         "coefficients": coefficients,
         "event_history": _event_history(events),
+        "cohort_event_history": project_cohort_events(events),
         "next_lifecycle_event": next_event,
         "refresh_status": refresh.get("status", "UNKNOWN"),
         "feature_backend": refresh.get("feature_backend")
