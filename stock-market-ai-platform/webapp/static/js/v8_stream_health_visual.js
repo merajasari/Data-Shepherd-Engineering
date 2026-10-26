@@ -14,6 +14,8 @@
 
   const style = document.createElement('style');
   style.textContent = `
+    .performance-range-controls{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}.performance-range-controls button{padding:7px 10px;border:1px solid rgba(120,155,205,.3);border-radius:9px;background:#0d1c31;color:#91a6c2;font:inherit;font-size:.72rem;font-weight:850;cursor:pointer}.performance-range-controls button[aria-pressed=true]{background:linear-gradient(90deg,#36d8ff,#39e3a1);color:#06151d;border-color:transparent}.performance-range-controls button:focus-visible{outline:2px solid #f2f6ff;outline-offset:2px}.performance-range-note{color:#91a6c2;font-size:.68rem;line-height:1.5}
+
     #stock-stream-health-card{overflow:hidden;position:relative;border-color:rgba(54,216,255,.28);background:radial-gradient(circle at 92% 8%,rgba(54,216,255,.11),transparent 28%),linear-gradient(145deg,rgba(14,32,54,.98),rgba(7,18,33,.99))}#stock-stream-health-card:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#36d8ff,#39e3a1,#9b65ff)}
     .v8-stream-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;flex-wrap:wrap}.v8-stream-title{display:flex;gap:14px;align-items:center}.v8-stream-pulse{width:13px;height:13px;border-radius:50%;background:#39e3a1;box-shadow:0 0 0 0 rgba(57,227,161,.55);animation:v8Pulse 2s infinite}.v8-stream-pulse.closed{background:#efc56b;box-shadow:none;animation:none}.v8-stream-pulse.bad{background:#ff6680;box-shadow:none;animation:none}@keyframes v8Pulse{70%{box-shadow:0 0 0 12px rgba(57,227,161,0)}100%{box-shadow:0 0 0 0 rgba(57,227,161,0)}}
     .v8-stream-state{padding:9px 13px;border-radius:999px;border:1px solid rgba(57,227,161,.32);background:rgba(57,227,161,.08);font-size:.72rem;font-weight:950;letter-spacing:.08em;color:#39e3a1}.v8-stream-state.closed{color:#efc56b;border-color:rgba(239,197,107,.32);background:rgba(239,197,107,.08)}.v8-stream-state.bad{color:#ff6680;border-color:rgba(255,102,128,.35);background:rgba(255,102,128,.08)}
@@ -85,6 +87,13 @@
       <div class="metric"><span>V8 COMPLETED MAX DRAWDOWN</span><strong id="v8-summary-drawdown">—</strong></div>
       <div class="metric"><span>COMPLETED / OPEN COHORTS</span><strong id="v8-summary-observations">0 / 0</strong></div>`;
 
+
+  // Rolling display windows end at the newest supplied observation; values stay on their original basis.
+  const performanceRanges=[["24h",1],["48h",2],["72h",3],["1w",7],["2w",14],["1m",30],["3m",90],["6m",180],["1y",365],["5y",1825],["Max",null]];
+  let performanceRange='Max';
+  const rangeStart=end=>performanceRange==='Max'?-Infinity:end-performanceRanges.find(row=>row[0]===performanceRange)[1]*86400000;
+  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Rolling windows use available forward observations only · 1m = 30 days · Max = all recorded history.</div>';
+
     const priorLiveChart=document.getElementById('v8-live-chart');
     if(priorLiveChart)priorLiveChart.remove();
     const liveChart=document.createElement('section');
@@ -93,6 +102,7 @@
     liveChart.innerHTML=`
       <div class="v8-live-chart-head"><div><div class="label">V8 VS SPY · LIVE FORWARD EQUITY</div><h3>Interactive Holdout Performance</h3><div class="v8-live-chart-sub">Both lines use the same $100,000 starting value. Hover anywhere on the graph for exact values.</div></div><div class="v8-live-chart-badge" data-v8-chart-badge>LOADING LIVE MARKS</div></div>
       <div class="v8-live-chart-legend"><div class="v8-live-chart-key"><i style="background:#36d8ff"></i>V8 <strong data-v8-chart-value>—</strong></div><div class="v8-live-chart-key"><i style="background:#a988ff"></i>SPY <strong data-spy-chart-value>—</strong></div><div class="v8-live-chart-key">EXCESS <strong data-excess-chart-value>—</strong></div></div>
+      ${rangeButtons()}
       <div class="v8-live-chart-stage"><div class="v8-live-chart-plot" role="img" aria-label="Live V8 portfolio equity compared with SPY"></div><div class="v8-live-chart-tooltip"></div></div>
       <div class="v8-live-chart-foot"><span data-v8-chart-range>Holdout start → current mark</span><span>Refreshes every 15 seconds · completed points remain official evidence only</span></div>`;
     equityCard.insertAdjacentElement('beforebegin',liveChart);
@@ -117,7 +127,9 @@
     };
     const drawChart=d=>{
       chartPayload=d;
-      const points=chartPoints(d),height=330,margin={top:22,right:145,bottom:42,left:80};
+      const allPoints=chartPoints(d).sort((a,b)=>a.time-b.time);
+      const cutoff=rangeStart(allPoints.at(-1).time);
+      const points=allPoints.filter(point=>point.time>=cutoff),height=330,margin={top:22,right:145,bottom:42,left:80};
       chartWidth=Math.max(620,Math.round(chartPlot.clientWidth||900));
       const minX=points[0].time,maxX=Math.max(points.at(-1).time,minX+86400000);
       const all=points.flatMap(p=>[p.v8,p.spy,100000]),raw=Math.max(...all)-Math.min(...all),pad=Math.max(raw*.18,45);
@@ -142,6 +154,14 @@
       liveChart.querySelector('[data-v8-chart-badge]').textContent=d.equity_basis==='LIVE_MARK_TO_MARKET'?`LIVE MARK · ${priced}/${open} COHORTS`:`${Number(d.completed_cohorts||0)} COMPLETED COHORTS`;
       liveChart.querySelector('[data-v8-chart-range]').textContent=`${chartDate(minX)} → ${chartDate(maxX,true)} · ${Math.max(0,points.length-2)} official exit points + current mark`;
     };
+    liveChart.addEventListener('click',event=>{
+      const button=event.target.closest('[data-performance-range]');
+      if(!button)return;
+      performanceRange=button.dataset.performanceRange;
+      liveChart.querySelectorAll('[data-performance-range]').forEach(node=>node.setAttribute('aria-pressed',String(node===button)));
+      chartTip.classList.remove('show');
+      if(chartPayload)drawChart(chartPayload);
+    });
     chartStage.onpointermove=event=>{
       if(!chartHits.length)return;
       const rect=chartPlot.getBoundingClientRect(),px=(event.clientX-rect.left)*chartWidth/rect.width;
