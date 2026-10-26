@@ -13,6 +13,12 @@
   const performanceRanges=[["24h",1],["48h",2],["72h",3],["1w",7],["2w",14],["1m",30],["3m",90],["6m",180],["1y",365],["5y",1825],["Max",null]];
   let performanceRange='Max';
   const rangeStart=end=>performanceRange==='Max'?-Infinity:end-performanceRanges.find(row=>row[0]===performanceRange)[1]*86400000;
+  // Retain the prior real observation as context; never create a boundary sample.
+  function pointsWithBoundaryContext(points,cutoff){
+    const inside=points.filter(point=>point.time>=cutoff);
+    const previous=points.filter(point=>point.time<cutoff).at(-1);
+    return previous&&inside.length?[{...previous,label:'Prior recorded observation (before selected range) · '+previous.label},...inside]:inside;
+  }
   const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Saved marks are sampled every 5 minutes when source valuations change · 1m = 30 days · older marks are thinned for display.</div>';
 
 
@@ -354,7 +360,7 @@
     if(official&&official.points.length)series.splice(1,0,official);
     const newest=Math.max(...series.flatMap(item=>item.points.map(point=>point.time)));
     const cutoff=rangeStart(newest);
-    liveRenderedSeries=series.map(item=>({...item,points:item.points.filter(point=>point.time>=cutoff)})).filter(item=>item.points.length);
+    liveRenderedSeries=series.map(item=>({...item,points:pointsWithBoundaryContext(item.points,cutoff)})).filter(item=>item.points.length);
 
     const allPoints=liveRenderedSeries.flatMap(item=>item.points);
     if(!allPoints.length){
@@ -364,7 +370,7 @@
 
     const H=330,p={l:72,r:158,t:24,b:42};
     liveWidth=Math.max(650,Math.round(host.clientWidth||900));
-    const minX=Math.min(...allPoints.map(row=>row.time));
+    const minX=Math.max(cutoff,Math.min(...allPoints.map(row=>row.time)));
     const rawMaxX=Math.max(...allPoints.map(row=>row.time));
     const maxX=Math.max(rawMaxX,minX+60000);
     const values=[...allPoints.map(row=>row.value),NORMALIZED_BASE];
@@ -378,9 +384,12 @@
     }).join('');
     liveSeriesGeometry=liveRenderedSeries.map(item=>({...item,points:item.points.map(point=>({point,x:x(point.time),y:y(point.value)}))}));
     const paths=liveRenderedSeries.map(item=>{
-      const path=item.points.map((row,index)=>`${index?'L':'M'} ${x(row.time).toFixed(1)} ${y(row.value).toFixed(1)}`).join(' ');
-      const dots=item.points.map((row,index)=>`<circle data-paper-series="${item.id}" cx="${x(row.time)}" cy="${y(row.value)}" r="${index===item.points.length-1?4.5:3}" fill="${item.color}"/>`).join('');
-      return `<path data-paper-series="${item.id}" d="${path}" fill="none" stroke="${item.color}" stroke-width="${item.width}" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+      const prior=item.points[0].time<minX;
+      const visible=prior?item.points.slice(1):item.points;
+      const path=visible.map((row,index)=>`${index?'L':'M'} ${x(row.time).toFixed(1)} ${y(row.value).toFixed(1)}`).join(' ');
+      const connector=prior?`<path data-paper-series="${item.id}" d="M ${x(item.points[0].time)} ${y(item.points[0].value)} L ${x(item.points[1].time)} ${y(item.points[1].value)}" fill="none" stroke="${item.color}" stroke-width="${item.width}" stroke-dasharray="6 5"/>`:'';
+      const dots=visible.map((row,index)=>`<circle data-paper-series="${item.id}" cx="${x(row.time)}" cy="${y(row.value)}" r="${index===visible.length-1?4.5:3}" fill="${item.color}"/>`).join('');
+      return `<g clip-path="url(#a10-performance-window-clip)">${connector}<path data-paper-series="${item.id}" d="${path}" fill="none" stroke="${item.color}" stroke-width="${item.width}" stroke-linejoin="round" stroke-linecap="round"/>${dots}</g>`;
     }).join('');
 
     const ends=liveRenderedSeries.map(item=>{
@@ -411,9 +420,9 @@
     });
 
     const firstLabel=rawMaxX-minX<86400000?dateTime(minX):dateOnly(minX),lastLabel=dateTime(rawMaxX);
-    host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live V10 accelerated paper equity, official frozen V8 holdout equity, and SPY"><line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${grid}${paths}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${firstLabel}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${lastLabel}</text></svg>`;
+    host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live V10 accelerated paper equity, official frozen V8 holdout equity, and SPY"><defs><clipPath id="a10-performance-window-clip"><rect x="${p.l}" y="${p.t}" width="${liveWidth-p.l-p.r}" height="${H-p.t-p.b}"/></clipPath></defs><line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${grid}${paths}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${firstLabel}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${lastLabel}</text></svg>`;
     const officialStatus=official&&official.points.length?'official V8 holdout + accelerated V10/SPY':'accelerated V10/SPY · official V8 unavailable';
-    set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · Axis fits available observations (${performanceRange} selected) · ${officialStatus}${liveRenderedSeries.every(item=>item.points.length<2)?' · Only one observation per series in this window; saved marks will accumulate.':''}`);
+    set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · Axis fits available observations (${performanceRange} selected) · Dashed connector = prior recorded point; intervening values were not observed · ${officialStatus}${liveRenderedSeries.every(item=>item.points.length<2)?' · Only one observation per series in this window; saved marks will accumulate.':''}`);
   }
 
   section.addEventListener('click',event=>{
