@@ -241,27 +241,18 @@ def _build_current_feature_rows(
     decision_index = int(load_contract()["frozen_mechanics"]["decision_bar_index"])
     _decision_source_sha(series)
 
-    manifest, intraday = load_dataset(manifest_path)
-    if manifest.get("manifest_sha256") != artifact["source_manifest_sha256"]:
-        raise ValueError("V15_V7_RUNTIME_HISTORY_MANIFEST_DRIFT")
-    grouped = {symbol: _group_sessions(rows) for symbol, rows in intraday.items()}
-    common_history = sorted(set.intersection(*(set(rows) for rows in grouped.values())))
-    prior_sessions = [value for value in common_history if value < session]
-    if not prior_sessions:
-        raise ValueError("V15_V7_PREVIOUS_INTRADAY_SESSION_MISSING")
-    previous = prior_sessions[-1]
-    candidates = sorted(symbol for symbol in series if symbol != "SPY")
-    if len(candidates) != 100 or sorted(grouped) != sorted(candidates + ["SPY"]):
+    from ml.v15.intraday_prospective_v7_runtime_cache import load_runtime_inputs
+    candidates, previous_closes, context, daily_session = load_runtime_inputs(
+        session, artifact, manifest_path
+    )
+    if candidates != sorted(symbol for symbol in series if symbol != "SPY"):
         raise ValueError("V15_V7_RUNTIME_UNIVERSE_MISMATCH")
 
     raw: dict[str, dict[str, float]] = {}
     for symbol in candidates + ["SPY"]:
-        previous_rows = grouped[symbol].get(previous)
-        if not previous_rows:
-            raise ValueError(f"V15_V7_PREVIOUS_CLOSE_MISSING:{symbol}")
         features = derive_features(
             series[symbol][: decision_index + 1],
-            previous_close=float(previous_rows[-1]["close"]),
+            previous_close=float(previous_closes[symbol]),
         )
         raw[symbol] = {
             name: float(getattr(features, name)) for name in FEATURE_NAMES
@@ -281,27 +272,6 @@ def _build_current_feature_rows(
         name: _zscore({symbol: relative[symbol][name] for symbol in candidates})
         for name in FEATURE_NAMES
     }
-
-    daily_symbols, daily_frames, _, _ = load_daily_market()
-    if sorted(daily_symbols) != candidates:
-        raise ValueError("V15_V7_RUNTIME_DAILY_UNIVERSE_MISMATCH")
-    v2_contract = load_v2_contract()
-    slow_model, slow_mean, slow_std, slow_snapshot, mapped = _pretrain_daily_context(
-        daily_frames,
-        candidates,
-        str(artifact["eligible_history_start_session"]),
-        v2_contract,
-    )
-    if slow_snapshot["model_sha256"] != artifact["slow_context_model_sha256"]:
-        raise ValueError("V15_V7_SLOW_CONTEXT_MODEL_DRIFT")
-    common_daily = sorted(set.intersection(*(set(rows) for rows in mapped.values())))
-    prior_daily = [value for value in common_daily if value < session]
-    if not prior_daily:
-        raise ValueError("V15_V7_PRIOR_DAILY_CONTEXT_MISSING")
-    daily_session = prior_daily[-1]
-    context, _ = _daily_context_for_session(
-        daily_session, candidates, mapped, slow_model, slow_mean, slow_std
-    )
 
     rows: list[dict[str, object]] = []
     for symbol in candidates:
