@@ -127,6 +127,27 @@
     const chartPlot=liveChart.querySelector('.v8-live-chart-plot');
     const chartStage=liveChart.querySelector('.v8-live-chart-stage');
     const chartTip=liveChart.querySelector('.v8-live-chart-tooltip');
+
+  // Put the popup outside clipped chart containers and keep it inside the viewport.
+  if(!document.getElementById('paper-performance-tooltip-style')){
+    const popupStyle=document.createElement('style');
+    popupStyle.id='paper-performance-tooltip-style';
+    popupStyle.textContent='.paper-performance-tip{position:fixed;z-index:12000;box-sizing:border-box;width:360px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;padding:14px 16px;border:1px solid rgba(129,162,205,.5);border-radius:12px;background:#081526;box-shadow:0 12px 35px rgba(0,0,0,.45);color:#f2f6ff;font:12px/1.5 system-ui,sans-serif;pointer-events:none;opacity:0;visibility:hidden}.paper-performance-tip.show{opacity:1;visibility:visible}.paper-performance-tip strong{display:block;margin-bottom:6px}.paper-performance-tip .paper-tip-row{display:flex;justify-content:space-between;gap:16px;margin:4px 0}.paper-performance-tip b{text-align:right}.paper-performance-tip small{display:block;color:#91a6c2;margin-top:6px}.paper-performance-tip hr{border:0;border-top:1px solid #244261;margin:10px 0}';
+    document.head.appendChild(popupStyle);
+  }
+  function placePaperTooltip(tip,event){
+    tip.classList.add('show');
+    const width=tip.offsetWidth,height=tip.offsetHeight;
+    const x=event.clientX+16+width<=window.innerWidth-12?event.clientX+16:event.clientX-width-16;
+    const y=event.clientY+16+height<=window.innerHeight-12?event.clientY+16:event.clientY-height-16;
+    tip.style.left=Math.max(12,Math.min(window.innerWidth-width-12,x))+'px';
+    tip.style.top=Math.max(12,Math.min(window.innerHeight-height-12,y))+'px';
+  }
+
+    chartTip.className='paper-performance-tip';
+    chartTip.setAttribute('role','tooltip');
+    document.body.appendChild(chartTip);
+    let chartTipPinned=false;
     let chartPayload=null,chartHits=[],chartWidth=900;
     const chartMoney=v=>Number(v).toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
     const chartPct=v=>`${Number(v)>=0?'+':''}${(Number(v)*100).toFixed(4)}%`;
@@ -181,19 +202,42 @@
       const button=event.target.closest('[data-performance-range]');
       if(!button)return;
       performanceRange=button.dataset.performanceRange;
+      chartTipPinned=false;
       liveChart.querySelectorAll('[data-performance-range]').forEach(node=>node.setAttribute('aria-pressed',String(node===button)));
       chartTip.classList.remove('show');
       if(chartPayload)drawChart(chartPayload);
     });
     chartStage.onpointermove=event=>{
-      if(!chartHits.length)return;
+      if(chartTipPinned||!chartHits.length)return;
       const rect=chartPlot.getBoundingClientRect(),px=(event.clientX-rect.left)*chartWidth/rect.width;
-      const point=chartHits.reduce((a,b)=>Math.abs(b.x-px)<Math.abs(a.x-px)?b:a),screenX=point.x/chartWidth*rect.width,start=Number(chartPayload?.starting_equity)||100000;
-      const guide=chartPlot.querySelector('[data-hover-line]');guide.setAttribute('x1',point.x);guide.setAttribute('x2',point.x);guide.setAttribute('opacity','1');
-      chartTip.innerHTML=`<strong>${point.label} · ${chartDate(point.time,true)}</strong><div><span>V8 equity</span><b>${chartMoney(point.v8)}</b></div><div><span>SPY equity</span><b>${chartMoney(point.spy)}</b></div><div><span>V8 return</span><b>${chartPct(point.v8/start-1)}</b></div><div><span>Excess</span><b>${chartPct((point.v8-point.spy)/start)}</b></div>`;
-      chartTip.style.left=`${Math.max(110,Math.min(rect.width-110,screenX))}px`;chartTip.style.top=`${Math.max(105,point.top)}px`;chartTip.classList.add('show');
+      const point=chartHits.reduce((a,b)=>Math.abs(b.x-px)<Math.abs(a.x-px)?b:a);
+      const start=Number(chartPayload?.starting_equity)||100000;
+      const guide=chartPlot.querySelector('[data-hover-line]');
+      guide?.setAttribute('x1',point.x);guide?.setAttribute('x2',point.x);guide?.setAttribute('opacity','1');
+      const gain=point.v8-start,spyGain=point.spy-start;
+      const dollarChange=value=>(value>=0?'+':'−')+chartMoney(Math.abs(value));
+      chartTip.innerHTML=`<strong>V8 vs SPY · ${chartDate(point.time,true)}</strong><small>${point.label}</small>
+        <div class="paper-tip-row"><span>V8 paper equity</span><b>${chartMoney(point.v8)}</b></div>
+        <div class="paper-tip-row"><span>V8 gain / loss</span><b>${dollarChange(gain)}</b></div>
+        <div class="paper-tip-row"><span>V8 return</span><b>${chartPct(gain/start)}</b></div><hr>
+        <div class="paper-tip-row"><span>SPY equity</span><b>${chartMoney(point.spy)}</b></div>
+        <div class="paper-tip-row"><span>SPY gain / loss</span><b>${dollarChange(spyGain)}</b></div>
+        <div class="paper-tip-row"><span>SPY return</span><b>${chartPct(spyGain/start)}</b></div>
+        <div class="paper-tip-row"><span>V8 − SPY</span><b>${dollarChange(point.v8-point.spy)} · ${((point.v8-point.spy)/start*100).toFixed(2)} pp</b></div>
+        <small>Returns use the original ${chartMoney(start)} basis. Saved/current marks are display valuations, not completed exits.</small>
+        <small>Click or tap to pin · Esc to dismiss.</small>`;
+      placePaperTooltip(chartTip,event);
     };
-    chartStage.onpointerleave=()=>{chartTip.classList.remove('show');const guide=chartPlot.querySelector('[data-hover-line]');if(guide)guide.setAttribute('opacity','0');};
+    const clearChartTip=()=>{chartTip.classList.remove('show');chartPlot.querySelector('[data-hover-line]')?.setAttribute('opacity','0');};
+    chartStage.onpointerleave=()=>{if(!chartTipPinned)clearChartTip();};
+    chartStage.addEventListener('click',event=>{
+      if(chartTipPinned){chartTipPinned=false;clearChartTip();}
+      else{chartStage.onpointermove(event);chartTipPinned=true;}
+    });
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'){chartTipPinned=false;clearChartTip();}});
+    window.addEventListener('scroll',()=>{chartTipPinned=false;clearChartTip();},{passive:true});
+    document.addEventListener('click',event=>{if(!chartStage.contains(event.target)){chartTipPinned=false;clearChartTip();}});
+    window.addEventListener('resize',()=>{chartTipPinned=false;clearChartTip();});
     if(window.ResizeObserver)new ResizeObserver(()=>{if(chartPayload)drawChart(chartPayload);}).observe(chartPlot);
 
     const money = v => '$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
