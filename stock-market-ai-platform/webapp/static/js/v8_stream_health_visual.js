@@ -92,7 +92,25 @@
   const performanceRanges=[["24h",1],["48h",2],["72h",3],["1w",7],["2w",14],["1m",30],["3m",90],["6m",180],["1y",365],["5y",1825],["Max",null]];
   let performanceRange='Max';
   const rangeStart=end=>performanceRange==='Max'?-Infinity:end-performanceRanges.find(row=>row[0]===performanceRange)[1]*86400000;
-  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Rolling windows use available forward observations only · 1m = 30 days · Max = all recorded history.</div>';
+  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Saved marks are sampled every 5 minutes when source valuations change · 1m = 30 days · older marks are thinned for display.</div>';
+
+
+  // Display-only observations are recorded independently of the official journals.
+  let paperHistory={v8:[],v10:[]};
+  async function loadPaperHistory(){
+    const cache=window.DataShepherdPaperHistory||(window.DataShepherdPaperHistory={at:0,payload:null,pending:null});
+    if(!cache.pending&&Date.now()-cache.at>30000){
+      cache.at=Date.now();
+      cache.pending=fetch('/static/generated/stock_paper_equity_history.json',{credentials:'same-origin',cache:'no-store'})
+        .then(response=>{if(!response.ok)throw Error('History unavailable');return response.json();})
+        .then(data=>{cache.payload=data;})
+        .catch(()=>{}).finally(()=>{cache.pending=null;});
+    }
+    if(cache.pending)await cache.pending;
+    paperHistory=cache.payload||{v8:[],v10:[]};
+  }
+  const observedRows=(model,payload)=>(Array.isArray(paperHistory[model])?paperHistory[model]:[])
+    .filter(row=>row.frozen_sha256===payload.frozen_sha256&&(!payload.contract_sha256||row.contract_sha256===payload.contract_sha256));
 
     const priorLiveChart=document.getElementById('v8-live-chart');
     if(priorLiveChart)priorLiveChart.remove();
@@ -121,6 +139,11 @@
         const point={time:new Date(row.timestamp_utc).getTime(),v8:Number(row.strategy_normalized),spy:Number(row.spy_normalized),label:'Completed cohort'};
         if(Object.values(point).slice(0,3).every(Number.isFinite))points.push(point);
       });
+      observedRows('v8',d).forEach(row=>{
+        const point={time:Date.parse(row.timestamp_utc),v8:Number(row.strategy_normalized),spy:Number(row.spy_normalized),label:'Observed paper valuation · source '+chartDate(row.valuation_timestamp_utc||row.timestamp_utc,true)};
+        if([point.time,point.v8,point.spy].every(Number.isFinite))points.push(point);
+      });
+      points.sort((a,b)=>a.time-b.time);
       const live={time:new Date(d.valuation_timestamp_utc||Date.now()).getTime(),v8:Number(d.current_equity),spy:Number(d.current_spy_equity),label:d.equity_basis==='LIVE_MARK_TO_MARKET'?'Current live mark':'Latest completed value'};
       if(Number.isFinite(live.time)&&Number.isFinite(live.v8)&&Number.isFinite(live.spy)){if(live.time<=points.at(-1).time)live.time=points.at(-1).time+1;points.push(live);}
       return points;
@@ -152,7 +175,7 @@
       chartTone(v8Node,v8Return);chartTone(spyNode,spyReturn);chartTone(excessNode,excess);
       const open=Number(d.open_cohorts||0),priced=Number(d.priced_open_cohorts||0);
       liveChart.querySelector('[data-v8-chart-badge]').textContent=d.equity_basis==='LIVE_MARK_TO_MARKET'?`LIVE MARK · ${priced}/${open} COHORTS`:`${Number(d.completed_cohorts||0)} COMPLETED COHORTS`;
-      liveChart.querySelector('[data-v8-chart-range]').textContent=`${chartDate(minX)} → ${chartDate(maxX,true)} · ${Math.max(0,points.length-2)} official exit points + current mark`;
+      liveChart.querySelector('[data-v8-chart-range]').textContent=`${points.length<2?'Only one observation in this window; more saved marks are needed. ':''}${chartDate(minX)} → ${chartDate(maxX,true)} · ${points.length} available points · completed exits + observed marks + current value`;
     };
     liveChart.addEventListener('click',event=>{
       const button=event.target.closest('[data-performance-range]');
@@ -189,7 +212,7 @@
 
     const refreshV8Equity = async (force=false) => {
       try {
-        const d=await getSnapshot(force);
+        const [d]=await Promise.all([getSnapshot(force),loadPaperHistory()]);
         const completed=Number(d.completed_cohorts||0),open=Number(d.open_cohorts||0);
         const equity=finite(d.current_equity)?Number(d.current_equity):100000;
         const ret=finite(d.current_return)?Number(d.current_return):equity/100000-1;
