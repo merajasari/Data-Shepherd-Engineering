@@ -419,34 +419,72 @@
     const button=event.target.closest('[data-performance-range]');
     if(!button)return;
     performanceRange=button.dataset.performanceRange;
+    liveTipPinned=false;
     section.querySelectorAll('[data-performance-range]').forEach(node=>node.setAttribute('aria-pressed',String(node===button)));
-    section.querySelector('[data-a10-live-tooltip]')?.classList.remove('show');
+    document.querySelector('[data-a10-live-tooltip]')?.classList.remove('show');
     if(livePayload)renderLiveChart(livePayload,officialV8Payload);
   });
+
+  // Put the popup outside clipped chart containers and keep it inside the viewport.
+  if(!document.getElementById('paper-performance-tooltip-style')){
+    const popupStyle=document.createElement('style');
+    popupStyle.id='paper-performance-tooltip-style';
+    popupStyle.textContent='.paper-performance-tip{position:fixed;z-index:12000;box-sizing:border-box;width:360px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;padding:14px 16px;border:1px solid rgba(129,162,205,.5);border-radius:12px;background:#081526;box-shadow:0 12px 35px rgba(0,0,0,.45);color:#f2f6ff;font:12px/1.5 system-ui,sans-serif;pointer-events:none;opacity:0;visibility:hidden}.paper-performance-tip.show{opacity:1;visibility:visible}.paper-performance-tip strong{display:block;margin-bottom:6px}.paper-performance-tip .paper-tip-row{display:flex;justify-content:space-between;gap:16px;margin:4px 0}.paper-performance-tip b{text-align:right}.paper-performance-tip small{display:block;color:#91a6c2;margin-top:6px}.paper-performance-tip hr{border:0;border-top:1px solid #244261;margin:10px 0}';
+    document.head.appendChild(popupStyle);
+  }
+  function placePaperTooltip(tip,event){
+    tip.classList.add('show');
+    const width=tip.offsetWidth,height=tip.offsetHeight;
+    const x=event.clientX+16+width<=window.innerWidth-12?event.clientX+16:event.clientX-width-16;
+    const y=event.clientY+16+height<=window.innerHeight-12?event.clientY+16:event.clientY-height-16;
+    tip.style.left=Math.max(12,Math.min(window.innerWidth-width-12,x))+'px';
+    tip.style.top=Math.max(12,Math.min(window.innerHeight-height-12,y))+'px';
+  }
+
   const liveStage=section.querySelector('.a10-live-stage');
-  liveStage?.addEventListener('pointermove',event=>{
-    if(!liveHits.length||!liveRenderedSeries.length)return;
-    const host=section.querySelector('[data-a10-live-chart]'),tip=section.querySelector('[data-a10-live-tooltip]');
+  const liveTooltip=section.querySelector('[data-a10-live-tooltip]');
+  liveTooltip.className='paper-performance-tip';
+  liveTooltip.setAttribute('role','tooltip');
+  document.body.appendChild(liveTooltip);
+  let liveTipPinned=false;
+  const clearLiveTip=()=>{
+    liveTooltip.classList.remove('show');
+    section.querySelector('[data-a10-hover-line]')?.setAttribute('opacity','0');
+  };
+  const inspectLivePoint=event=>{
+    if(liveTipPinned||!liveHits.length||!liveRenderedSeries.length)return;
+    const host=section.querySelector('[data-a10-live-chart]');
     const rect=host.getBoundingClientRect(),px=(event.clientX-rect.left)*liveWidth/rect.width;
     const hit=liveHits.reduce((left,right)=>Math.abs(right.x-px)<Math.abs(left.x-px)?right:left);
     const guide=host.querySelector('[data-a10-hover-line]');
     guide?.setAttribute('x1',hit.x);guide?.setAttribute('x2',hit.x);guide?.setAttribute('opacity','1');
-    const rows=liveRenderedSeries.map(item=>({
-      item,
-      point:nearestSeriesPoint(item.points,hit.time),
-    }));
-    tip.innerHTML=`<strong>Nearest forward values · ${dateTime(hit.time)}</strong>${rows.map(row=>{
-      const start=NORMALIZED_BASE;
-      return `<div><span>${row.item.label} · ${dateTime(row.point.time)}<br>${row.point.label}${row.point.sourceTime?' · source '+dateTime(row.point.sourceTime):''}</span><b>${money(row.point.value)} (${pct4(row.point.value/start-1)})</b></div>`;
+    const rows=liveRenderedSeries.map(item=>({item,point:nearestSeriesPoint(item.points,hit.time)}));
+    const dollarChange=value=>(value>=0?'+':'−')+money(Math.abs(value));
+    liveTooltip.innerHTML=`<strong>Paper performance · ${dateTime(hit.time)}</strong><small>Nearest available observation for each series; actual dates are shown below.</small>${rows.map(row=>{
+      const start=NORMALIZED_BASE,gain=row.point.value-start;
+      return `<hr><strong>${row.item.label} · ${money(row.point.value)}</strong>
+        <small>${dateTime(row.point.time)} · ${row.point.label}${row.point.sourceTime?' · source '+dateTime(row.point.sourceTime):''}</small>
+        <div class="paper-tip-row"><span>Gain / loss</span><b>${dollarChange(gain)}</b></div>
+        <div class="paper-tip-row"><span>Return from original basis</span><b>${pct4(gain/start)}</b></div>`;
     }).join('')}`;
-    tip.style.left=`${Math.max(115,Math.min(rect.width-115,hit.x/liveWidth*rect.width))}px`;
-    tip.style.top=`${Math.max(118,hit.top/H*rect.height)}px`;
-    tip.classList.add('show');
+    const v10=rows.find(row=>row.item.id==='v10'),spy=rows.find(row=>row.item.id==='spy');
+    if(v10&&spy&&Math.abs(v10.point.time-spy.point.time)<=300000){
+      const edge=v10.point.value-spy.point.value;
+      liveTooltip.innerHTML+=`<hr><div class="paper-tip-row"><span>V10 − SPY</span><b>${dollarChange(edge)} · ${(edge/NORMALIZED_BASE*100).toFixed(2)} pp</b></div>`;
+    }
+    liveTooltip.innerHTML+='<small>$100,000 original basis. V8 and V10 have different evidence boundaries. Saved/current marks are not completed exits.</small><small>Click or tap to pin · Esc to dismiss.</small>';
+    placePaperTooltip(liveTooltip,event);
+  };
+  liveStage?.addEventListener('pointermove',inspectLivePoint);
+  liveStage?.addEventListener('pointerleave',()=>{if(!liveTipPinned)clearLiveTip();});
+  liveStage?.addEventListener('click',event=>{
+    if(liveTipPinned){liveTipPinned=false;clearLiveTip();}
+    else{inspectLivePoint(event);liveTipPinned=true;}
   });
-  liveStage?.addEventListener('pointerleave',()=>{
-    section.querySelector('[data-a10-live-tooltip]')?.classList.remove('show');
-    section.querySelector('[data-a10-hover-line]')?.setAttribute('opacity','0');
-  });
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'){liveTipPinned=false;clearLiveTip();}});
+  window.addEventListener('scroll',()=>{liveTipPinned=false;clearLiveTip();},{passive:true});
+  document.addEventListener('click',event=>{if(!liveStage?.contains(event.target)){liveTipPinned=false;clearLiveTip();}});
+  window.addEventListener('resize',()=>{liveTipPinned=false;clearLiveTip();});
   if(window.ResizeObserver)new ResizeObserver(()=>{
     if(livePayload)renderLiveChart(livePayload,officialV8Payload);
   }).observe(section.querySelector('[data-a10-live-chart]'));
