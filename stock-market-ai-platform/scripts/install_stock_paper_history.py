@@ -9,7 +9,8 @@ import subprocess
 import tempfile
 
 BASE = "27c49fffa94b42fd34d96203adec7d6f125005a2"
-HEAD = "60c876bf903a42e4be26d7e041fb44bef94eb343"
+HEAD = "9362c37cc2f545f0b1019ea2b7ff2a445c9120a4"
+HISTORY_BASE = "60c876bf903a42e4be26d7e041fb44bef94eb343"
 PREFIX = "stock-market-ai-platform/"
 JS = ("v8_stream_health_visual.js", "v10_cycle3_accelerated_v2_dashboard.js")
 NEW = ("scripts/record_stock_paper_equity.py",
@@ -49,12 +50,27 @@ def main():
     for name in JS:
         relative = "webapp/static/js/" + name
         path = root / PREFIX / relative
-        prepared.append((path, merge(path.read_text(), source(BASE, relative), source(HEAD, relative), name)))
+        current = path.read_text()
+        if "paper-performance-tooltip-style" in current:
+            prepared.append((path, current))
+            continue
+        base_ref = HISTORY_BASE if "loadPaperHistory" in current else BASE
+        before, after = source(base_ref, relative), source(HEAD, relative)
+        if name.startswith("v8"):
+            # This entire handler is intentionally replaced; keep unrelated layout edits.
+            start = "    chartStage.onpointermove=event=>{"
+            end = "    if(window.ResizeObserver)"
+            if current.count(start) != 1 or current.count(end) != 1:
+                raise SystemExit("Unexpected V8 hover structure; no files written.")
+            a, b = current.index(start), current.index(end)
+            x, y = before.index(start), before.index(end)
+            current = current[:a] + before[x:y] + current[b:]
+        prepared.append((path, merge(current, before, after, name)))
     for relative in NEW:
         path = root / PREFIX / relative
-        if path.exists():
-            raise SystemExit("New file already exists; stopped before writes: " + str(path))
         text = source(HEAD, relative)
+        if path.exists() and path.read_text() != text:
+            raise SystemExit("Existing recorder file differs; stopped before writes: " + str(path))
         if relative.endswith(".py"):
             ast.parse(text)
         prepared.append((path, text))
