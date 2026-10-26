@@ -221,7 +221,23 @@
     host.innerHTML=`<table><thead><tr><th>Event</th><th>Time</th><th>Cohort</th><th>Basket</th><th>V14 net return</th><th>SPY return</th><th>Relative edge</th><th>Model</th></tr></thead><tbody>${rows.map(row=>`<tr><td><span class="v14-pill ${row.event_type==='DECISION'?'top':''}">${escapeHtml(row.event_type)}</span></td><td>${escapeHtml(dateTime(row.timestamp_utc))}</td><td>${integer(row.cohort_offset)}</td><td>${escapeHtml((row.symbols||[]).join(', ')||'—')}</td><td>${pct(row.net_portfolio_return)}</td><td>${pct(row.spy_return)}</td><td class="${number(row.net_relative_return)!=null&&Number(row.net_relative_return)<0?'negative':'positive'}">${pct(row.net_relative_return)}</td><td>${escapeHtml(shortSha(row.model_sha256))}</td></tr>`).join('')}</tbody></table>`;
   }
 
+
+  function publishCohortInteraction(model,payload){
+    const cache=window.DataShepherdCohortPayloads||(window.DataShepherdCohortPayloads={});
+    cache[model]=payload;
+    if(!document.getElementById('stock-cohort-interaction-script')){
+      const script=document.createElement('script');
+      script.id='stock-cohort-interaction-script';
+      script.src='/static/js/stock_cohort_interaction.js';
+      script.async=true;
+      script.onerror=()=>{script.remove();};
+      document.head.appendChild(script);
+    }
+    document.dispatchEvent(new CustomEvent('data-shepherd-cohort-update',{detail:{model,payload}}));
+  }
+
   function render(section, payload) {
+    publishCohortInteraction('v14',payload);
     const state=statusText(payload.state),badge=section.querySelector('[data-v14-state]');badge.textContent=state;badge.classList.toggle('waiting',/WAITING/.test(state));badge.classList.toggle('alert',/ERROR|CORRUPT|BLOCKED/.test(state));
     set(section,'[data-v14-model]',statusText(payload.model_type));set(section,'[data-v14-target]',statusText(payload.target));set(section,'[data-v14-features]',`${integer((payload.features||[]).length)} learned inputs`);set(section,'[data-v14-universe]',`${integer(payload.required_symbols)} symbols`);set(section,'[data-v14-boundary]',dateOnly(payload.paper_forward_start_utc));set(section,'[data-v14-next]',statusText(payload.next_lifecycle_event));
     set(section,'[data-v14-equity]',money(payload.current_equity));set(section,'[data-v14-return]',`${pct(payload.current_return)} V14 · ${statusText(payload.equity_basis)}`);set(section,'[data-v14-equity-note]',`${money(payload.starting_equity)} start · updated ${dateTime(payload.valuation_timestamp_utc||payload.checked_at_utc)} · current marks are not completed evidence`);set(section,'[data-v14-spy-equity]',money(payload.current_spy_equity));set(section,'[data-v14-excess]',pct(payload.current_excess_return));set(section,'[data-v14-open]',integer(payload.open_cohorts));set(section,'[data-v14-priced]',`${integer(payload.priced_open_cohorts)} / ${integer(payload.open_cohorts)}`);tone(section,'[data-v14-return]',payload.current_return);tone(section,'[data-v14-excess]',payload.current_excess_return);
