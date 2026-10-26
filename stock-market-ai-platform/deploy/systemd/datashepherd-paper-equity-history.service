@@ -1,0 +1,19 @@
+[Unit]
+Description=Observe stock paper equity for dashboard history
+After=datashepherd-web.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Data-Shepherd-Engineering/stock-market-ai-platform
+ExecStart=/home/ubuntu/Data-Shepherd-Engineering/stock-market-ai-platform/.venv/bin/python -u scripts/record_stock_paper_equity.py
+Slice=datashepherdbatch.slice
+MemoryAccounting=yes
+MemoryMax=96M
+CPUQuota=20%
+Nice=10
+TimeoutStartSec=75s
+TimeoutStopSec=5s
+OOMScoreAdjust=500
+NoNewPrivileges=yes
+
