@@ -594,7 +594,23 @@
   }
 
   const NORMALIZED_BASE=100000;
+
+  function publishCohortInteraction(model,payload){
+    const cache=window.DataShepherdCohortPayloads||(window.DataShepherdCohortPayloads={});
+    cache[model]=payload;
+    if(!document.getElementById('stock-cohort-interaction-script')){
+      const script=document.createElement('script');
+      script.id='stock-cohort-interaction-script';
+      script.src='/static/js/stock_cohort_interaction.js';
+      script.async=true;
+      script.onerror=()=>{script.remove();};
+      document.head.appendChild(script);
+    }
+    document.dispatchEvent(new CustomEvent('data-shepherd-cohort-update',{detail:{model,payload}}));
+  }
+
   function renderDashboard(data,officialV8) {
+      publishCohortInteraction('v10',data);
       const current=Number.isFinite(Number(data.current_equity))?Number(data.current_equity):NORMALIZED_BASE;
       const currentReturn=Number.isFinite(Number(data.current_return))?Number(data.current_return):current/NORMALIZED_BASE-1;
       const officialV8Equity=officialV8&&finiteNumber(officialV8.current_equity)?Number(officialV8.current_equity):null;
