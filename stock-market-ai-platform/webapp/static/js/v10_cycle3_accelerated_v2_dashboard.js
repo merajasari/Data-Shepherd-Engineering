@@ -13,7 +13,25 @@
   const performanceRanges=[["24h",1],["48h",2],["72h",3],["1w",7],["2w",14],["1m",30],["3m",90],["6m",180],["1y",365],["5y",1825],["Max",null]];
   let performanceRange='Max';
   const rangeStart=end=>performanceRange==='Max'?-Infinity:end-performanceRanges.find(row=>row[0]===performanceRange)[1]*86400000;
-  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Rolling windows use available forward observations only · 1m = 30 days · Max = all recorded history.</div>';
+  const rangeButtons=()=>'<div class="performance-range-controls" role="group" aria-label="Performance date range">'+performanceRanges.map(([label])=>'<button type="button" data-performance-range="'+label+'" aria-pressed="'+(label===performanceRange)+'">'+label+'</button>').join('')+'</div><div class="performance-range-note">Saved marks are sampled every 5 minutes when source valuations change · 1m = 30 days · older marks are thinned for display.</div>';
+
+
+  // Display-only observations are recorded independently of the official journals.
+  let paperHistory={v8:[],v10:[]};
+  async function loadPaperHistory(){
+    const cache=window.DataShepherdPaperHistory||(window.DataShepherdPaperHistory={at:0,payload:null,pending:null});
+    if(!cache.pending&&Date.now()-cache.at>30000){
+      cache.at=Date.now();
+      cache.pending=fetch('/static/generated/stock_paper_equity_history.json',{credentials:'same-origin',cache:'no-store'})
+        .then(response=>{if(!response.ok)throw Error('History unavailable');return response.json();})
+        .then(data=>{cache.payload=data;})
+        .catch(()=>{}).finally(()=>{cache.pending=null;});
+    }
+    if(cache.pending)await cache.pending;
+    paperHistory=cache.payload||{v8:[],v10:[]};
+  }
+  const observedRows=(model,payload)=>(Array.isArray(paperHistory[model])?paperHistory[model]:[])
+    .filter(row=>row.frozen_sha256===payload.frozen_sha256&&(!payload.contract_sha256||row.contract_sha256===payload.contract_sha256));
 
   const section = document.createElement('section');
   section.id = panelId;
@@ -264,6 +282,12 @@
           rows.push({time,value:Number(row[key]),label:'Completed accelerated exit'});
         }
       });
+      observedRows('v10',data).forEach(row=>{
+        const value=Number(row[id==='v10'?'strategy_normalized':'spy_normalized']);
+        const time=stamp(row.timestamp_utc);
+        if(time!=null&&Number.isFinite(value))rows.push({time,value,label:'Observed paper valuation',sourceTime:row.valuation_timestamp_utc});
+      });
+      rows.sort((a,b)=>a.time-b.time);
       if(data.equity_basis==='LIVE_MARK_TO_MARKET'){
         appendCurrentPoint(
           rows,
@@ -306,6 +330,10 @@
         'Latest official V8 value'
       );
     }
+    observedRows('v8',v8).forEach(row=>{
+      const time=stamp(row.timestamp_utc),value=Number(row.strategy_normalized);
+      if(time!=null&&Number.isFinite(value))rows.push({time,value,label:'Observed paper valuation',sourceTime:row.valuation_timestamp_utc});
+    });
     return {
       id:'v8',
       label:'V8 official',
@@ -384,7 +412,7 @@
     const firstLabel=dateOnly(minX),lastLabel=dateTime(rawMaxX);
     host.innerHTML=`<svg viewBox="0 0 ${liveWidth} ${H}" role="img" aria-label="Live V10 accelerated paper equity, official frozen V8 holdout equity, and SPY"><line x1="${p.l}" y1="${y(NORMALIZED_BASE)}" x2="${liveWidth-p.r}" y2="${y(NORMALIZED_BASE)}" stroke="rgba(242,246,255,.34)" stroke-dasharray="5 6"/>${grid}${paths}${endLabels}<line data-a10-hover-line x1="0" y1="${p.t}" x2="0" y2="${H-p.b}" stroke="rgba(242,246,255,.52)" stroke-dasharray="3 4" opacity="0"/><text x="${p.l}" y="${H-10}" fill="#91a6c2" font-size="10">${firstLabel}</text><text x="${liveWidth-p.r}" y="${H-10}" text-anchor="end" fill="#91a6c2" font-size="10">${lastLabel}</text></svg>`;
     const officialStatus=official&&official.points.length?'official V8 holdout + accelerated V10/SPY':'accelerated V10/SPY · official V8 unavailable';
-    set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · ${officialStatus}`);
+    set('[data-a10-live-range]',`${firstLabel} → ${lastLabel} · ${officialStatus}${liveRenderedSeries.every(item=>item.points.length<2)?' · Only one observation per series in this window; saved marks will accumulate.':''}`);
   }
 
   section.addEventListener('click',event=>{
@@ -409,7 +437,7 @@
     }));
     tip.innerHTML=`<strong>Nearest forward values · ${dateTime(hit.time)}</strong>${rows.map(row=>{
       const start=NORMALIZED_BASE;
-      return `<div><span>${row.item.label}</span><b>${money(row.point.value)} (${pct4(row.point.value/start-1)})</b></div>`;
+      return `<div><span>${row.item.label} · ${dateTime(row.point.time)}<br>${row.point.label}${row.point.sourceTime?' · source '+dateTime(row.point.sourceTime):''}</span><b>${money(row.point.value)} (${pct4(row.point.value/start-1)})</b></div>`;
     }).join('')}`;
     tip.style.left=`${Math.max(115,Math.min(rect.width-115,hit.x/liveWidth*rect.width))}px`;
     tip.style.top=`${Math.max(118,hit.top/H*rect.height)}px`;
@@ -605,6 +633,7 @@
       fetch('/api/v10/cycle3/accelerated-v2',{credentials:'same-origin',cache:'no-store'})
         .then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}),
       fetchOfficialV8(),
+      loadPaperHistory(),
     ])
       .then(([data,officialV8])=>renderDashboard(data,officialV8))
       .catch(renderError);
